@@ -1,0 +1,25 @@
+# Workflow state files (created at runtime in user's project)
+.claude/workflow-*.local.md
+
+# Workflow runtime directories (created in user's project)
+.workflow-adapter/logs/
+.workflow-adapter/doc/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Node
+node_modules/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak

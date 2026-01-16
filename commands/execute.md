@@ -1,6 +1,6 @@
 ---
 description: Execute all agents in background
-argument-hint: <feature-name> [--in-session] [--max-iter N]
+argument-hint: <feature-name> [--in-session] [--max-iter N] [--complete]
 allowed-tools: [Read, Write, Bash, Glob, Task]
 ---
 
@@ -10,6 +10,7 @@ Execute all workflow agents for a specific feature. Uses Stop hook for automatic
 - `$1`: Feature name (required) - the feature to execute
 - `--in-session`: Run agents within current Claude session (default: false)
 - `--max-iter N`: Maximum iterations per agent (default: 10)
+- `--complete`: Continue until ALL tasks in plan.md are DONE, even if blocked by dependencies
 
 ## Prerequisites
 Before running execute:
@@ -44,6 +45,7 @@ Run /workflow-adapter:feature-plan {name} first.
 - Feature name from `$1`
 - Check if `--in-session` flag is present
 - Extract max iterations from `--max-iter N`. Default to 10 if not specified.
+- Check if `--complete` flag is present (enables plan.md verification for completion)
 
 ### 5. Read Feature Plan
 @.workflow-adapter/doc/feature_$1/plan.md
@@ -61,7 +63,11 @@ Extract assigned tasks for each agent from the plan.
 Use Bash tool to run the execution script:
 
 ```bash
+# Without --complete flag:
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {feature_name} {max_iter}
+
+# With --complete flag:
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {feature_name} {max_iter} --complete
 ```
 
 This script will:
@@ -103,10 +109,15 @@ Read all agent files from `.workflow-adapter/agents/`:
 For each agent, create a state file using setup script:
 
 ```bash
+# Without --complete flag:
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup-agent-loop.sh" {agent_name} {feature_name} --max-iter {max_iter}
+
+# With --complete flag:
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup-agent-loop.sh" {agent_name} {feature_name} --max-iter {max_iter} --complete
 ```
 
 The state files will be created at `.claude/workflow-agent-{name}.local.md`
+With `--complete` flag, the state file will include `check_plan_completion: true`
 
 ### Step 3: Read First Agent Instructions
 Read the first agent's (alphabetically, e.g., "alpha") full instructions from `.workflow-adapter/agents/{name}.md`.
@@ -139,12 +150,15 @@ You are working on the feature: {feature_name}
 4. Update task status in plan.md as you complete them (TODO -> IN_PROGRESS -> DONE)
 5. Write messages to other agents if needed (to .workflow-adapter/doc/feature_{feature_name}/messages/)
 6. When done, check .workflow-adapter/doc/feature_{feature_name}/messages/ for messages addressed to you
+7. If blocked by dependencies, output WAITING_FOR_DEPENDENCY (will retry later)
 
 When all your assigned tasks are complete and messages are processed, output: TASKS_COMPLETE
 ```
 
 The Stop hook will automatically:
 - Continue this agent until TASKS_COMPLETE
+- If `--complete` mode, verify plan.md tasks are DONE before completing
+- Handle WAITING_FOR_DEPENDENCY by retrying
 - Switch to the next agent (beta, gamma, etc.)
 - Complete the workflow when all agents finish
 

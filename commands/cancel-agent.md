@@ -1,40 +1,34 @@
 ---
-description: Cancel running agent or orchestrator loop(s)
-argument-hint: "[agent-name | orchestrator | --all]"
+description: Cancel running agent loop(s)
+argument-hint: "[agent-name | --all]"
 allowed-tools: [Bash, Read, Glob]
 ---
 
-# Cancel Agent/Orchestrator Loop
+# Cancel Agent Loop
 
-Cancel one or more running workflow-adapter loops by removing their state files.
+Cancel one or more running workflow-adapter agent loops by removing their state files.
 
 ## Arguments
 
 - `agent-name`: Cancel specific agent (e.g., `alpha`, `beta`)
-- `orchestrator`: Cancel the orchestrator loop
-- `--all`: Cancel all running loops (agents + orchestrator)
+- `--all`: Cancel all running agent loops
 
 ## Instructions
 
 1. **Parse the argument**:
-   - If `--all`: Remove all `.claude/workflow-agent-*.local.md` AND `.claude/workflow-orchestrator.local.md`
-   - If `orchestrator`: Remove `.claude/workflow-orchestrator.local.md`
+   - If `--all`: Remove all `.claude/workflow-agent-*.local.md`
    - If agent name provided: Remove `.claude/workflow-agent-{name}.local.md`
    - If no argument: List currently active loops and ask which to cancel
 
 2. **Check for active loops**:
    ```bash
-   ls -la .claude/workflow-agent-*.local.md .claude/workflow-orchestrator.local.md 2>/dev/null || echo "No active loops"
+   ls -la .claude/workflow-agent-*.local.md 2>/dev/null || echo "No active agent loops"
    ```
 
 3. **Cancel the specified loop(s)**:
    - For `--all`:
      ```bash
-     rm -f .claude/workflow-agent-*.local.md .claude/workflow-orchestrator.local.md
-     ```
-   - For `orchestrator`:
-     ```bash
-     rm -f .claude/workflow-orchestrator.local.md
+     rm -f .claude/workflow-agent-*.local.md
      ```
    - For specific agent:
      ```bash
@@ -51,15 +45,12 @@ Cancel one or more running workflow-adapter loops by removing their state files.
 /workflow-adapter:cancel-agent alpha
 # Cancels the alpha agent loop
 
-/workflow-adapter:cancel-agent orchestrator
-# Cancels the orchestrator loop
-
 /workflow-adapter:cancel-agent --all
-# Cancels all running loops (agents + orchestrator)
+# Cancels all running agent loops
 ```
 
 ## Notes
 
 - Canceling a loop will stop it at the end of the current iteration
 - The work up to that point is preserved in the feature documents
-- Use this if an agent/orchestrator is stuck or you want to manually intervene
+- Use this if an agent is stuck or you want to manually intervene

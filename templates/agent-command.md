@@ -1,7 +1,7 @@
 ---
 description: Execute {{AGENT_NAME}} agent
-argument-hint: "[--feature NAME] [--max-iter N] [--no-loop]"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, TodoWrite]
+argument-hint: "[--feature NAME] [--max-iter N] [--no-loop] [--complete]"
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Task, TodoWrite, WebFetch, WebSearch, AskUserQuestion, NotebookEdit]
 ---
 
 You are now acting as the **{{AGENT_NAME}}** agent.
@@ -11,17 +11,88 @@ Parse these from the command arguments if provided:
 - `--feature NAME`: Feature to work on (required for loop mode)
 - `--max-iter N`: Maximum iterations (default: 10)
 - `--no-loop`: Disable automatic loop (single execution only)
+- `--complete`: Continue until ALL assigned tasks in plan.md are DONE (not just until TASKS_COMPLETE signal)
 
 ## Setup Loop (if not --no-loop)
 
 If `--feature` is provided (or can be auto-detected from `.workflow-adapter/doc/feature_*/`):
 
-1. Create agent loop state file using:
+Create the agent loop state file directly.
+
+**If `--complete` flag is present**, add `check_plan_completion: true` to the frontmatter:
+
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup-agent-loop.sh" {{AGENT_NAME}} {feature_name} --max-iter {max_iter}
+mkdir -p .claude && cat > .claude/workflow-agent-{{AGENT_NAME}}.local.md << 'STATEEOF'
+---
+active: true
+agent_name: {{AGENT_NAME}}
+feature_name: {feature_name}
+iteration: 1
+max_iterations: {max_iter}
+completion_signal: "TASKS_COMPLETE"
+check_plan_completion: true
+started_at: "{timestamp}"
+---
+
+You are the {{AGENT_NAME}} agent. Execute your responsibilities now for feature: {feature_name}
+
+## Your Feature
+Feature: {feature_name}
+Plan: .workflow-adapter/doc/feature_{feature_name}/plan.md
+Context: .workflow-adapter/doc/feature_{feature_name}/context.md
+
+## Workflow
+1. Read .workflow-adapter/doc/principle.md for guidelines
+2. Read .workflow-adapter/doc/feature_{feature_name}/context.md for project context
+3. Read .workflow-adapter/doc/feature_{feature_name}/plan.md and find YOUR assigned tasks
+4. Work on your assigned tasks and update their status in plan.md (TODO -> IN_PROGRESS -> DONE)
+5. Check messages directory for messages addressed to you
+6. If blocked by dependencies, output WAITING_FOR_DEPENDENCY (will retry later)
+7. If all YOUR tasks are complete, output TASKS_COMPLETE
+
+Note: With --complete mode, iteration continues until plan.md shows all your tasks as DONE.
+
+Start working now.
+STATEEOF
 ```
 
-2. The Stop hook will automatically continue this agent until TASKS_COMPLETE.
+**If `--complete` flag is NOT present**, use `check_plan_completion: false`:
+
+```bash
+mkdir -p .claude && cat > .claude/workflow-agent-{{AGENT_NAME}}.local.md << 'STATEEOF'
+---
+active: true
+agent_name: {{AGENT_NAME}}
+feature_name: {feature_name}
+iteration: 1
+max_iterations: {max_iter}
+completion_signal: "TASKS_COMPLETE"
+check_plan_completion: false
+started_at: "{timestamp}"
+---
+
+You are the {{AGENT_NAME}} agent. Execute your responsibilities now for feature: {feature_name}
+
+## Your Feature
+Feature: {feature_name}
+Plan: .workflow-adapter/doc/feature_{feature_name}/plan.md
+Context: .workflow-adapter/doc/feature_{feature_name}/context.md
+
+## Workflow
+1. Read .workflow-adapter/doc/principle.md for guidelines
+2. Read .workflow-adapter/doc/feature_{feature_name}/context.md for project context
+3. Read .workflow-adapter/doc/feature_{feature_name}/plan.md and find YOUR assigned tasks
+4. Work on your assigned tasks and update their status in plan.md (TODO -> IN_PROGRESS -> DONE)
+5. Check messages directory for messages addressed to you
+6. If all YOUR tasks are complete, output TASKS_COMPLETE
+
+Start working now.
+STATEEOF
+```
+
+Replace `{feature_name}`, `{max_iter}`, and `{timestamp}` with actual values.
+
+The Stop hook will automatically continue this agent until TASKS_COMPLETE (or until plan.md tasks are DONE in --complete mode).
 
 ## Agent Instructions
 @.workflow-adapter/agents/{{AGENT_NAME}}.md

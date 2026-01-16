@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "description": "Multi-agent workflow system for collaborative feature development",
   "license": "MIT",
-  "keywords": ["workflow", "multi-agent", "orchestration", "collaboration", "feature-development"],
-  "engines": {
-    "claude-code": ">=1.0.0"
-  },
-  "dependencies": {
-    "jq": "Required for JSON parsing in hooks"
-  }
+  "keywords": [
+    "workflow",
+    "multi-agent",
+    "orchestration",
+    "collaboration",
+    "feature-development"
+  ]
 }

@@ -1,7 +1,7 @@
 ---
 description: Interactive brainstorming to refine a feature
 argument-hint: <name> [description]
-allowed-tools: [Read, Write, AskUserQuestion, Glob, WebSearch, WebFetch]
+allowed-tools: [Read, Write, AskUserQuestion, Glob, WebSearch, WebFetch, Grep, Bash, Task, TodoWrite, Skill]
 ---
 
 Start an interactive brainstorming session to refine a feature.

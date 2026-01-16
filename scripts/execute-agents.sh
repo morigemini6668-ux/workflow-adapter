@@ -1,14 +1,35 @@
 #!/bin/bash
 # Execute all workflow agents in parallel for a specific feature
-# Usage: ./execute-agents.sh <feature_name> [max_iterations]
+# Usage: ./execute-agents.sh <feature_name> [max_iterations] [--complete]
+#
+# Options:
+#   --complete  Continue until ALL tasks in plan.md are DONE, even if blocked by dependencies
 #
 # This script creates state files for each agent and starts them in parallel.
 # The Stop hook handles automatic task continuation until TASKS_COMPLETE.
 
 set -e
 
-FEATURE_NAME=${1:-""}
-MAX_ITERATIONS=${2:-10}
+# Parse arguments
+FEATURE_NAME=""
+MAX_ITERATIONS=10
+CHECK_PLAN_COMPLETION="false"
+
+for arg in "$@"; do
+  case "$arg" in
+    --complete)
+      CHECK_PLAN_COMPLETION="true"
+      ;;
+    *)
+      if [[ -z "$FEATURE_NAME" ]]; then
+        FEATURE_NAME="$arg"
+      elif [[ "$arg" =~ ^[0-9]+$ ]]; then
+        MAX_ITERATIONS="$arg"
+      fi
+      ;;
+  esac
+done
+
 WORKFLOW_DIR=".workflow-adapter"
 AGENTS_DIR="$WORKFLOW_DIR/agents"
 LOGS_DIR="$WORKFLOW_DIR/logs"
@@ -187,7 +208,30 @@ run_agent() {
         return 1
     fi
 
-    local user_prompt="You are the $agent_name agent. Execute your responsibilities now for feature: $FEATURE_NAME
+    local user_prompt
+    if [[ "$CHECK_PLAN_COMPLETION" == "true" ]]; then
+      user_prompt="You are the $agent_name agent. Execute your responsibilities now for feature: $FEATURE_NAME
+
+## Your Feature
+Feature: $FEATURE_NAME
+Plan: $FEATURE_DIR/plan.md
+Context: $FEATURE_DIR/context.md
+
+## Workflow
+1. Read .workflow-adapter/doc/principle.md for guidelines
+2. Read $FEATURE_DIR/context.md for project context
+3. Read $FEATURE_DIR/plan.md and find YOUR assigned tasks (look for your name: $agent_name)
+4. Work on your assigned tasks and update their status in plan.md (TODO -> IN_PROGRESS -> DONE)
+5. Write status messages to $MESSAGES_DIR/ if needed
+6. When done, check $MESSAGES_DIR/ for messages addressed to you (from_*_to_${agent_name}_*.md)
+7. If blocked by dependencies, output WAITING_FOR_DEPENDENCY (will retry later)
+8. If all YOUR tasks are complete and messages processed, output TASKS_COMPLETE
+
+Note: Running in --complete mode. Iteration continues until plan.md shows all your tasks as DONE.
+
+Start working now."
+    else
+      user_prompt="You are the $agent_name agent. Execute your responsibilities now for feature: $FEATURE_NAME
 
 ## Your Feature
 Feature: $FEATURE_NAME
@@ -204,6 +248,7 @@ Context: $FEATURE_DIR/context.md
 7. If all YOUR tasks are complete and messages processed, output TASKS_COMPLETE
 
 Start working now."
+    fi
 
     # Create state file for Stop hook
     cat > "$state_file" << EOF
@@ -214,6 +259,7 @@ feature_name: $FEATURE_NAME
 iteration: 1
 max_iterations: $MAX_ITERATIONS
 completion_signal: "TASKS_COMPLETE"
+check_plan_completion: $CHECK_PLAN_COMPLETION
 started_at: "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 ---
 
@@ -289,6 +335,7 @@ main() {
     log_info "Configuration:"
     echo "  Feature: $FEATURE_NAME"
     echo "  Max iterations: $MAX_ITERATIONS"
+    echo "  Check plan completion: $CHECK_PLAN_COMPLETION"
     echo "  Timestamp: $TIMESTAMP"
     echo "  Agents: $agents"
     echo ""

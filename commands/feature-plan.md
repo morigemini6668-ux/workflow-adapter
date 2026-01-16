@@ -1,7 +1,7 @@
 ---
 description: Generate implementation plan with agent task assignments
 argument-hint: <name> [--revise]
-allowed-tools: [Read, Write, Glob, AskUserQuestion]
+allowed-tools: [Read, Write, AskUserQuestion, Glob, WebSearch, WebFetch, Grep, Bash, Task, TodoWrite, Skill]
 ---
 
 Generate an implementation plan with tasks assigned to each agent.
@@ -45,20 +45,131 @@ Extract agent names (excluding reviewer and orchestrator for task assignment).
 - Consider project conventions when designing tasks
 - Identify potential conflicts with existing implementations
 
-### 5. (If --revise) Read Review Feedback and Existing Plan
+### 5. (If --revise) Interactive Plan Revision
 If `--revise` flag is present:
 
-Read the review feedback:
-@.workflow-adapter/doc/feature_$1/review.md
-
+#### 5.1 Read Current State
 Read the existing plan:
 @.workflow-adapter/doc/feature_$1/plan.md
 
+Read review feedback (if exists):
+@.workflow-adapter/doc/feature_$1/review.md
+
+#### 5.2 Present Current Issues
+Summarize the current plan and any issues found:
+- List Critical/Major issues from review.md (if exists)
+- Show current task distribution
+- Highlight potential problems
+
+#### 5.3 Interactive Revision Loop
+Use `AskUserQuestion` to gather revision requirements:
+
+**First Question - Revision Scope:**
+```
+question: "What aspects of the plan would you like to revise?"
+header: "Revise"
+options:
+  - label: "Task assignments"
+    description: "Change which agent handles which tasks"
+  - label: "Task breakdown"
+    description: "Add, remove, or modify tasks"
+  - label: "Dependencies"
+    description: "Change task dependencies and ordering"
+  - label: "Address review issues"
+    description: "Fix issues identified in the review"
+multiSelect: true
+```
+
+**Based on selection, ask follow-up questions:**
+
+If "Task assignments" selected:
+```
+question: "Which task assignments would you like to change?"
+header: "Assign"
+options:
+  - label: "Rebalance workload"
+    description: "Automatically distribute tasks more evenly"
+  - label: "Specific reassignment"
+    description: "I'll specify which tasks to reassign"
+  - label: "Assign by expertise"
+    description: "Group related tasks to same agent"
+```
+
+If "Task breakdown" selected:
+```
+question: "How would you like to modify the tasks?"
+header: "Tasks"
+options:
+  - label: "Add new tasks"
+    description: "Include additional tasks not in current plan"
+  - label: "Remove tasks"
+    description: "Remove unnecessary or redundant tasks"
+  - label: "Split/merge tasks"
+    description: "Break down large tasks or combine small ones"
+  - label: "Modify descriptions"
+    description: "Update task details and acceptance criteria"
+```
+
+If "Dependencies" selected:
+```
+question: "What dependency changes are needed?"
+header: "Deps"
+options:
+  - label: "Add dependencies"
+    description: "Specify new task dependencies"
+  - label: "Remove dependencies"
+    description: "Allow parallel execution of currently sequential tasks"
+  - label: "Reorder phases"
+    description: "Change the phase structure"
+```
+
+If user selects "Other" at any point, ask them to describe their specific revision needs.
+
+#### 5.4 Gather Specific Details
+Based on user selections, use additional `AskUserQuestion` calls to clarify:
+
+**For specific reassignments:**
+```
+question: "Which tasks should be reassigned? (Enter task IDs like T-001, T-003)"
+```
+→ User selects "Other" and provides task IDs
+
+**For adding tasks:**
+```
+question: "What type of tasks would you like to add?"
+header: "Add"
+options:
+  - label: "Testing tasks"
+    description: "Unit tests, integration tests, e2e tests"
+  - label: "Documentation tasks"
+    description: "README, API docs, comments"
+  - label: "Infrastructure tasks"
+    description: "CI/CD, deployment, monitoring"
+  - label: "Custom tasks"
+    description: "I'll describe the tasks to add"
+```
+
+#### 5.5 Confirm Revision Plan
+Before applying changes, summarize what will be modified:
+
+```
+question: "I'll make the following changes to the plan. Proceed?"
+header: "Confirm"
+options:
+  - label: "Yes, apply changes"
+    description: "Update the plan with these revisions"
+  - label: "Modify selections"
+    description: "Go back and change my revision choices"
+  - label: "Cancel revision"
+    description: "Keep the current plan unchanged"
+```
+
+#### 5.6 Apply Revisions
 **When revising, you MUST:**
-- Address ALL issues marked as Critical and Major in review.md
-- Consider Minor issues and Recommendations
+- Address ALL issues marked as Critical and Major in review.md (if exists)
+- Apply user-requested changes from the interactive session
 - Preserve what worked well in the existing plan
-- Explain what changes you made and why in the Notes section
+- Document all changes in the Notes section with timestamps
 
 ### 6. Generate Implementation Plan
 Break down the feature into tasks and assign to agents.
@@ -183,14 +294,25 @@ Next step:
 Implementation plan for '{feature_name}' REVISED:
 .workflow-adapter/doc/feature_{name}/plan.md
 
-Changes made based on review feedback:
-- {summary of changes addressing review issues}
+Revision summary:
+- Revision scope: {user selections from interactive session}
+- Changes applied:
+  - {specific change 1}
+  - {specific change 2}
+  - ...
+- Review issues addressed: {count} critical, {count} major
 
-Task distribution:
+Task distribution (updated):
 - alpha: {n} tasks
 - beta: {n} tasks
 - gamma: {n} tasks
 
 Next step:
 - Run /workflow-adapter:feature-review {name} to re-review the revised plan
+```
+
+**If revision cancelled:**
+```
+Plan revision cancelled. Current plan unchanged:
+.workflow-adapter/doc/feature_{name}/plan.md
 ```

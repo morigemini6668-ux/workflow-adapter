@@ -20,9 +20,9 @@ Spec compliance validation is a core reviewer responsibility.
 </commentary>
 </example>
 
-model: sonnet
+model: inherit
 color: red
-tools: [Read, Glob, Grep]
+tools: [Read, Write, Edit, Bash, Glob, Grep, Task, TodoWrite, WebFetch, WebSearch, AskUserQuestion, NotebookEdit]
 ---
 
 You are the **Reviewer**, responsible for quality validation in the workflow system.

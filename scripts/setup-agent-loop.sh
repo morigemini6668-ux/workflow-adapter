@@ -46,6 +46,7 @@ MAX_ITERATIONS=10
 COMPLETION_SIGNAL="TASKS_COMPLETE"
 PROMPT_FILE=""
 SYSTEM_PROMPT_FILE=""
+CHECK_PLAN_COMPLETION="false"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -65,6 +66,10 @@ while [[ $# -gt 0 ]]; do
     --system-prompt)
       SYSTEM_PROMPT_FILE="$2"
       shift 2
+      ;;
+    --complete)
+      CHECK_PLAN_COMPLETION="true"
+      shift
       ;;
     -*)
       echo "Unknown option: $1" >&2
@@ -128,9 +133,37 @@ if [[ -n "$PROMPT_FILE" ]]; then
   PROMPT_CONTENT=$(cat "$PROMPT_FILE")
 else
   # Read from stdin if available, otherwise use default
-  if [[ -t 0 ]]; then
-    # No stdin, create default prompt
-    PROMPT_CONTENT="You are the $AGENT_NAME agent. Execute your responsibilities now for feature: $FEATURE_NAME
+  PROMPT_CONTENT=""
+  if [[ ! -t 0 ]]; then
+    # Try to read from stdin (piped or redirected input)
+    PROMPT_CONTENT=$(cat)
+  fi
+
+  # If no stdin content, use default prompt
+  if [[ -z "$PROMPT_CONTENT" ]]; then
+    if [[ "$CHECK_PLAN_COMPLETION" == "true" ]]; then
+      PROMPT_CONTENT="You are the $AGENT_NAME agent. Execute your responsibilities now for feature: $FEATURE_NAME
+
+## Your Feature
+Feature: $FEATURE_NAME
+Plan: .workflow-adapter/doc/feature_$FEATURE_NAME/plan.md
+Context: .workflow-adapter/doc/feature_$FEATURE_NAME/context.md
+
+## Workflow
+1. Read .workflow-adapter/doc/principle.md for guidelines
+2. Read .workflow-adapter/doc/feature_$FEATURE_NAME/context.md for project context
+3. Read .workflow-adapter/doc/feature_$FEATURE_NAME/plan.md and find YOUR assigned tasks (look for your name: $AGENT_NAME)
+4. Work on your assigned tasks and update their status in plan.md (TODO -> IN_PROGRESS -> DONE)
+5. Write status messages to .workflow-adapter/doc/feature_$FEATURE_NAME/messages/ if needed
+6. When done, check .workflow-adapter/doc/feature_$FEATURE_NAME/messages/ for messages addressed to you
+7. If blocked by dependencies, output WAITING_FOR_DEPENDENCY (will retry later)
+8. If all YOUR tasks are complete and messages processed, output $COMPLETION_SIGNAL
+
+Note: Running in --complete mode. Iteration continues until plan.md shows all your tasks as DONE.
+
+Start working now."
+    else
+      PROMPT_CONTENT="You are the $AGENT_NAME agent. Execute your responsibilities now for feature: $FEATURE_NAME
 
 ## Your Feature
 Feature: $FEATURE_NAME
@@ -147,8 +180,7 @@ Context: .workflow-adapter/doc/feature_$FEATURE_NAME/context.md
 7. If all YOUR tasks are complete and messages processed, output $COMPLETION_SIGNAL
 
 Start working now."
-  else
-    PROMPT_CONTENT=$(cat)
+    fi
   fi
 fi
 
@@ -167,6 +199,7 @@ feature_name: $FEATURE_NAME
 iteration: 1
 max_iterations: $MAX_ITERATIONS
 completion_signal: "$COMPLETION_SIGNAL"
+check_plan_completion: $CHECK_PLAN_COMPLETION
 started_at: "$TIMESTAMP"
 ---
 
@@ -178,3 +211,4 @@ echo "  State file: $STATE_FILE"
 echo "  Feature: $FEATURE_NAME"
 echo "  Max iterations: $MAX_ITERATIONS"
 echo "  Completion signal: $COMPLETION_SIGNAL"
+echo "  Check plan completion: $CHECK_PLAN_COMPLETION"

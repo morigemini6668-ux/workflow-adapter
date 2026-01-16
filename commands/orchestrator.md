@@ -1,213 +1,318 @@
 ---
-description: Run orchestrator to coordinate workflow until completion
-argument-hint: <feature-name> [--complete] [--max-iter N]
-allowed-tools: [Read, Write, Bash, Glob, Grep, Task, TodoWrite]
+description: Validate workflow progress and add tasks if needed
+argument-hint: <feature-name> [--cleanup]
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, TodoWrite]
 ---
 
-You are the **Orchestrator**, coordinating a multi-agent workflow system.
+You are the **Orchestrator**, responsible for validating workflow progress and planning additional work.
 
 ## Arguments
 - `$1`: Feature name (required)
-- `--complete`: Continue until WORKFLOW_COMPLETE (enables Stop hook loop)
-- `--max-iter N`: Maximum iterations (default: 100)
+- `--cleanup`: Clean up workflow artifacts after completion (state files, etc.)
 
 ## Your Role
-Coordinate all agents, monitor progress, and ensure workflow completion.
-- Check plan status
-- Monitor messages
-- Restart idle agents with pending work
-- Resolve conflicts
-- Validate completion
+**Validate and Plan** - Do NOT execute agents.
+- Review completed work quality
+- Identify gaps or missing requirements
+- Add new tasks to plan.md if needed
+- Report overall status
+
+**You do NOT:**
+- Execute agents (use `/workflow-adapter:execute` for that)
+- Mark tasks as DONE (only workers do that)
+- Loop continuously (single validation run)
 
 ## Startup Sequence
 
 ### Step 1: Parse Arguments
-Extract feature_name, --complete flag, and --max-iter value.
+Extract `feature_name` from the first positional argument.
 
-### Step 2: Setup Complete Mode (if --complete flag)
-If `--complete` flag is present, create orchestrator state file:
+If no feature name provided, show error:
+```
+Error: Feature name required.
+Usage: /workflow-adapter:orchestrator <feature-name>
 
-```bash
-mkdir -p .claude
-
-cat > .claude/workflow-orchestrator.local.md << 'EOF'
----
-active: true
-feature_name: {feature_name}
-iteration: 1
-max_iterations: {max_iter}
-completion_signal: "WORKFLOW_COMPLETE"
-started_at: "{timestamp}"
----
-
-Orchestrator monitoring feature: {feature_name}
-Continue until all tasks complete or WORKFLOW_COMPLETE is output.
-EOF
+Available features:
+{list features from .workflow-adapter/doc/feature_*/}
 ```
 
-### Step 3: Read Orchestrator Instructions
+### Step 2: Read Orchestrator Instructions
 @.workflow-adapter/agents/orchestrator.md
 
-### Step 4: Check Workflow Status
+### Step 3: Gather Context
 
-#### A. Read Plan
-Read `.workflow-adapter/doc/feature_{feature_name}/plan.md`
+#### A. Read Feature Documents
+Read and understand:
+- `.workflow-adapter/doc/feature_{feature_name}/context.md` - Project context
+- `.workflow-adapter/doc/feature_{feature_name}/spec.md` - Feature specification
+- `.workflow-adapter/doc/feature_{feature_name}/plan.md` - Current task plan
+
+#### B. Check Plan Status
+Analyze plan.md:
 - Count tasks by status: TODO, IN_PROGRESS, DONE
 - Identify which agents have pending tasks
-
-#### B. Check Running Agents
-Check for active agent state files:
-```bash
-ls .claude/workflow-agent-*.local.md 2>/dev/null
-```
-- If state file exists for an agent → agent is running (DO NOT restart)
-- If no state file → agent is idle (can be restarted if has pending work)
+- Note any BLOCKED tasks and their dependencies
 
 #### C. Scan Messages
 Check `.workflow-adapter/doc/feature_{feature_name}/messages/` for:
-- Unprocessed messages (no response files)
+- Unprocessed messages
 - Messages addressed to orchestrator
 - Conflict reports between agents
+- Requests for additional tasks
 
-### Step 5: Decision Making
+### Step 4: Validate Completed Work
 
-Based on status check, decide action:
+For each task marked as DONE:
+1. **Verify implementation exists** - Check that the claimed work is actually done
+2. **Check quality** - Does it meet the spec requirements?
+3. **Identify issues** - Any bugs, missing edge cases, or incomplete parts?
 
-1. **All tasks DONE**:
-   - Create completion.md summary
-   - Output: `WORKFLOW_COMPLETE`
-   - (Stop hook will detect and allow exit)
+If validation issues found, document them.
 
-2. **Running agents exist**:
-   - Report status: "Agent {name} is running (iteration X)"
-   - If `--complete` mode: wait and let Stop hook continue
-   - If single run: report and exit
+### Step 5: Identify Gaps
 
-3. **Idle agents with pending tasks**:
-   - Select agent with highest priority pending task
-   - Execute using Task tool (see Step 6)
+Compare spec.md requirements against completed work:
+1. **Missing features** - Requirements not covered by any task
+2. **Incomplete implementations** - Tasks marked DONE but work is partial
+3. **New requirements** - Issues discovered during implementation
+4. **Integration needs** - Work needed to connect completed pieces
 
-4. **No actionable work**:
-   - Check for blockers or conflicts
-   - Report status
-   - If `--complete` mode: wait for running agents
+### Step 6: Update Plan (if needed)
 
-### Step 6: Execute Idle Agent (if needed)
+If gaps are identified, **add new tasks** to plan.md:
 
-Use **Task tool** to run an idle agent with pending work:
+```markdown
+## Additional Tasks (Added by Orchestrator)
 
-```
-Task tool parameters:
-- description: "Run {agent_name} agent for {feature_name}"
-- subagent_type: "general-purpose"
-- prompt: |
-    You are the {agent_name} agent in a multi-agent workflow system.
-
-    ## Feature: {feature_name}
-
-    ## Your Agent Instructions
-    {content from .workflow-adapter/agents/{agent_name}.md - skip YAML frontmatter}
-
-    ## Your Assigned Tasks (from plan.md)
-    {Extract tasks assigned to this agent}
-
-    ## Workflow
-    1. Read .workflow-adapter/doc/principle.md for guidelines
-    2. Read .workflow-adapter/doc/feature_{feature_name}/context.md
-    3. Work on your assigned tasks
-    4. Update task status in plan.md (TODO -> IN_PROGRESS -> DONE)
-    5. Check messages directory for messages addressed to you
-    6. When complete, output: TASKS_COMPLETE
+### T-NEW-001: {Task Title}
+- **Status**: TODO
+- **Assignee**: {most appropriate agent}
+- **Priority**: {high|medium|low}
+- **Description**: {what needs to be done}
+- **Reason**: {why this task was added}
+- **Dependencies**: {any task IDs this depends on}
 ```
 
-**Important**:
-- Task tool waits for result synchronously (no sleep needed)
-- After Task completes, return to Step 4 to check status again
+**Guidelines for adding tasks:**
+- Assign to the agent whose existing work is most related
+- Set appropriate priority based on impact
+- Include clear acceptance criteria
+- Note dependencies on other tasks
 
-### Step 7: Loop Continuation (--complete mode)
+### Step 7: Generate Status Report
 
-If `--complete` flag is set and workflow not complete:
-- Report current status
-- Do NOT output WORKFLOW_COMPLETE
-- Let Stop hook block exit and re-run orchestrator
-
-The Stop hook will:
-1. Check `.claude/workflow-orchestrator.local.md`
-2. If WORKFLOW_COMPLETE not found → block and re-inject prompt
-3. If WORKFLOW_COMPLETE found → delete state file and exit
-
-## Status Report Format
+Output a comprehensive status report:
 
 ```
-[Orchestrator Status - Iteration {N}]
+[Orchestrator Validation Report]
 Feature: {feature_name}
-Tasks: {done}/{total} complete
+Timestamp: {current time}
 
-Agent Status:
-- alpha: DONE (no pending tasks)
-- beta: RUNNING (state file exists)
-- gamma: IDLE (2 pending tasks)
+## Progress Summary
+- Total Tasks: {count}
+- Completed: {done_count} ({percentage}%)
+- In Progress: {in_progress_count}
+- Pending: {todo_count}
+- Blocked: {blocked_count}
 
-Messages: {N} unprocessed
+## Agent Status
+- alpha: {X} tasks ({Y} done, {Z} pending)
+- beta: {X} tasks ({Y} done, {Z} pending)
+- ...
 
-Action: {what orchestrator will do next}
+## Validation Results
+{List any issues found with completed work}
+
+## Gaps Identified
+{List any missing requirements or needed work}
+
+## Tasks Added
+{List any new tasks added to plan.md, or "None"}
+
+## Recommendations
+{Suggested next actions}
+
+## Overall Status
+{READY_FOR_REVIEW | NEEDS_MORE_WORK | BLOCKED}
 ```
 
-## Completion Criteria
+## Decision Outcomes
 
-Output `WORKFLOW_COMPLETE` only when ALL conditions are met:
-- [ ] All tasks in plan.md marked DONE
-- [ ] No running agents (no state files)
-- [ ] No unprocessed critical messages
-- [ ] No unresolved conflicts
+### If all tasks are DONE and validated:
+```
+## Overall Status: READY_FOR_REVIEW
+
+All tasks completed and validated. Ready for final review.
+Next step: /workflow-adapter:validate {feature_name}
+```
+
+**If `--cleanup` flag is present**, proceed to Step 8 (Cleanup).
+
+### If work remains or tasks were added:
+```
+## Overall Status: NEEDS_MORE_WORK
+
+{X} tasks remaining, {Y} new tasks added.
+Next step: /workflow-adapter:execute {feature_name} --complete
+```
+
+### If blocked by external factors:
+```
+## Overall Status: BLOCKED
+
+Blocked by: {description of blocker}
+Action needed: {what needs to happen to unblock}
+```
+
+---
+
+### Step 8: Cleanup (if --cleanup flag and READY_FOR_REVIEW)
+
+When all tasks are complete and `--cleanup` flag is provided, perform cleanup:
+
+#### 8A. Clean Up State Files
+Remove any remaining agent state files for this feature:
+
+```bash
+# Remove agent state files that might be orphaned
+rm -f .claude/workflow-agent-*.local.md
+```
+
+#### 8B. Create Completion Summary
+Create `.workflow-adapter/doc/feature_{feature_name}/completion.md`:
+
+```markdown
+# Feature Completion Summary
+
+## Feature: {feature_name}
+## Completed: {timestamp}
+
+### Final Statistics
+- Total Tasks: {count}
+- All tasks marked DONE
+
+### Agents Involved
+- alpha: {X} tasks completed
+- beta: {Y} tasks completed
+- ...
+
+### Key Deliverables
+{List main outputs/files created}
+
+### Notes
+{Any important observations or follow-up items}
+```
+
+#### 8C. Archive Messages (Optional)
+If there are many messages, move them to an archive folder:
+
+```bash
+# Create archive directory
+mkdir -p .workflow-adapter/doc/feature_{feature_name}/messages/archive
+
+# Move processed messages to archive
+mv .workflow-adapter/doc/feature_{feature_name}/messages/*.md \
+   .workflow-adapter/doc/feature_{feature_name}/messages/archive/ 2>/dev/null || true
+```
+
+#### 8D. Report Cleanup Results
+
+```
+## Cleanup Complete
+
+Feature: {feature_name}
+
+Cleaned up:
+- [x] Removed {N} agent state files
+- [x] Created completion.md summary
+- [x] Archived {M} message files
+
+Feature workflow is now complete.
+```
 
 ## Example Session
 
 ```
-/workflow-adapter:orchestrator my-feature --complete
+/workflow-adapter:orchestrator my-feature
 
-[Orchestrator Status - Iteration 1]
+[Orchestrator Validation Report]
 Feature: my-feature
-Tasks: 5/10 complete
+Timestamp: 2024-01-15 10:30:00
 
-Agent Status:
-- alpha: DONE
-- beta: RUNNING
-- gamma: IDLE (3 pending tasks)
+## Progress Summary
+- Total Tasks: 10
+- Completed: 8 (80%)
+- In Progress: 0
+- Pending: 2
+- Blocked: 0
 
-Messages: 1 unprocessed (from beta to gamma)
+## Agent Status
+- alpha: 4 tasks (4 done, 0 pending)
+- beta: 3 tasks (2 done, 1 pending)
+- gamma: 3 tasks (2 done, 1 pending)
 
-Action: Waiting for beta to complete...
+## Validation Results
+- T-003 (alpha): Implementation complete but missing error handling
+- T-007 (beta): API endpoint works but no input validation
 
---- (Stop hook blocks, re-runs) ---
+## Gaps Identified
+- Error handling not implemented for edge cases
+- No unit tests for new API endpoints
 
-[Orchestrator Status - Iteration 2]
-Feature: my-feature
-Tasks: 7/10 complete
+## Tasks Added
+- T-011: Add error handling to user service (assigned: alpha)
+- T-012: Add input validation to API endpoints (assigned: beta)
+- T-013: Write unit tests for new endpoints (assigned: gamma)
 
-Agent Status:
-- alpha: DONE
-- beta: DONE
-- gamma: IDLE (3 pending tasks)
+## Recommendations
+1. Run execute with --complete to finish remaining tasks
+2. Run reviewer after completion for final validation
 
-Action: Starting gamma agent...
+## Overall Status: NEEDS_MORE_WORK
 
---- (Task tool runs gamma, waits for result) ---
-
-[Orchestrator Status - Iteration 3]
-Feature: my-feature
-Tasks: 10/10 complete
-
-All tasks complete! Creating completion summary...
-
-WORKFLOW_COMPLETE
+5 tasks remaining (2 original + 3 new).
+Next step: /workflow-adapter:execute my-feature --complete
 ```
 
-## Cancellation
+### Example 2: Cleanup After Completion
 
-To cancel orchestrator:
 ```
-/workflow-adapter:cancel-agent orchestrator
+/workflow-adapter:orchestrator my-feature --cleanup
+
+[Orchestrator Validation Report]
+Feature: my-feature
+Timestamp: 2024-01-15 14:00:00
+
+## Progress Summary
+- Total Tasks: 13
+- Completed: 13 (100%)
+- In Progress: 0
+- Pending: 0
+- Blocked: 0
+
+## Validation Results
+All tasks validated successfully.
+
+## Overall Status: READY_FOR_REVIEW
+
+Proceeding with cleanup...
+
+## Cleanup Complete
+
+Feature: my-feature
+
+Cleaned up:
+- [x] Removed 3 agent state files
+- [x] Created completion.md summary
+- [x] Archived 8 message files
+
+Feature workflow is now complete.
 ```
 
-This removes `.claude/workflow-orchestrator.local.md` and stops the loop.
+## Important Notes
+
+- **Single run only** - Orchestrator does not loop. Run again if needed after more work is done.
+- **Read-only for task status** - Never mark tasks as DONE. Only add new tasks.
+- **Plan additions are cumulative** - New tasks are added, existing tasks are not modified.
+- **Use execute for running agents** - Orchestrator validates, execute runs.
+- **Cleanup is optional** - Use `--cleanup` flag only when you're sure all work is complete.

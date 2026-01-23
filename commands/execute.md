@@ -1,16 +1,17 @@
 ---
 description: Execute all agents in background
-argument-hint: <feature-name> [--in-session] [--max-iter N] [--complete]
+argument-hint: <name> [--in-session] [--max-iter N] [--complete] [--fix]
 allowed-tools: [Read, Write, Bash, Glob, Task]
 ---
 
-Execute all workflow agents for a specific feature. Uses Stop hook for automatic task continuation.
+Execute all workflow agents for a specific feature or fix. Uses Stop hook for automatic task continuation.
 
 ## Arguments
-- `$1`: Feature name (required) - the feature to execute
+- `$1`: Name (required) - the feature or fix name to execute
 - `--in-session`: Run agents within current Claude session (default: false)
 - `--max-iter N`: Maximum iterations per agent (default: 10)
 - `--complete`: Continue until ALL tasks in plan.md are DONE, even if blocked by dependencies
+- `--fix`: Execute for a fix workflow (uses `.workflow-adapter/doc/fix_*` instead of `feature_*`)
 
 ## Prerequisites
 Before running execute:
@@ -63,11 +64,17 @@ Extract assigned tasks for each agent from the plan.
 Use Bash tool to run the execution script:
 
 ```bash
-# Without --complete flag:
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {feature_name} {max_iter}
+# For feature workflow:
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {name} {max_iter}
+
+# For fix workflow:
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {name} {max_iter} --fix
 
 # With --complete flag:
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {feature_name} {max_iter} --complete
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {name} {max_iter} --complete
+
+# Fix with --complete:
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {name} {max_iter} --fix --complete
 ```
 
 This script will:

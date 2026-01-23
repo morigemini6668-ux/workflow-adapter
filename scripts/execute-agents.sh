@@ -1,9 +1,10 @@
 #!/bin/bash
-# Execute all workflow agents in parallel for a specific feature
-# Usage: ./execute-agents.sh <feature_name> [max_iterations] [--complete]
+# Execute all workflow agents in parallel for a feature or fix
+# Usage: ./execute-agents.sh <name> [max_iterations] [--complete] [--fix]
 #
 # Options:
 #   --complete  Continue until ALL tasks in plan.md are DONE, even if blocked by dependencies
+#   --fix       Execute for a fix workflow (uses fix_ directory instead of feature_)
 #
 # This script creates state files for each agent and starts them in parallel.
 # The Stop hook handles automatic task continuation until TASKS_COMPLETE.
@@ -11,18 +12,22 @@
 set -e
 
 # Parse arguments
-FEATURE_NAME=""
+WORKFLOW_NAME=""
 MAX_ITERATIONS=10
 CHECK_PLAN_COMPLETION="false"
+DOC_TYPE="feature"
 
 for arg in "$@"; do
   case "$arg" in
     --complete)
       CHECK_PLAN_COMPLETION="true"
       ;;
+    --fix)
+      DOC_TYPE="fix"
+      ;;
     *)
-      if [[ -z "$FEATURE_NAME" ]]; then
-        FEATURE_NAME="$arg"
+      if [[ -z "$WORKFLOW_NAME" ]]; then
+        WORKFLOW_NAME="$arg"
       elif [[ "$arg" =~ ^[0-9]+$ ]]; then
         MAX_ITERATIONS="$arg"
       fi
@@ -33,8 +38,8 @@ done
 WORKFLOW_DIR=".workflow-adapter"
 AGENTS_DIR="$WORKFLOW_DIR/agents"
 LOGS_DIR="$WORKFLOW_DIR/logs"
-FEATURE_DIR="$WORKFLOW_DIR/doc/feature_$FEATURE_NAME"
-MESSAGES_DIR="$FEATURE_DIR/messages"
+DOC_DIR="$WORKFLOW_DIR/doc/${DOC_TYPE}_$WORKFLOW_NAME"
+MESSAGES_DIR="$DOC_DIR/messages"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # Get script directory for referencing other scripts
@@ -86,15 +91,15 @@ validate_name() {
 
 # Check prerequisites
 check_prerequisites() {
-    # Check feature name
-    if [ -z "$FEATURE_NAME" ]; then
-        log_error "Feature name required"
-        log_error "Usage: ./execute-agents.sh <feature_name> [max_iterations]"
+    # Check workflow name
+    if [ -z "$WORKFLOW_NAME" ]; then
+        log_error "Workflow name required"
+        log_error "Usage: ./execute-agents.sh <name> [max_iterations] [--fix]"
         exit 1
     fi
 
-    # Validate feature name
-    if ! validate_name "$FEATURE_NAME" "feature"; then
+    # Validate workflow name
+    if ! validate_name "$WORKFLOW_NAME" "workflow"; then
         exit 1
     fi
 
@@ -134,16 +139,16 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check feature directory and plan
-    if [ ! -d "$FEATURE_DIR" ]; then
-        log_error "Feature directory not found: $FEATURE_DIR"
-        log_error "Run /workflow-adapter:feature $FEATURE_NAME first"
+    # Check doc directory and plan
+    if [ ! -d "$DOC_DIR" ]; then
+        log_error "Directory not found: $DOC_DIR"
+        log_error "Run /workflow-adapter:${DOC_TYPE} $WORKFLOW_NAME first"
         exit 1
     fi
 
-    if [ ! -f "$FEATURE_DIR/plan.md" ]; then
-        log_error "Feature plan not found: $FEATURE_DIR/plan.md"
-        log_error "Run /workflow-adapter:feature-plan $FEATURE_NAME first"
+    if [ ! -f "$DOC_DIR/plan.md" ]; then
+        log_error "Plan not found: $DOC_DIR/plan.md"
+        log_error "Run /workflow-adapter:${DOC_TYPE}-plan $WORKFLOW_NAME first"
         exit 1
     fi
 }
@@ -210,17 +215,17 @@ run_agent() {
 
     local user_prompt
     if [[ "$CHECK_PLAN_COMPLETION" == "true" ]]; then
-      user_prompt="You are the $agent_name agent. Execute your responsibilities now for feature: $FEATURE_NAME
+      user_prompt="You are the $agent_name agent. Execute your responsibilities now for $DOC_TYPE: $WORKFLOW_NAME
 
-## Your Feature
-Feature: $FEATURE_NAME
-Plan: $FEATURE_DIR/plan.md
-Context: $FEATURE_DIR/context.md
+## Your $DOC_TYPE
+Name: $WORKFLOW_NAME
+Plan: $DOC_DIR/plan.md
+Context: $DOC_DIR/context.md
 
 ## Workflow
 1. Read .workflow-adapter/doc/principle.md for guidelines
-2. Read $FEATURE_DIR/context.md for project context
-3. Read $FEATURE_DIR/plan.md and find YOUR assigned tasks (look for your name: $agent_name)
+2. Read $DOC_DIR/context.md for project context
+3. Read $DOC_DIR/plan.md and find YOUR assigned tasks (look for your name: $agent_name)
 4. Work on your assigned tasks and update their status in plan.md (TODO -> IN_PROGRESS -> DONE)
 5. Write status messages to $MESSAGES_DIR/ if needed
 6. When done, check $MESSAGES_DIR/ for messages addressed to you (from_*_to_${agent_name}_*.md)
@@ -231,17 +236,17 @@ Note: Running in --complete mode. Iteration continues until plan.md shows all yo
 
 Start working now."
     else
-      user_prompt="You are the $agent_name agent. Execute your responsibilities now for feature: $FEATURE_NAME
+      user_prompt="You are the $agent_name agent. Execute your responsibilities now for $DOC_TYPE: $WORKFLOW_NAME
 
-## Your Feature
-Feature: $FEATURE_NAME
-Plan: $FEATURE_DIR/plan.md
-Context: $FEATURE_DIR/context.md
+## Your $DOC_TYPE
+Name: $WORKFLOW_NAME
+Plan: $DOC_DIR/plan.md
+Context: $DOC_DIR/context.md
 
 ## Workflow
 1. Read .workflow-adapter/doc/principle.md for guidelines
-2. Read $FEATURE_DIR/context.md for project context
-3. Read $FEATURE_DIR/plan.md and find YOUR assigned tasks (look for your name: $agent_name)
+2. Read $DOC_DIR/context.md for project context
+3. Read $DOC_DIR/plan.md and find YOUR assigned tasks (look for your name: $agent_name)
 4. Work on your assigned tasks and update their status in plan.md (TODO -> IN_PROGRESS -> DONE)
 5. Write status messages to $MESSAGES_DIR/ if needed
 6. When done, check $MESSAGES_DIR/ for messages addressed to you (from_*_to_${agent_name}_*.md)
@@ -255,7 +260,8 @@ Start working now."
 ---
 active: true
 agent_name: $agent_name
-feature_name: $FEATURE_NAME
+workflow_name: $WORKFLOW_NAME
+doc_type: $DOC_TYPE
 iteration: 1
 max_iterations: $MAX_ITERATIONS
 completion_signal: "TASKS_COMPLETE"
@@ -333,7 +339,9 @@ main() {
 
     echo ""
     log_info "Configuration:"
-    echo "  Feature: $FEATURE_NAME"
+    echo "  Type: $DOC_TYPE"
+    echo "  Name: $WORKFLOW_NAME"
+    echo "  Directory: $DOC_DIR"
     echo "  Max iterations: $MAX_ITERATIONS"
     echo "  Check plan completion: $CHECK_PLAN_COMPLETION"
     echo "  Timestamp: $TIMESTAMP"
@@ -403,8 +411,8 @@ main() {
 
     echo ""
     log_info "Check detailed logs: tail -100 $LOGS_DIR/*_${TIMESTAMP}.log"
-    log_info "Check messages: ls $FEATURE_DIR/messages/"
-    log_info "Validate results: /workflow-adapter:validate $FEATURE_NAME"
+    log_info "Check messages: ls $DOC_DIR/messages/"
+    log_info "Validate results: /workflow-adapter:validate $WORKFLOW_NAME"
 }
 
 # Run main

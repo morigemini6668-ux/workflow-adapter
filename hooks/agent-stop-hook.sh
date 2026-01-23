@@ -88,7 +88,15 @@ fi
 # Parse markdown frontmatter (YAML between ---) and extract values
 FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$AGENT_STATE_FILE")
 AGENT_NAME=$(echo "$FRONTMATTER" | grep '^agent_name:' | sed 's/agent_name: *//')
-FEATURE_NAME=$(echo "$FRONTMATTER" | grep '^feature_name:' | sed 's/feature_name: *//')
+# Support both old (feature_name) and new (workflow_name) formats
+WORKFLOW_NAME=$(echo "$FRONTMATTER" | grep '^workflow_name:' | sed 's/workflow_name: *//')
+if [[ -z "$WORKFLOW_NAME" ]]; then
+  WORKFLOW_NAME=$(echo "$FRONTMATTER" | grep '^feature_name:' | sed 's/feature_name: *//')
+fi
+DOC_TYPE=$(echo "$FRONTMATTER" | grep '^doc_type:' | sed 's/doc_type: *//')
+if [[ -z "$DOC_TYPE" ]]; then
+  DOC_TYPE="feature"
+fi
 ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
 MAX_ITERATIONS=$(echo "$FRONTMATTER" | grep '^max_iterations:' | sed 's/max_iterations: *//')
 COMPLETION_SIGNAL=$(echo "$FRONTMATTER" | grep '^completion_signal:' | sed 's/completion_signal: *//' | sed 's/^"\(.*\)"$/\1/')
@@ -197,7 +205,7 @@ if echo "$LAST_OUTPUT" | grep -q "WAITING_FOR_DEPENDENCY"; then
   sed "s/^iteration: .*/iteration: $NEXT_ITERATION/" "$AGENT_STATE_FILE" > "$TEMP_FILE"
   mv "$TEMP_FILE" "$AGENT_STATE_FILE"
 
-  SYSTEM_MSG="[workflow-adapter] Agent '$AGENT_NAME' iteration $NEXT_ITERATION/$MAX_ITERATIONS | Retrying after dependency wait | Feature: $FEATURE_NAME"
+  SYSTEM_MSG="[workflow-adapter] Agent '$AGENT_NAME' iteration $NEXT_ITERATION/$MAX_ITERATIONS | Retrying after dependency wait | $DOC_TYPE: $WORKFLOW_NAME"
 
   jq -n \
     --arg prompt "$PROMPT_TEXT" \
@@ -218,8 +226,8 @@ CHECK_PLAN=$(echo "$FRONTMATTER" | grep '^check_plan_completion:' | sed 's/check
 
 if echo "$LAST_OUTPUT" | grep -q "$SIGNAL"; then
   # If --complete mode, verify against plan.md before marking complete
-  if [[ "$CHECK_PLAN" == "true" ]] && [[ -n "$FEATURE_NAME" ]]; then
-    PLAN_FILE=".workflow-adapter/doc/feature_${FEATURE_NAME}/plan.md"
+  if [[ "$CHECK_PLAN" == "true" ]] && [[ -n "$WORKFLOW_NAME" ]]; then
+    PLAN_FILE=".workflow-adapter/doc/${DOC_TYPE}_${WORKFLOW_NAME}/plan.md"
     if [[ -f "$PLAN_FILE" ]]; then
       # Check if agent has remaining TODO or IN_PROGRESS tasks
       REMAINING_TASKS=$(grep -E "^\s*-\s*\[" "$PLAN_FILE" | grep -i "assignee:.*$AGENT_NAME" | grep -v "DONE" | head -1 || true)
@@ -235,7 +243,7 @@ if echo "$LAST_OUTPUT" | grep -q "$SIGNAL"; then
         sed "s/^iteration: .*/iteration: $NEXT_ITERATION/" "$AGENT_STATE_FILE" > "$TEMP_FILE"
         mv "$TEMP_FILE" "$AGENT_STATE_FILE"
 
-        SYSTEM_MSG="[workflow-adapter] Agent '$AGENT_NAME' iteration $NEXT_ITERATION/$MAX_ITERATIONS | Tasks still remaining in plan.md | Feature: $FEATURE_NAME"
+        SYSTEM_MSG="[workflow-adapter] Agent '$AGENT_NAME' iteration $NEXT_ITERATION/$MAX_ITERATIONS | Tasks still remaining in plan.md | $DOC_TYPE: $WORKFLOW_NAME"
 
         jq -n \
           --arg prompt "$PROMPT_TEXT" \
@@ -308,7 +316,7 @@ sed "s/^iteration: .*/iteration: $NEXT_ITERATION/" "$AGENT_STATE_FILE" > "$TEMP_
 mv "$TEMP_FILE" "$AGENT_STATE_FILE"
 
 # Build system message
-SYSTEM_MSG="[workflow-adapter] Agent '$AGENT_NAME' iteration $NEXT_ITERATION/$MAX_ITERATIONS | Feature: $FEATURE_NAME | Output '$SIGNAL' when all tasks complete"
+SYSTEM_MSG="[workflow-adapter] Agent '$AGENT_NAME' iteration $NEXT_ITERATION/$MAX_ITERATIONS | $DOC_TYPE: $WORKFLOW_NAME | Output '$SIGNAL' when all tasks complete"
 
 # Output JSON to block the stop and feed prompt back
 jq -n \

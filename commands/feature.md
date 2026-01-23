@@ -127,7 +127,29 @@ Generate implementation plan:
 - Consider existing features to avoid conflicts
 - Break down into tasks
 - Assign to available agents
-- Write to `.workflow-adapter/doc/feature_$1/plan.md`
+
+**Draft Agent Guidance:**
+For each worker agent with assigned tasks, draft customized guidance:
+- 규율 (Rules): Coding standards, constraints from spec
+- 주의사항 (Considerations): Edge cases, integration points, risks
+- 탐색 영역 (Exploration): Relevant code paths, documentation
+
+**Interactive Guidance Refinement:**
+For each agent, use `AskUserQuestion` to refine the guidance:
+```yaml
+question: "{AGENT_NAME}에게 할당된 task와 가이던스 초안입니다. 수정이 필요하신가요?"
+header: "{AGENT_NAME}"
+options:
+  - label: "확인, 다음으로"
+  - label: "규율 수정"
+  - label: "주의사항 수정"
+  - label: "탐색 영역 수정"
+multiSelect: true
+```
+
+Apply user feedback before proceeding to next agent.
+
+- Write to `.workflow-adapter/doc/feature_$1/plan.md` (including Agent Guidance section)
 
 ### Stage 4: Review
 Inform user: "Running review..."

@@ -259,6 +259,41 @@ Write to `.workflow-adapter/doc/feature_$1/plan.md`:
 | {risk} | High/Medium/Low | {mitigation} |
 | Conflict with existing features | Medium | Review context.md, coordinate with existing implementations |
 
+## Agent Guidance
+
+각 agent가 task 수행 시 참고해야 할 맞춤 가이던스입니다.
+
+### alpha
+**담당 Task:** {task_ids}
+
+**규율 (Rules):**
+- {rule_1}
+- {rule_2}
+
+**주의사항 (Considerations):**
+- {consideration_1}
+
+**탐색 영역 (Exploration):**
+- `{path_1}` - {reason}
+
+---
+
+### beta
+**담당 Task:** {task_ids}
+
+**규율 (Rules):**
+- {rule_1}
+
+**주의사항 (Considerations):**
+- {consideration_1}
+
+**탐색 영역 (Exploration):**
+- `{path_1}` - {reason}
+
+---
+
+(각 worker agent마다 반복)
+
 ## Notes
 - {Any additional notes}
 - Project context was considered from context.md
@@ -268,11 +303,69 @@ _Plan created: {timestamp}_
 _Based on: context.md, spec.md_
 ```
 
-### 7. Distribute Tasks
+### 7. Draft Agent Guidance
+For each worker agent with assigned tasks, draft customized guidance:
+
+1. Analyze the tasks assigned to this agent
+2. Review context.md and spec.md for relevant constraints
+3. Draft guidance with three sections:
+
+```markdown
+## {AGENT_NAME} 가이던스 (초안)
+
+### 담당 Task
+- T-001: {description}
+- T-003: {description}
+
+### 규율 (Rules)
+- Coding standards from context
+- Constraints from spec
+- Dependencies to respect
+
+### 주의사항 (Considerations)
+- Edge cases in their tasks
+- Integration points with other agents' work
+- Potential risks
+
+### 탐색 영역 (Exploration)
+- Relevant code paths to examine
+- Documentation to reference
+- Similar implementations to learn from
+```
+
+### 8. Interactive Guidance Refinement
+For each agent with tasks, use `AskUserQuestion` to refine the guidance:
+
+**Agent별 순차 질문** (alpha → beta → gamma 순서로 한 agent씩):
+
+```yaml
+question: "{AGENT_NAME}에게 할당된 task:\n{task_list}\n\n가이던스 초안:\n\n**규율:**\n{rules}\n\n**주의사항:**\n{considerations}\n\n**탐색영역:**\n{exploration}\n\n수정이 필요하신가요?"
+header: "{AGENT_NAME}"
+options:
+  - label: "확인, 다음으로"
+    description: "이 agent 가이던스 확정"
+  - label: "규율 수정"
+    description: "따라야 할 규칙 변경"
+  - label: "주의사항 수정"
+    description: "신경써야 할 부분 변경"
+  - label: "탐색 영역 수정"
+    description: "참고 코드/문서 변경"
+multiSelect: true
+```
+
+**Processing user feedback:**
+- If user selects "확인, 다음으로": Keep the draft as-is and proceed to next agent
+- If user selects modification options: Ask for specific changes via "Other" input
+- If user selects "Other": Apply their custom feedback directly
+- Confirm changes before proceeding to next agent
+
+After all agents' guidance is confirmed, proceed to write the final plan.
+
+### 9. Distribute Tasks
 Ensure each worker agent has a balanced workload.
 Consider dependencies when assigning tasks.
 
-### 8. Output Summary
+### 10. Output Summary
 
 **If new plan (no --revise):**
 ```

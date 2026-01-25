@@ -6,6 +6,11 @@ allowed-tools: [Read, Write, AskUserQuestion, Glob, WebSearch, WebFetch, Grep, B
 
 Generate an implementation plan for a triaged fix with tasks assigned to each agent.
 
+## Important Constraints
+- **DO NOT use Plan subagent** (subagent_type=Plan). This command IS the planning step.
+- You MUST write the final plan directly to `.workflow-adapter/doc/fix_$1/plan.md` file using Write tool.
+- Never delegate the plan creation to another agent.
+
 ## Arguments
 - `$1`: Fix name (required)
 - `--revise`: Revise existing plan based on review feedback (optional)

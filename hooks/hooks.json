@@ -1,12 +1,12 @@
 {
-  "description": "workflow-adapter agent continuation hook - enables automatic task iteration until completion",
+  "description": "workflow-adapter hooks - agent continuation and prompt history logging",
   "hooks": {
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/agent-stop-hook.sh"
+            "command": "powershell.exe -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/agent-stop-hook.ps1\""
           }
         ]
       }

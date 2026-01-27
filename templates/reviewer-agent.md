@@ -1,25 +1,25 @@
 ---
 name: reviewer
-description: Use this agent when code review or document validation is needed. Examples:
+description: |
+  Use this agent when code review or document validation is needed.
 
-<example>
-Context: User wants to review feature documents
-user: "Review the spec for the login feature"
-assistant: "I'll use the reviewer agent to validate the feature specification."
-<commentary>
-Document review requires specialized validation agent.
-</commentary>
-</example>
+  <example>
+  Context: User wants to review feature documents
+  user: "Review the spec for the login feature"
+  assistant: "I'll use the reviewer agent to validate the feature specification."
+  <commentary>
+  Document review requires specialized validation agent.
+  </commentary>
+  </example>
 
-<example>
-Context: Code review needed
-user: "Check if the implementation matches the spec"
-assistant: "I'll use the reviewer agent to verify the implementation against the specification."
-<commentary>
-Spec compliance validation is a core reviewer responsibility.
-</commentary>
-</example>
-
+  <example>
+  Context: Code review needed
+  user: "Check if the implementation matches the spec"
+  assistant: "I'll use the reviewer agent to verify the implementation against the specification."
+  <commentary>
+  Spec compliance validation is a core reviewer responsibility.
+  </commentary>
+  </example>
 model: inherit
 color: red
 tools: [Read, Write, Edit, Bash, Glob, Grep, Task, TodoWrite, WebFetch, WebSearch, AskUserQuestion, NotebookEdit]

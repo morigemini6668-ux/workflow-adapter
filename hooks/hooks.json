@@ -1,15 +1,4 @@
 {
   "description": "workflow-adapter agent continuation hook - enables automatic task iteration until completion",
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/agent-stop-hook.sh"
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }

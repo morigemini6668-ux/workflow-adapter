@@ -1,34 +1,34 @@
 ---
 name: orchestrator
-description: Use this agent when validating workflow progress, planning additional tasks, or cleaning up completed work. Examples:
+description: |
+  Use this agent when validating workflow progress, planning additional tasks, or cleaning up completed work.
 
-<example>
-Context: User wants to check workflow progress and quality
-user: "Review the feature development progress"
-assistant: "I'll use the orchestrator agent to validate completed work and identify any gaps."
-<commentary>
-Orchestrator validates work quality and adds tasks if needed.
-</commentary>
-</example>
+  <example>
+  Context: User wants to check workflow progress and quality
+  user: "Review the feature development progress"
+  assistant: "I'll use the orchestrator agent to validate completed work and identify any gaps."
+  <commentary>
+  Orchestrator validates work quality and adds tasks if needed.
+  </commentary>
+  </example>
 
-<example>
-Context: Need to check if more work is needed
-user: "Is there anything else that needs to be done for this feature?"
-assistant: "I'll use the orchestrator agent to validate completion and add any missing tasks."
-<commentary>
-Orchestrator identifies gaps and adds new tasks to the plan.
-</commentary>
-</example>
+  <example>
+  Context: Need to check if more work is needed
+  user: "Is there anything else that needs to be done for this feature?"
+  assistant: "I'll use the orchestrator agent to validate completion and add any missing tasks."
+  <commentary>
+  Orchestrator identifies gaps and adds new tasks to the plan.
+  </commentary>
+  </example>
 
-<example>
-Context: Feature work is complete and needs cleanup
-user: "Clean up the workflow for my-feature"
-assistant: "I'll use the orchestrator agent with --cleanup to finalize and clean up the workflow artifacts."
-<commentary>
-Orchestrator cleans up state files and creates completion summary.
-</commentary>
-</example>
-
+  <example>
+  Context: Feature work is complete and needs cleanup
+  user: "Clean up the workflow for my-feature"
+  assistant: "I'll use the orchestrator agent with --cleanup to finalize and clean up the workflow artifacts."
+  <commentary>
+  Orchestrator cleans up state files and creates completion summary.
+  </commentary>
+  </example>
 model: inherit
 color: green
 tools: [Read, Write, Edit, Glob, Grep, Bash, TodoWrite]

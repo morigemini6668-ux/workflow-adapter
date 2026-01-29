@@ -104,79 +104,92 @@ After execution, run /workflow-adapter:validate {name} to verify completion.
 
 **IMPORTANT: Only use this mode when --in-session flag is explicitly provided.**
 
-Run agents within the current Claude session. The Stop hook handles automatic iteration.
+Run agents as subagents within the current Claude session using Task tool.
 
 ### Step 1: Discover Agents
 Read all agent files from `.workflow-adapter/agents/`:
 - List all `.md` files
-- Extract agent names (exclude orchestrator for now)
+- Extract agent names (exclude orchestrator and reviewer for parallel execution)
 - Sort alphabetically (alpha, beta, gamma...)
 
-### Step 2: Create State Files for All Agents
-For each agent, create a state file using setup script:
+### Step 2: Read Agent Instructions and Tasks
+For each worker agent:
+1. Read agent instructions from `.workflow-adapter/agents/{name}.md`
+2. Extract assigned tasks from `.workflow-adapter/doc/feature_{feature_name}/plan.md`
 
-```bash
-# Without --complete flag:
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup-agent-loop.sh" {agent_name} {feature_name} --max-iter {max_iter}
+### Step 3: Launch Worker Agents in Parallel via Task Tool
+**Use Task tool to launch all worker agents in parallel** (send multiple Task tool calls in a single message).
 
-# With --complete flag:
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup-agent-loop.sh" {agent_name} {feature_name} --max-iter {max_iter} --complete
+The agents are installed to `.claude/agents/` via `/workflow-adapter:install`, so use the agent name directly:
+- `subagent_type: "alpha"`
+- `subagent_type: "beta"`
+- `subagent_type: "gamma"`
+- etc.
+
+For each worker agent, call Task tool with:
+
+```yaml
+subagent_type: "{agent_name}"
+description: "{agent_name} agent for {feature_name}"
+mode: "bypassPermissions"
+prompt: |
+  ## Feature: {feature_name}
+  You are working on the feature: {feature_name}
+
+  ## Your Assigned Tasks (from plan.md)
+  {Extract tasks assigned to this agent from plan.md}
+
+  ## Workflow
+  1. Read .workflow-adapter/doc/principle.md for guidelines
+  2. Read .workflow-adapter/doc/feature_{feature_name}/context.md for project context
+  3. Work on YOUR assigned tasks from the plan above
+  4. Update task status in plan.md as you complete them (TODO -> IN_PROGRESS -> DONE)
+  5. Write messages to other agents if needed (to .workflow-adapter/doc/feature_{feature_name}/messages/)
+  6. When done, check .workflow-adapter/doc/feature_{feature_name}/messages/ for messages addressed to you
+
+  Complete all your assigned tasks, then report what you accomplished.
 ```
 
-The state files will be created at `.claude/workflow-agent-{name}.local.md`
-With `--complete` flag, the state file will include `check_plan_completion: true`
-
-### Step 3: Read First Agent Instructions
-Read the first agent's (alphabetically, e.g., "alpha") full instructions from `.workflow-adapter/agents/{name}.md`.
-
-### Step 4: Start First Agent
-**Output the first agent's prompt directly** (not via Task tool). The Stop hook will:
-1. Detect the agent's state file
-2. Continue the agent until TASKS_COMPLETE
-3. Automatically switch to the next agent
-4. Complete when all agents are done
-
-Output this prompt for the first agent:
-
+**Example: Launching 3 agents in parallel (single message with multiple Task calls):**
 ```
-You are the {first_agent_name} agent in a multi-agent workflow system.
-
-## Feature: {feature_name}
-You are working on the feature: {feature_name}
-
-## Your Agent Instructions
-{content from .workflow-adapter/agents/{first_agent_name}.md - skip YAML frontmatter}
-
-## Your Assigned Tasks (from plan.md)
-{Extract tasks assigned to this agent from .workflow-adapter/doc/feature_{feature_name}/plan.md}
-
-## Workflow
-1. Read .workflow-adapter/doc/principle.md for guidelines
-2. Read .workflow-adapter/doc/feature_{feature_name}/context.md for project context
-3. Work on YOUR assigned tasks from the plan above
-4. Update task status in plan.md as you complete them (TODO -> IN_PROGRESS -> DONE)
-5. Write messages to other agents if needed (to .workflow-adapter/doc/feature_{feature_name}/messages/)
-6. When done, check .workflow-adapter/doc/feature_{feature_name}/messages/ for messages addressed to you
-7. If blocked by dependencies, output WAITING_FOR_DEPENDENCY (will retry later)
-
-When all your assigned tasks are complete and messages are processed, output: TASKS_COMPLETE
+[Task call 1: subagent_type="alpha"]
+[Task call 2: subagent_type="beta"]
+[Task call 3: subagent_type="gamma"]
 ```
 
-The Stop hook will automatically:
-- Continue this agent until TASKS_COMPLETE
-- If `--complete` mode, verify plan.md tasks are DONE before completing
-- Handle WAITING_FOR_DEPENDENCY by retrying
-- Switch to the next agent (beta, gamma, etc.)
-- Complete the workflow when all agents finish
+### Step 4: Wait for All Agents to Complete
+Task tool will return results from each agent. Collect their outputs.
 
-### Step 5: Completion Message (shown after all agents complete)
+### Step 5: Run Reviewer Agent (if exists)
+After all workers complete, launch the reviewer agent:
+
+```yaml
+subagent_type: "reviewer"
+description: "reviewer agent for {feature_name}"
+mode: "bypassPermissions"
+prompt: |
+  ## Feature: {feature_name}
+
+  ## Review Tasks
+  1. Read .workflow-adapter/doc/feature_{feature_name}/plan.md - check all tasks are DONE
+  2. Check .workflow-adapter/doc/feature_{feature_name}/messages/ for any unresolved issues
+  3. Verify the implementation quality
+
+  Report your review findings.
+```
+
+### Step 6: Completion Message
 ```
 In-session execution complete for feature: {feature_name}
 
-Agents executed: {list}
+Agents executed in parallel: {worker_list}
+Reviewer: {reviewer_status}
+
+Results:
+- {agent_name}: {summary from Task result}
+- ...
 
 Check:
-- Logs: .workflow-adapter/logs/
 - Messages: .workflow-adapter/doc/feature_{feature_name}/messages/
 - Plan status: .workflow-adapter/doc/feature_{feature_name}/plan.md
 
@@ -185,39 +198,43 @@ Run /workflow-adapter:validate {feature_name} to verify completion.
 
 ---
 
-## How the Stop Hook Works
+## How Each Mode Works
 
-The workflow-adapter plugin includes a Stop hook (`hooks/agent-stop-hook.sh`) that:
+### Background Mode (Default)
+Uses Stop hook (`hooks/agent-stop-hook.sh`) for automatic iteration:
 1. Detects active agent state files in `.claude/`
 2. Checks if the agent output contains TASKS_COMPLETE
 3. If not complete: blocks session exit and re-injects the prompt
 4. If complete: removes the state file and starts the next agent
 5. When all agents complete: allows session to exit normally
 
-This enables automatic task continuation without manual intervention.
+### In-Session Mode (--in-session)
+Uses Task tool to spawn subagents:
+1. Each agent runs as a subagent via Task tool
+2. Subagents execute until completion (no Stop hook needed)
+3. Task tool returns results when each agent finishes
+4. Workers run in parallel, reviewer runs after workers complete
 
 ---
 
 ## Troubleshooting
 
-### If script execution fails:
+### If background script execution fails:
 1. Check that `claude` CLI is installed and in PATH
 2. Verify `.workflow-adapter/agents/` has agent files
 3. Check script permissions: `chmod +x scripts/*.sh`
 
-### To cancel running agents:
+### To cancel running background agents:
 ```
 /workflow-adapter:cancel-agent --all
 ```
 
-### If an agent is stuck:
+### If a background agent is stuck:
 1. Check the agent's state file: `.claude/workflow-agent-{name}.local.md`
 2. Check the iteration count - may have hit max_iterations
 3. Cancel and restart: `/workflow-adapter:cancel-agent {name}` then run execute again
 
 ## Notes
-- Both modes use the Stop hook for automatic task continuation
-- Background mode provides true parallel execution (multiple Claude sessions)
-- In-session mode runs agents sequentially (useful for debugging)
+- **Background mode**: Uses Stop hook for iteration, true parallel execution (multiple Claude sessions). State files in `.claude/workflow-agent-*.local.md` control the loop.
+- **In-session mode**: Uses Task tool subagents, parallel workers within current session. No state files needed.
 - Agents communicate via `.workflow-adapter/doc/feature_{feature_name}/messages/`
-- State files in `.claude/workflow-agent-*.local.md` control the loop

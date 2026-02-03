@@ -31,18 +31,17 @@ Use Glob to check if `.workflow-adapter/` already exists:
 Create these directories in the project root:
 ```
 .workflow-adapter/
-├── agents/
 ├── doc/
 └── logs/
 
 .claude/
-├── agents/workflow-adapter/    # Sub-agents (Task tool)
+├── agents/workflow-adapter/    # Agents (Sub-agents for Task tool)
 └── commands/workflow-adapter/  # Slash commands
 ```
 
 Use Bash to create directories:
 ```bash
-mkdir -p .workflow-adapter/agents .workflow-adapter/doc .workflow-adapter/logs .claude/agents/workflow-adapter .claude/commands/workflow-adapter
+mkdir -p .workflow-adapter/doc .workflow-adapter/logs .claude/agents/workflow-adapter .claude/commands/workflow-adapter
 ```
 
 ### 4. Copy Principle Template
@@ -61,44 +60,29 @@ Target: `.workflow-adapter/doc/principle.md`
 For each agent (up to count, using the Greek names above in order):
 1. Read worker template: @${CLAUDE_PLUGIN_ROOT}/templates/worker-agent.md
 2. Replace `{{AGENT_NAME}}` with the Greek letter name
-3. Target: `.workflow-adapter/agents/{name}.md`
+3. Target: `.claude/agents/workflow-adapter/{name}.md`
    - Check if file exists, then Write (new) or Edit (update)
 
 ### 6. Generate Reviewer Agent
 Read the reviewer template: @${CLAUDE_PLUGIN_ROOT}/templates/reviewer-agent.md
 
-Target: `.workflow-adapter/agents/reviewer.md`
+Target: `.claude/agents/workflow-adapter/reviewer.md`
 - Check if file exists, then Write (new) or Edit (update)
 
 ### 7. Generate Orchestrator Agent
 Read template: @${CLAUDE_PLUGIN_ROOT}/templates/orchestrator-agent.md
 
-Target: `.workflow-adapter/agents/orchestrator.md`
+Target: `.claude/agents/workflow-adapter/orchestrator.md`
 - Check if file exists, then Write (new) or Edit (update)
 
-### 8. Install Sub-Agents to .claude/agents/
-For each agent created in steps 5-7 (workers + reviewer + orchestrator):
-
-Copy the same agent file (with YAML frontmatter) to `.claude/agents/workflow-adapter/{name}.md`
-
-This allows agents to be invoked via the Task tool as sub-agents:
-- `subagent_type: "workflow-adapter:alpha"`
-- `subagent_type: "workflow-adapter:reviewer"`
-- `subagent_type: "workflow-adapter:orchestrator"`
-
-For each agent:
-1. Use the same content as `.workflow-adapter/agents/{name}.md`
-2. Target: `.claude/agents/workflow-adapter/{name}.md`
-   - Check if file exists, then Write (new) or Edit (update)
-
-### 9. Create Dynamic Commands
+### 8. Create Dynamic Commands
 For each agent created (workers + reviewer + orchestrator):
 1. Read command template: @${CLAUDE_PLUGIN_ROOT}/templates/agent-command.md
 2. Replace `{{AGENT_NAME}}` with the agent name
 3. Target: `.claude/commands/workflow-adapter/{name}.md`
    - Check if file exists, then Write (new) or Edit (update)
 
-### 10. Output Summary
+### 9. Output Summary
 Report what was created or updated:
 - Installation type (NEW or UPDATE)
 - Number of worker agents and their names
@@ -115,7 +99,7 @@ Created agents:
 - Workers: alpha, beta, gamma
 - Special: reviewer, orchestrator
 
-Sub-agents installed (for Task tool):
+Agents installed (for Task tool):
 - workflow-adapter:alpha
 - workflow-adapter:beta
 - workflow-adapter:gamma
@@ -128,13 +112,12 @@ Commands available:
 
 Directory structure:
 .workflow-adapter/
-├── agents/ (5 agents)
 ├── doc/
 │   └── principle.md
 └── logs/
 
 .claude/
-├── agents/workflow-adapter/ (5 sub-agents)
+├── agents/workflow-adapter/ (5 agents)
 └── commands/workflow-adapter/ (5 commands)
 ```
 
@@ -146,7 +129,7 @@ Updated agents:
 - Workers: alpha, beta, gamma
 - Special: reviewer, orchestrator
 
-Sub-agents updated:
+Agents updated:
 - workflow-adapter:alpha, workflow-adapter:beta, workflow-adapter:gamma
 - workflow-adapter:reviewer, workflow-adapter:orchestrator
 

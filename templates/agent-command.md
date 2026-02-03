@@ -95,7 +95,7 @@ Replace `{feature_name}`, `{max_iter}`, and `{timestamp}` with actual values.
 The Stop hook will automatically continue this agent until TASKS_COMPLETE (or until plan.md tasks are DONE in --complete mode).
 
 ## Agent Instructions
-@.workflow-adapter/agents/{{AGENT_NAME}}.md
+@.claude/agents/workflow-adapter/{{AGENT_NAME}}.md
 
 ## Current Context
 Read these files to understand your context:

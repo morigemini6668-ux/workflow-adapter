@@ -37,7 +37,7 @@ Available features:
 ```
 
 ### Step 2: Read Orchestrator Instructions
-@.workflow-adapter/agents/orchestrator.md
+@.claude/agents/workflow-adapter/orchestrator.md
 
 ### Step 3: Gather Context
 

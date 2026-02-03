@@ -36,7 +36,7 @@ for arg in "$@"; do
 done
 
 WORKFLOW_DIR=".workflow-adapter"
-AGENTS_DIR="$WORKFLOW_DIR/agents"
+AGENTS_DIR=".claude/agents/workflow-adapter"
 LOGS_DIR="$WORKFLOW_DIR/logs"
 DOC_DIR="$WORKFLOW_DIR/doc/${DOC_TYPE}_$WORKFLOW_NAME"
 MESSAGES_DIR="$DOC_DIR/messages"

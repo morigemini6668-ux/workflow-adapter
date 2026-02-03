@@ -21,7 +21,9 @@ Generate an implementation plan for a triaged fix with tasks assigned to each ag
 - Extract fix name from `$1`
 - Check if `--revise` flag is present
 
-### 2. Validate Prerequisites
+### 2. Validate Prerequisites and Check Versions
+
+**Step 2.1: Check prerequisites exist**
 Check that these files exist:
 - `.workflow-adapter/doc/fix_$1/context.md` (project context)
 - `.workflow-adapter/doc/fix_$1/triage.md` (triage report)
@@ -32,10 +34,49 @@ If `--revise` flag is present, also check:
 
 If required files missing, inform user to run previous steps.
 
+**Step 2.2: Check version dependencies (if NOT --revise)**
+
+If `.workflow-adapter/doc/fix_$1/plan.md` already exists AND `--revise` is NOT set:
+
+1. Read plan.md and extract YAML frontmatter `depends_on` section
+2. For each dependency (context.md, triage.md):
+   - Read the dependency file's frontmatter `version` field
+   - Compare with the version recorded in plan.md's `depends_on`
+
+3. If any dependency's current version differs from recorded version (or if plan.md has no frontmatter/depends_on):
+
+   Show warning to user:
+   ```
+   ⚠️ plan.md was generated based on older versions of prerequisites.
+
+   Version changes detected:
+   - {filename}: recorded {old_version} → current {new_version}
+   ```
+
+   Use AskUserQuestion to let user decide:
+   ```yaml
+   question: "plan.md의 선행 문서가 업데이트되었습니다. 어떻게 진행할까요?"
+   header: "버전 충돌"
+   options:
+     - label: "재생성 (권장)"
+       description: "최신 선행 문서 기반으로 plan.md 새로 생성"
+     - label: "기존 유지"
+       description: "현재 plan.md 유지 (선행 문서와 불일치할 수 있음)"
+     - label: "취소"
+       description: "작업 중단"
+   ```
+
+   - If "재생성": Continue with plan generation (Step 3)
+   - If "기존 유지": Skip plan generation, proceed to summary
+   - If "취소": Stop execution
+
+4. If plan.md doesn't exist OR user chose "재생성":
+   Proceed to Step 3 (Discover Available Agents)
+
 ### 3. Discover Available Agents
-List all agent files in `.workflow-adapter/agents/`:
+List all agent files in `.claude/agents/workflow-adapter/`:
 ```bash
-ls .workflow-adapter/agents/*.md
+ls .claude/agents/workflow-adapter/*.md
 ```
 
 Extract agent names (excluding reviewer and orchestrator for task assignment).
@@ -112,6 +153,13 @@ Break down the fix into tasks based on triage report.
 Write to `.workflow-adapter/doc/fix_$1/plan.md`:
 
 ```markdown
+---
+version: "{CURRENT_TIMESTAMP_ISO8601}"
+depends_on:
+  context.md: "{VERSION_FROM_CONTEXT_MD}"
+  triage.md: "{VERSION_FROM_TRIAGE_MD}"
+---
+
 # Fix Implementation Plan: {fix_name}
 
 ## Overview

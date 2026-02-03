@@ -31,7 +31,7 @@ Available features:
 ```
 
 ### 2. Validate Setup
-Check that `.workflow-adapter/agents/` exists and contains agent files.
+Check that `.claude/agents/workflow-adapter/` exists and contains agent files.
 If not, inform user to run install first.
 
 ### 3. Check Feature Exists
@@ -107,29 +107,29 @@ After execution, run /workflow-adapter:validate {name} to verify completion.
 Run agents as subagents within the current Claude session using Task tool.
 
 ### Step 1: Discover Agents
-Read all agent files from `.workflow-adapter/agents/`:
+Read all agent files from `.claude/agents/workflow-adapter/`:
 - List all `.md` files
 - Extract agent names (exclude orchestrator and reviewer for parallel execution)
 - Sort alphabetically (alpha, beta, gamma...)
 
 ### Step 2: Read Agent Instructions and Tasks
 For each worker agent:
-1. Read agent instructions from `.workflow-adapter/agents/{name}.md`
+1. Read agent instructions from `.claude/agents/workflow-adapter/{name}.md`
 2. Extract assigned tasks from `.workflow-adapter/doc/feature_{feature_name}/plan.md`
 
 ### Step 3: Launch Worker Agents in Parallel via Task Tool
 **Use Task tool to launch all worker agents in parallel** (send multiple Task tool calls in a single message).
 
-The agents are installed to `.claude/agents/` via `/workflow-adapter:install`, so use the agent name directly:
-- `subagent_type: "alpha"`
-- `subagent_type: "beta"`
-- `subagent_type: "gamma"`
+The agents are installed to `.claude/agents/workflow-adapter/` via `/workflow-adapter:install`, so use the namespaced agent name:
+- `subagent_type: "workflow-adapter:alpha"`
+- `subagent_type: "workflow-adapter:beta"`
+- `subagent_type: "workflow-adapter:gamma"`
 - etc.
 
 For each worker agent, call Task tool with:
 
 ```yaml
-subagent_type: "{agent_name}"
+subagent_type: "workflow-adapter:{agent_name}"
 description: "{agent_name} agent for {feature_name}"
 mode: "bypassPermissions"
 prompt: |
@@ -152,9 +152,9 @@ prompt: |
 
 **Example: Launching 3 agents in parallel (single message with multiple Task calls):**
 ```
-[Task call 1: subagent_type="alpha"]
-[Task call 2: subagent_type="beta"]
-[Task call 3: subagent_type="gamma"]
+[Task call 1: subagent_type="workflow-adapter:alpha"]
+[Task call 2: subagent_type="workflow-adapter:beta"]
+[Task call 3: subagent_type="workflow-adapter:gamma"]
 ```
 
 ### Step 4: Wait for All Agents to Complete
@@ -164,7 +164,7 @@ Task tool will return results from each agent. Collect their outputs.
 After all workers complete, launch the reviewer agent:
 
 ```yaml
-subagent_type: "reviewer"
+subagent_type: "workflow-adapter:reviewer"
 description: "reviewer agent for {feature_name}"
 mode: "bypassPermissions"
 prompt: |
@@ -221,7 +221,7 @@ Uses Task tool to spawn subagents:
 
 ### If background script execution fails:
 1. Check that `claude` CLI is installed and in PATH
-2. Verify `.workflow-adapter/agents/` has agent files
+2. Verify `.claude/agents/workflow-adapter/` has agent files
 3. Check script permissions: `chmod +x scripts/*.sh`
 
 ### To cancel running background agents:

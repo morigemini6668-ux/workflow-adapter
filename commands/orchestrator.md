@@ -37,7 +37,11 @@ Available features:
 ```
 
 ### Step 2: Read Orchestrator Instructions
-@.claude/agents/workflow-adapter/orchestrator.md
+Resolve agents directory by checking which path exists with agent files:
+1. If `.claude/agents/.local/workflow-adapter/` exists with `.md` files → use this path
+2. Otherwise → use `.claude/agents/workflow-adapter/`
+
+Read orchestrator file from the resolved agents directory: `{AGENTS_DIR}/orchestrator.md`
 
 ### Step 3: Gather Context
 

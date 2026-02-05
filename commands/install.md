@@ -8,6 +8,7 @@ Initialize the workflow-adapter system in the current project.
 
 ## Arguments
 - `$ARGUMENTS` or `$1`: Number of worker agents to create (default: 3)
+- `--local`: Install agents to `.claude/agents/.local/workflow-adapter` instead of `.claude/agents/workflow-adapter`
 
 ## File Write Strategy
 **IMPORTANT:** Before writing any file, check if it already exists:
@@ -18,9 +19,13 @@ This prevents errors when re-running install on existing setup.
 
 ## Tasks to Perform
 
-### 1. Parse Agent Count
+### 1. Parse Arguments
 Get the count from arguments. If not provided, default to 3.
 Valid range: 1-24 (Greek alphabet limit)
+
+Check if `--local` flag is present in arguments.
+- If `--local`: Use `.claude/agents/.local/workflow-adapter` as AGENTS_DIR
+- Otherwise: Use `.claude/agents/workflow-adapter` as AGENTS_DIR
 
 ### 2. Check Existing Installation
 Use Glob to check if `.workflow-adapter/` already exists:
@@ -35,12 +40,16 @@ Create these directories in the project root:
 └── logs/
 
 .claude/
-├── agents/workflow-adapter/    # Agents (Sub-agents for Task tool)
-└── commands/workflow-adapter/  # Slash commands
+├── agents/{workflow-adapter OR .local/workflow-adapter}  # Agents (Sub-agents for Task tool)
+└── commands/workflow-adapter/                             # Slash commands
 ```
 
-Use Bash to create directories:
+Use Bash to create directories (use AGENTS_DIR determined in step 1):
 ```bash
+# If --local flag:
+mkdir -p .workflow-adapter/doc .workflow-adapter/logs .claude/agents/.local/workflow-adapter .claude/commands/workflow-adapter
+
+# If no --local flag (default):
 mkdir -p .workflow-adapter/doc .workflow-adapter/logs .claude/agents/workflow-adapter .claude/commands/workflow-adapter
 ```
 
@@ -60,19 +69,19 @@ Target: `.workflow-adapter/doc/principle.md`
 For each agent (up to count, using the Greek names above in order):
 1. Read worker template: @${CLAUDE_PLUGIN_ROOT}/templates/worker-agent.md
 2. Replace `{{AGENT_NAME}}` with the Greek letter name
-3. Target: `.claude/agents/workflow-adapter/{name}.md`
+3. Target: `{AGENTS_DIR}/{name}.md` (use the AGENTS_DIR determined in step 1)
    - Check if file exists, then Write (new) or Edit (update)
 
 ### 6. Generate Reviewer Agent
 Read the reviewer template: @${CLAUDE_PLUGIN_ROOT}/templates/reviewer-agent.md
 
-Target: `.claude/agents/workflow-adapter/reviewer.md`
+Target: `{AGENTS_DIR}/reviewer.md` (use the AGENTS_DIR determined in step 1)
 - Check if file exists, then Write (new) or Edit (update)
 
 ### 7. Generate Orchestrator Agent
 Read template: @${CLAUDE_PLUGIN_ROOT}/templates/orchestrator-agent.md
 
-Target: `.claude/agents/workflow-adapter/orchestrator.md`
+Target: `{AGENTS_DIR}/orchestrator.md` (use the AGENTS_DIR determined in step 1)
 - Check if file exists, then Write (new) or Edit (update)
 
 ### 8. Create Dynamic Commands
@@ -117,8 +126,10 @@ Directory structure:
 └── logs/
 
 .claude/
-├── agents/workflow-adapter/ (5 agents)
+├── agents/workflow-adapter/ (5 agents)   # or .local/workflow-adapter/ if --local
 └── commands/workflow-adapter/ (5 commands)
+
+Installation path: .claude/agents/workflow-adapter/  # or .claude/agents/.local/workflow-adapter/ if --local
 ```
 
 **Example output (update):**

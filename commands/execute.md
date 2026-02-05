@@ -20,6 +20,14 @@ Before running execute:
 
 ## Tasks to Perform
 
+### 0. Resolve Agents Directory Path
+Determine the agents directory by checking which path exists with agent files:
+
+1. Check `.claude/agents/.local/workflow-adapter/` - if exists and contains `.md` files, use this path
+2. Otherwise, use `.claude/agents/workflow-adapter/`
+
+Store this as `AGENTS_DIR` for use in subsequent steps.
+
 ### 1. Validate Feature Name
 If no feature name provided, show error:
 ```
@@ -31,7 +39,7 @@ Available features:
 ```
 
 ### 2. Validate Setup
-Check that `.claude/agents/workflow-adapter/` exists and contains agent files.
+Check that `AGENTS_DIR` (resolved in step 0) exists and contains agent files.
 If not, inform user to run install first.
 
 ### 3. Check Feature Exists
@@ -107,14 +115,14 @@ After execution, run /workflow-adapter:validate {name} to verify completion.
 Run agents as subagents within the current Claude session using Task tool.
 
 ### Step 1: Discover Agents
-Read all agent files from `.claude/agents/workflow-adapter/`:
+Read all agent files from `AGENTS_DIR` (resolved in step 0):
 - List all `.md` files
 - Extract agent names (exclude orchestrator and reviewer for parallel execution)
 - Sort alphabetically (alpha, beta, gamma...)
 
 ### Step 2: Read Agent Instructions and Tasks
 For each worker agent:
-1. Read agent instructions from `.claude/agents/workflow-adapter/{name}.md`
+1. Read agent instructions from `{AGENTS_DIR}/{name}.md`
 2. Extract assigned tasks from `.workflow-adapter/doc/feature_{feature_name}/plan.md`
 
 ### Step 3: Launch Worker Agents in Parallel via Task Tool

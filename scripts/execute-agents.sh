@@ -35,8 +35,19 @@ for arg in "$@"; do
   esac
 done
 
+# Resolve agents directory: prefer .local path if it exists with agent files
+resolve_agents_dir() {
+    local local_path=".claude/agents/.local/workflow-adapter"
+    local default_path=".claude/agents/workflow-adapter"
+    if [[ -d "$local_path" ]] && ls "$local_path"/*.md >/dev/null 2>&1; then
+        echo "$local_path"
+    else
+        echo "$default_path"
+    fi
+}
+
 WORKFLOW_DIR=".workflow-adapter"
-AGENTS_DIR=".claude/agents/workflow-adapter"
+AGENTS_DIR=$(resolve_agents_dir)
 LOGS_DIR="$WORKFLOW_DIR/logs"
 DOC_DIR="$WORKFLOW_DIR/doc/${DOC_TYPE}_$WORKFLOW_NAME"
 MESSAGES_DIR="$DOC_DIR/messages"

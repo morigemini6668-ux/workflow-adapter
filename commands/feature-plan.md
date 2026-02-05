@@ -70,9 +70,18 @@ If `.workflow-adapter/doc/feature_$1/plan.md` already exists AND `--revise` is N
    Proceed to Step 3 (Discover Available Agents)
 
 ### 3. Discover Available Agents
-List all agent files in `.claude/agents/workflow-adapter/`:
+Resolve agents directory by checking which path exists with agent files:
+1. If `.claude/agents/.local/workflow-adapter/` exists with `.md` files → use this path
+2. Otherwise → use `.claude/agents/workflow-adapter/`
+
+List all agent files in the resolved agents directory:
 ```bash
-ls .claude/agents/workflow-adapter/*.md
+# Check .local path first
+if ls .claude/agents/.local/workflow-adapter/*.md >/dev/null 2>&1; then
+  ls .claude/agents/.local/workflow-adapter/*.md
+else
+  ls .claude/agents/workflow-adapter/*.md
+fi
 ```
 
 Extract agent names (excluding reviewer and orchestrator for task assignment).

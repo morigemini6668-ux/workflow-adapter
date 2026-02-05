@@ -94,8 +94,13 @@ Replace `{feature_name}`, `{max_iter}`, and `{timestamp}` with actual values.
 
 The Stop hook will automatically continue this agent until TASKS_COMPLETE (or until plan.md tasks are DONE in --complete mode).
 
+## Resolve Agents Directory
+Determine agents directory by checking which path exists:
+1. If `.claude/agents/.local/workflow-adapter/` exists with `.md` files → use `.claude/agents/.local/workflow-adapter`
+2. Otherwise → use `.claude/agents/workflow-adapter`
+
 ## Agent Instructions
-@.claude/agents/workflow-adapter/{{AGENT_NAME}}.md
+Read agent file from the resolved agents directory: `{AGENTS_DIR}/{{AGENT_NAME}}.md`
 
 ## Current Context
 Read these files to understand your context:

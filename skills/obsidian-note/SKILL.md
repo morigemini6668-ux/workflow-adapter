@@ -77,7 +77,18 @@ Structure the note body following Obsidian conventions:
 - When multiple topics were discussed, organize under clear section headings within a single note
 - Group related topics under the same tags for Obsidian tag-based navigation
 
-### 5. Write the Note
+### 5. Preview and Review
+
+Before writing to the vault, present the full draft to the user for review. Display the complete note content (frontmatter + body) as a code block so the user can see exactly what will be saved.
+
+After presenting the draft, ask the user via AskUserQuestion:
+- **Save as-is**: Write the note to the vault without changes
+- **Edit**: Apply specific changes the user requests, then show the updated draft again
+- **Cancel**: Discard the draft without writing
+
+If the user requests edits, apply them and repeat this preview step until the user approves. Only proceed to step 6 after explicit approval.
+
+### 6. Write the Note
 
 Generate the filename as `{title-in-kebab-case}.md` (flat structure, no subdirectories).
 

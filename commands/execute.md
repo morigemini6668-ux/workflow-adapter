@@ -1,10 +1,10 @@
 ---
-description: Execute all agents in background
+description: Execute all agents using teammate coordination
 argument-hint: <name> [--in-session] [--max-iter N] [--complete] [--fix]
-allowed-tools: [Read, Write, Bash, Glob, Task]
+allowed-tools: [Read, Write, Glob, Task, Teammate, SendMessage, TaskCreate, TaskUpdate, TaskList, TaskGet]
 ---
 
-Execute all workflow agents for a specific feature or fix. Uses Stop hook for automatic task continuation.
+Execute all workflow agents for a specific feature or fix. Uses Teammate coordination for multi-agent execution.
 
 ## Arguments
 - `$1`: Name (required) - the feature or fix name to execute
@@ -63,47 +63,174 @@ Extract assigned tasks for each agent from the plan.
 
 ### 6. Execute Based on Mode
 
+Determine mode: If `--in-session` → Mode B (In-Session), else → Default (Teammate).
+
 ---
 
-## Mode A: Background Script Execution (Default)
+## Default Mode: Teammate Execution
 
-**IMPORTANT: You MUST use the Bash tool to execute the script. Do NOT use Task tool for this mode.**
+Uses Claude Code built-in Teammate feature for coordinated multi-agent execution. The main session acts as the team leader (orchestrator).
 
-Use Bash tool to run the execution script:
+### Step C1: Parse plan.md Tasks
+Read `.workflow-adapter/doc/feature_$1/plan.md` and extract:
+- All tasks: ID, description, assignee, dependencies, status
+- Filter out tasks with status DONE
+- Group remaining tasks by assignee
 
-```bash
-# For feature workflow:
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {name} {max_iter}
-
-# For fix workflow:
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {name} {max_iter} --fix
-
-# With --complete flag:
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {name} {max_iter} --complete
-
-# Fix with --complete:
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/execute-agents.sh" {name} {max_iter} --fix --complete
+### Step C2: Spawn Team
+```
+Teammate.spawnTeam("wa-exec-{name}", "Execute: {name}")
 ```
 
-This script will:
-- Create state files for each agent (`.claude/workflow-agent-{name}.local.md`)
-- Start each agent as a background process using `claude --print`
-- The Stop hook automatically continues each agent until TASKS_COMPLETE
-- Output logged to `.workflow-adapter/logs/`
+### Step C3: Create Tasks via TaskCreate
+For each task from plan.md that is NOT DONE:
+- Use `TaskCreate` with:
+  - subject: "{task_id}: {brief description}"
+  - description: Full task description including acceptance criteria from plan.md
+  - activeForm: "Working on {task_id}"
+- After creating all tasks, set up dependencies:
+  - Use `TaskUpdate.addBlockedBy` to mirror plan.md dependencies
+  - Only reference tasks that are not already DONE
 
-**After running the script, show this message:**
+### Step C4: Spawn Worker Teammates
+For each worker agent that has assigned tasks, use `Task` tool:
+```yaml
+team_name: "wa-exec-{name}"
+name: "{agent_name}"
+subagent_type: "workflow-adapter:{agent_name}"
+mode: "bypassPermissions"
+prompt: |
+  You are {agent_name}, a worker agent operating in teammate mode.
+
+  ## Feature: {feature_name}
+
+  ## How to Work
+  1. Read .workflow-adapter/doc/principle.md for guidelines
+  2. Read .workflow-adapter/doc/feature_{feature_name}/context.md for project context
+  3. Use TaskList to find tasks assigned to you (owner: {agent_name})
+  4. For each task:
+     - Use TaskUpdate to mark it as in_progress
+     - Implement the task
+     - Update plan.md task status (TODO -> IN_PROGRESS -> DONE)
+     - Use TaskUpdate to mark it as completed
+  5. If blocked, send a message to the team lead via SendMessage
+  6. After completing all your tasks, send a summary via SendMessage to the team lead
+
+  ## Agent Guidance
+  Read your guidance in .workflow-adapter/doc/feature_{feature_name}/plan.md
+  under the "Agent Guidance" section for {agent_name}.
+
+  Start working now.
 ```
-Agent execution started via background script!
 
-Logs directory: .workflow-adapter/logs/
+**Spawn all workers in parallel** (multiple Task calls in a single message).
 
-To monitor progress:
-- Check logs: tail -f .workflow-adapter/logs/*.log
-- Check messages: ls .workflow-adapter/doc/feature_{name}/messages/
-- Check plan status: cat .workflow-adapter/doc/feature_{name}/plan.md
-- Cancel agents: /workflow-adapter:cancel-agent --all
+### Step C5: Spawn Reviewer + Advocate
+Spawn reviewer teammate (will wait for tasks to be assigned):
+```yaml
+team_name: "wa-exec-{name}"
+name: "reviewer"
+subagent_type: "workflow-adapter:reviewer"
+mode: "bypassPermissions"
+prompt: |
+  You are the reviewer agent operating in teammate mode.
 
-After execution, run /workflow-adapter:validate {name} to verify completion.
+  ## Feature: {feature_name}
+
+  ## How to Work
+  1. Wait for review tasks to be assigned to you via TaskList
+  2. When a task is assigned, review the implementation
+  3. Check against spec: .workflow-adapter/doc/feature_{feature_name}/spec.md
+  4. Send review results to the team lead via SendMessage
+  5. Mark tasks as completed via TaskUpdate
+
+  Wait for task assignment.
+```
+
+If advocate agent is installed (check agents directory for `advocate.md`), also spawn:
+```yaml
+team_name: "wa-exec-{name}"
+name: "advocate"
+subagent_type: "workflow-adapter:advocate"
+mode: "bypassPermissions"
+prompt: |
+  You are the advocate (Devil's Advocate) operating in teammate mode.
+
+  ## Feature: {feature_name}
+
+  ## How to Work
+  1. Wait for review tasks to be assigned to you via TaskList
+  2. When assigned, critically review implementations
+  3. Focus on security, performance, edge cases, and failure scenarios
+  4. Send critical feedback to the team lead via SendMessage
+  5. If you identify issues, suggest specific fixes
+  6. Mark tasks as completed via TaskUpdate
+
+  Wait for task assignment.
+```
+
+### Step C6: Initial Task Assignment
+For each TaskCreate'd task that has NO blockedBy dependencies:
+- Use `TaskUpdate(owner: "{agent_name}")` to assign to the appropriate worker
+- Send `SendMessage` to that worker: "Task #{id} assigned to you: {description}"
+
+### Step C7: Orchestration Loop (Main Process)
+The main session (team leader) orchestrates the execution:
+
+**Loop until all tasks are completed:**
+
+1. **Receive teammate messages** (automatic delivery)
+   - When a worker reports task completion:
+     a. Verify task is marked completed in TaskList
+     b. Check if any blocked tasks are now unblocked
+     c. Assign newly unblocked tasks to their designated agents via TaskUpdate + SendMessage
+     d. Update plan.md task status to match
+
+2. **Handle advocate feedback** (if advocate is active):
+   - If advocate identifies critical issues during implementation:
+     a. Forward feedback to the relevant worker via SendMessage
+     b. Or create a new fix task via TaskCreate and assign it
+
+3. **Check for completion:**
+   - Use `TaskList` to check overall progress
+   - If all worker tasks are completed:
+     a. Create a review task: "Review all implementations for feature: {name}"
+     b. Assign to "reviewer" via TaskUpdate
+     c. If advocate is present, create a parallel critical review task and assign to "advocate"
+
+4. **Process review results:**
+   - When reviewer reports back:
+     - If APPROVED: proceed to Step C8
+     - If NEEDS_CHANGES: Create fix tasks from reviewer feedback, assign to appropriate workers
+
+5. **Handle stuck agents:**
+   - If no progress for extended period, send a check-in message
+   - If an agent reports being blocked, help resolve or reassign
+
+### Step C8: Completion and Cleanup
+1. Verify all tasks are completed via `TaskList`
+2. Send `shutdown_request` to each teammate (reviewer, advocate, all workers)
+3. Call `Teammate.cleanup()`
+4. Synchronize plan.md with final task statuses
+5. Show completion message:
+
+```
+Teammate execution complete for feature: {feature_name}
+
+Team: wa-exec-{name}
+Workers: {worker_list}
+Reviewer: {review_status}
+{Advocate: {advocate_status}  # if advocate was spawned}
+
+Results:
+- Tasks completed: {done}/{total}
+- Review status: {APPROVED/NEEDS_CHANGES}
+
+Documents updated:
+- Plan: .workflow-adapter/doc/feature_{name}/plan.md
+- Messages: .workflow-adapter/doc/feature_{name}/messages/
+
+Run /workflow-adapter:validate {name} to verify completion.
 ```
 
 ---
@@ -208,18 +335,19 @@ Run /workflow-adapter:validate {feature_name} to verify completion.
 
 ## How Each Mode Works
 
-### Background Mode (Default)
-Uses Stop hook (`hooks/agent-stop-hook.sh`) for automatic iteration:
-1. Detects active agent state files in `.claude/`
-2. Checks if the agent output contains TASKS_COMPLETE
-3. If not complete: blocks session exit and re-injects the prompt
-4. If complete: removes the state file and starts the next agent
-5. When all agents complete: allows session to exit normally
+### Teammate Mode (Default)
+Uses Claude Code built-in Teammate feature:
+1. Main session acts as team leader/orchestrator
+2. Workers, reviewer, and advocate spawned as teammates
+3. Tasks managed via TaskCreate/TaskUpdate/TaskList
+4. Inter-agent communication via SendMessage
+5. Main session orchestrates task assignment and dependency resolution
+6. Reviewer + advocate run after workers complete
 
 ### In-Session Mode (--in-session)
 Uses Task tool to spawn subagents:
 1. Each agent runs as a subagent via Task tool
-2. Subagents execute until completion (no Stop hook needed)
+2. Subagents execute until completion
 3. Task tool returns results when each agent finishes
 4. Workers run in parallel, reviewer runs after workers complete
 
@@ -227,22 +355,17 @@ Uses Task tool to spawn subagents:
 
 ## Troubleshooting
 
-### If background script execution fails:
-1. Check that `claude` CLI is installed and in PATH
-2. Verify `.claude/agents/workflow-adapter/` has agent files
-3. Check script permissions: `chmod +x scripts/*.sh`
+### If agents are not responding:
+1. Check that agent files exist in `AGENTS_DIR`
+2. Verify the feature plan has tasks assigned to agents
+3. Use `/workflow-adapter:teammate-status` to check team status
 
-### To cancel running background agents:
-```
-/workflow-adapter:cancel-agent --all
-```
-
-### If a background agent is stuck:
-1. Check the agent's state file: `.claude/workflow-agent-{name}.local.md`
-2. Check the iteration count - may have hit max_iterations
-3. Cancel and restart: `/workflow-adapter:cancel-agent {name}` then run execute again
+### If tasks are stuck:
+1. Check `TaskList` for blocked tasks
+2. Verify dependencies are correctly set up
+3. Send a check-in message to the stuck agent via `SendMessage`
 
 ## Notes
-- **Background mode**: Uses Stop hook for iteration, true parallel execution (multiple Claude sessions). State files in `.claude/workflow-agent-*.local.md` control the loop.
-- **In-session mode**: Uses Task tool subagents, parallel workers within current session. No state files needed.
-- Agents communicate via `.workflow-adapter/doc/feature_{feature_name}/messages/`
+- **Teammate mode (default)**: Uses Claude Code Teammate feature. Main session orchestrates. Supports advocate for critical review during execution.
+- **In-session mode (--in-session)**: Uses Task tool subagents, parallel workers within current session.
+- Check team status: `/workflow-adapter:teammate-status`

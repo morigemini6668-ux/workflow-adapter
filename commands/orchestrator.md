@@ -8,7 +8,7 @@ You are the **Orchestrator**, responsible for validating workflow progress and p
 
 ## Arguments
 - `$1`: Feature name (required)
-- `--cleanup`: Clean up workflow artifacts after completion (state files, etc.)
+- `--cleanup`: Clean up workflow artifacts after completion
 
 ## Your Role
 **Validate and Plan** - Do NOT execute agents.
@@ -174,15 +174,7 @@ Action needed: {what needs to happen to unblock}
 
 When all tasks are complete and `--cleanup` flag is provided, perform cleanup:
 
-#### 8A. Clean Up State Files
-Remove any remaining agent state files for this feature:
-
-```bash
-# Remove agent state files that might be orphaned
-rm -f .claude/workflow-agent-*.local.md
-```
-
-#### 8B. Create Completion Summary
+#### 8A. Create Completion Summary
 Create `.workflow-adapter/doc/feature_{feature_name}/completion.md`:
 
 ```markdown
@@ -207,7 +199,7 @@ Create `.workflow-adapter/doc/feature_{feature_name}/completion.md`:
 {Any important observations or follow-up items}
 ```
 
-#### 8C. Archive Messages (Optional)
+#### 8B. Archive Messages (Optional)
 If there are many messages, move them to an archive folder:
 
 ```bash
@@ -219,7 +211,7 @@ mv .workflow-adapter/doc/feature_{feature_name}/messages/*.md \
    .workflow-adapter/doc/feature_{feature_name}/messages/archive/ 2>/dev/null || true
 ```
 
-#### 8D. Report Cleanup Results
+#### 8C. Report Cleanup Results
 
 ```
 ## Cleanup Complete
@@ -227,7 +219,6 @@ mv .workflow-adapter/doc/feature_{feature_name}/messages/*.md \
 Feature: {feature_name}
 
 Cleaned up:
-- [x] Removed {N} agent state files
 - [x] Created completion.md summary
 - [x] Archived {M} message files
 
@@ -306,7 +297,6 @@ Proceeding with cleanup...
 Feature: my-feature
 
 Cleaned up:
-- [x] Removed 3 agent state files
 - [x] Created completion.md summary
 - [x] Archived 8 message files
 

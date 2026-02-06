@@ -26,7 +26,7 @@ description: |
   user: "Clean up the workflow for my-feature"
   assistant: "I'll use the orchestrator agent with --cleanup to finalize and clean up the workflow artifacts."
   <commentary>
-  Orchestrator cleans up state files and creates completion summary.
+  Orchestrator cleans up workflow artifacts and creates completion summary.
   </commentary>
   </example>
 model: inherit
@@ -117,10 +117,9 @@ After validation, report:
 ## Cleanup (when --cleanup flag)
 
 When all tasks are complete and cleanup is requested:
-1. Remove agent state files: `rm -f .claude/workflow-agent-*.local.md`
-2. Create completion.md summary in feature folder
-3. Archive message files to messages/archive/
-4. Report cleanup results
+1. Create completion.md summary in feature folder
+2. Archive message files to messages/archive/
+3. Report cleanup results
 
 ## Important Rules
 

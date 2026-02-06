@@ -34,6 +34,11 @@ mkdir -p .workflow-adapter/doc/fix_$1
 **Write context summary to `.workflow-adapter/doc/fix_$1/context.md`:**
 
 ```markdown
+---
+version: "{CURRENT_TIMESTAMP_ISO8601}"
+depends_on: {}
+---
+
 # Fix Context: {fix_name}
 
 ## User Report
@@ -207,6 +212,12 @@ multiSelect: true
 Write to `.workflow-adapter/doc/fix_$1/triage.md`:
 
 ```markdown
+---
+version: "{CURRENT_TIMESTAMP_ISO8601}"
+depends_on:
+  context.md: "{VERSION_FROM_CONTEXT_MD}"
+---
+
 # Triage Report: {fix_name}
 
 ## Overview

@@ -1,7 +1,7 @@
 ---
 description: Interactive brainstorming to refine a feature
 argument-hint: <name> [description]
-allowed-tools: [Read, Write, AskUserQuestion, Glob, WebSearch, WebFetch, Grep, Bash, Task, TodoWrite, Skill]
+allowed-tools: [Read, Write, AskUserQuestion, Glob, WebSearch, WebFetch, Grep, Bash, Task, TodoWrite, Skill, Teammate, SendMessage, TaskCreate, TaskUpdate, TaskList, TaskGet]
 ---
 
 Start an interactive brainstorming session to refine a feature.
@@ -35,6 +35,11 @@ mkdir -p .workflow-adapter/doc/feature_$1
 **Write context summary to `.workflow-adapter/doc/feature_$1/context.md`:**
 
 ```markdown
+---
+version: "{CURRENT_TIMESTAMP_ISO8601}"
+depends_on: {}
+---
+
 # Feature Context: {feature_name}
 
 ## User Request
@@ -65,9 +70,9 @@ _Context gathered: {timestamp}_
 
 **Show summary to user:**
 ```
-📋 Project Context Gathered
+Project Context Gathered
 
-Project docs: AGENT.md {✓/✗}, CLAUDE.md {✓/✗}
+Project docs: AGENT.md {check/cross}, CLAUDE.md {check/cross}
 Existing features: {count} found
 {list feature names briefly}
 
@@ -112,7 +117,7 @@ _Research conducted: {timestamp}_
 
 **Show research summary to user:**
 ```
-🔍 Web Research Complete
+Web Research Complete
 
 Found insights on:
 - Best practices: {count} items
@@ -167,6 +172,12 @@ Use AskUserQuestion to gather information. Ask questions one at a time or in sma
 Write the brainstorming results to `.workflow-adapter/doc/feature_$1/brainstorming.md`:
 
 ```markdown
+---
+version: "{CURRENT_TIMESTAMP_ISO8601}"
+depends_on:
+  context.md: "{VERSION_FROM_CONTEXT_MD}"
+---
+
 # Feature Brainstorming: {feature_name}
 
 ## Overview
@@ -215,6 +226,82 @@ Write the brainstorming results to `.workflow-adapter/doc/feature_$1/brainstormi
 _Brainstorming session completed: {timestamp}_
 ```
 
+### 6.5. Advocate Review (Automatic)
+
+**Only execute this step if the advocate agent is installed.**
+
+Check if the advocate agent is installed:
+- Use Glob to check if `{AGENTS_DIR}/advocate.md` exists (check both `.claude/agents/.local/workflow-adapter/` and `.claude/agents/workflow-adapter/`)
+- If advocate is NOT installed, skip this step silently
+- If advocate IS installed, proceed:
+
+#### 6.5.1 Spawn Team
+```
+Teammate.spawnTeam("wa-brainstorm-{name}", "Brainstorming review: {name}")
+```
+
+#### 6.5.2 Create Review Task
+Use `TaskCreate` to create a review task:
+- subject: "Review brainstorming.md for feature: {name}"
+- description: "Critically review the brainstorming document. Challenge assumptions, find gaps, identify risks."
+
+#### 6.5.3 Spawn Advocate
+Use `Task` tool to spawn advocate as a teammate:
+```yaml
+team_name: "wa-brainstorm-{name}"
+name: "advocate"
+subagent_type: "workflow-adapter:advocate"
+mode: "bypassPermissions"
+prompt: |
+  You are the Devil's Advocate reviewing brainstorming results.
+
+  ## Feature: {feature_name}
+
+  ## Document to Review
+  Read and critically review: .workflow-adapter/doc/feature_{name}/brainstorming.md
+  Also read context: .workflow-adapter/doc/feature_{name}/context.md
+
+  ## Your Task
+  1. Read the brainstorming document
+  2. Challenge every assumption made
+  3. Identify missing failure scenarios and edge cases
+  4. Question the problem statement and proposed approach
+  5. Suggest alternative perspectives
+
+  Send your feedback to the team lead via SendMessage when done.
+  Mark your task as completed via TaskUpdate.
+```
+
+#### 6.5.4 Assign Task
+Use `TaskUpdate` to assign the review task to "advocate".
+
+#### 6.5.5 Receive Feedback
+Wait for advocate's feedback message.
+
+#### 6.5.6 Integrate Feedback
+Add a "Devil's Advocate Feedback" section to brainstorming.md:
+```markdown
+## Devil's Advocate Feedback
+
+### Assumptions Challenged
+{from advocate feedback}
+
+### Risks Identified
+{from advocate feedback}
+
+### Missing Considerations
+{from advocate feedback}
+
+### Recommendations
+{from advocate feedback}
+
+---
+_Advocate review completed: {timestamp}_
+```
+
+#### 6.5.7 Cleanup Team
+Send `shutdown_request` to advocate, then call `Teammate.cleanup()`.
+
 ### 7. Output Summary
 Confirm brainstorming is saved and suggest next step:
 ```
@@ -224,6 +311,7 @@ Brainstorming for '{feature_name}' saved to:
 Documents created:
 - context.md (project context)
 - brainstorming.md (this session)
+{If advocate installed: - Includes Devil's Advocate feedback section}
 
 Next step: Run /workflow-adapter:feature-spec {name} to generate the specification.
 ```

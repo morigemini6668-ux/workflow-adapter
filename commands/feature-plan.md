@@ -1,7 +1,7 @@
 ---
 description: Generate implementation plan with agent task assignments
 argument-hint: <name> [--revise]
-allowed-tools: [Read, Write, AskUserQuestion, Glob, WebSearch, WebFetch, Grep, Bash, Task, TodoWrite, Skill]
+allowed-tools: [Read, Write, AskUserQuestion, Glob, WebSearch, WebFetch, Grep, Bash, Task, TodoWrite, Skill, Teammate, SendMessage, TaskCreate, TaskUpdate, TaskList, TaskGet]
 ---
 
 Generate an implementation plan with tasks assigned to each agent.
@@ -43,10 +43,10 @@ If `.workflow-adapter/doc/feature_$1/plan.md` already exists AND `--revise` is N
 
    Show warning to user:
    ```
-   ⚠️ plan.md was generated based on older versions of prerequisites.
+   plan.md was generated based on older versions of prerequisites.
 
    Version changes detected:
-   - {filename}: recorded {old_version} → current {new_version}
+   - {filename}: recorded {old_version} -> current {new_version}
    ```
 
    Use AskUserQuestion to let user decide:
@@ -71,8 +71,8 @@ If `.workflow-adapter/doc/feature_$1/plan.md` already exists AND `--revise` is N
 
 ### 3. Discover Available Agents
 Resolve agents directory by checking which path exists with agent files:
-1. If `.claude/agents/.local/workflow-adapter/` exists with `.md` files → use this path
-2. Otherwise → use `.claude/agents/workflow-adapter/`
+1. If `.claude/agents/.local/workflow-adapter/` exists with `.md` files -> use this path
+2. Otherwise -> use `.claude/agents/workflow-adapter/`
 
 List all agent files in the resolved agents directory:
 ```bash
@@ -182,7 +182,7 @@ Based on user selections, use additional `AskUserQuestion` calls to clarify:
 ```
 question: "Which tasks should be reassigned? (Enter task IDs like T-001, T-003)"
 ```
-→ User selects "Other" and provides task IDs
+-> User selects "Other" and provides task IDs
 
 **For adding tasks:**
 ```
@@ -394,7 +394,7 @@ For each worker agent with assigned tasks, draft customized guidance:
 ### 8. Interactive Guidance Refinement
 For each agent with tasks, use `AskUserQuestion` to refine the guidance:
 
-**Agent별 순차 질문** (alpha → beta → gamma 순서로 한 agent씩):
+**Agent별 순차 질문** (alpha -> beta -> gamma 순서로 한 agent씩):
 
 ```yaml
 question: "{AGENT_NAME}에게 할당된 task:\n{task_list}\n\n가이던스 초안:\n\n**규율:**\n{rules}\n\n**주의사항:**\n{considerations}\n\n**탐색영역:**\n{exploration}\n\n수정이 필요하신가요?"
@@ -422,6 +422,67 @@ After all agents' guidance is confirmed, proceed to write the final plan.
 ### 9. Distribute Tasks
 Ensure each worker agent has a balanced workload.
 Consider dependencies when assigning tasks.
+
+### 9.5. Advocate Review (Automatic)
+
+**Only execute this step if the advocate agent is installed.**
+
+Check if the advocate agent is installed:
+- Use Glob to check if advocate.md exists in agents directory (check both `.claude/agents/.local/workflow-adapter/` and `.claude/agents/workflow-adapter/`)
+- If advocate is NOT installed, skip this step silently
+- If advocate IS installed, proceed:
+
+#### 9.5.1 Spawn Team
+```
+Teammate.spawnTeam("wa-plan-{name}", "Plan review: {name}")
+```
+
+#### 9.5.2 Create Review Task
+Use `TaskCreate`:
+- subject: "Review plan.md for feature: {name}"
+- description: "Critically review the implementation plan. Check task distribution balance, missing dependencies, single points of failure, and risk underestimation."
+
+#### 9.5.3 Spawn Advocate
+Use `Task` tool to spawn advocate as a teammate:
+```yaml
+team_name: "wa-plan-{name}"
+name: "advocate"
+subagent_type: "workflow-adapter:advocate"
+mode: "bypassPermissions"
+prompt: |
+  You are the Devil's Advocate reviewing an implementation plan.
+
+  ## Feature: {feature_name}
+
+  ## Documents to Review
+  Read: .workflow-adapter/doc/feature_{name}/plan.md
+  Spec: .workflow-adapter/doc/feature_{name}/spec.md
+  Context: .workflow-adapter/doc/feature_{name}/context.md
+
+  ## Your Task
+  Focus on:
+  1. Task distribution balance - is any agent overloaded or underutilized?
+  2. Missing dependencies - are there implicit dependencies not captured?
+  3. Single points of failure - does one agent's failure block everything?
+  4. Risk underestimation - are the risk assessments realistic?
+  5. Phase ordering - could phases be parallelized better?
+  6. Completeness - does the plan cover all spec requirements?
+
+  Send your feedback to the team lead via SendMessage when done.
+  Mark your task as completed via TaskUpdate.
+```
+
+#### 9.5.4 Assign Task and Receive Feedback
+Assign review task to "advocate" via `TaskUpdate`, then wait for feedback.
+
+#### 9.5.5 Integrate Feedback
+Update plan.md based on advocate feedback:
+- Address critical issues (rebalance tasks, add missing dependencies)
+- Add advocate's risk findings to the Risk Assessment table
+- Document changes in Notes section with timestamp
+
+#### 9.5.6 Cleanup Team
+Send `shutdown_request` to advocate, then call `Teammate.cleanup()`.
 
 ### 10. Output Summary
 

@@ -1,7 +1,7 @@
 ---
 description: Integrated feature workflow (context -> brainstorming -> spec -> plan -> review)
 argument-hint: <name> [description]
-allowed-tools: [Read, Write, AskUserQuestion, Glob, Task]
+allowed-tools: [Read, Write, AskUserQuestion, Glob, Task, Teammate, SendMessage, TaskCreate, TaskUpdate, TaskList, TaskGet]
 ---
 
 Run the complete feature development workflow in one command.
@@ -81,9 +81,9 @@ _Context gathered: {timestamp}_
 
 **Show summary to user:**
 ```
-📋 Project Context Gathered
+Project Context Gathered
 
-Project docs found: AGENT.md ✓/✗, CLAUDE.md ✓/✗
+Project docs found: AGENT.md check/cross, CLAUDE.md check/cross
 Existing features found: {count}
 {list feature names}
 
@@ -130,9 +130,9 @@ Generate implementation plan:
 
 **Draft Agent Guidance:**
 For each worker agent with assigned tasks, draft customized guidance:
-- 규율 (Rules): Coding standards, constraints from spec
-- 주의사항 (Considerations): Edge cases, integration points, risks
-- 탐색 영역 (Exploration): Relevant code paths, documentation
+- Rules: Coding standards, constraints from spec
+- Considerations: Edge cases, integration points, risks
+- Exploration: Relevant code paths, documentation
 
 **Interactive Guidance Refinement:**
 For each agent, use `AskUserQuestion` to refine the guidance:
@@ -180,6 +180,16 @@ Please address the following before executing:
 {list of issues}
 ```
 
+## Advocate Review (Automatic)
+
+If the advocate agent is installed (check for `advocate.md` in agents directory), advocate review is automatically enabled at each stage:
+- **Stage 1 (Brainstorming)**: After Q&A, advocate reviews brainstorming.md
+- **Stage 2 (Spec)**: After generation, advocate reviews spec.md
+- **Stage 3 (Plan)**: After generation, advocate reviews plan.md
+- **Stage 4 (Review)**: Reviewer + advocate review in parallel
+
+Each stage spawns its own team, receives advocate feedback, integrates it, and cleans up before proceeding to the next stage. This ensures each document benefits from critical review before being used as input for the next stage.
+
 ## Notes
 - Stage 0 (context gathering) runs automatically before brainstorming
 - Each stage builds on the previous
@@ -187,3 +197,4 @@ Please address the following before executing:
 - Review may identify issues requiring revision
 - Use individual commands (feature-brainstorming, feature-spec, etc.) for more control
 - Context is saved in context.md and referenced throughout all stages
+- Advocate review is automatic when advocate agent is installed (via `--advocate` flag on install)

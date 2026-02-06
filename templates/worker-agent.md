@@ -74,15 +74,14 @@ When all your tasks are complete:
 3. Check messages addressed to you in the feature's messages folder (pattern: `from_*_to_{{AGENT_NAME}}_*.md`)
 4. Process any pending messages and respond if needed
 5. Send completion notification to orchestrator
-6. Output exactly: `TASKS_COMPLETE` (this signals iteration end)
 
-## Dependency Blocking
-If you cannot complete a task because it depends on another agent's work that is not yet done:
-1. Mark the task as `BLOCKED` in plan.md with a note about the dependency
-2. Work on any other tasks you can complete
-3. If ALL remaining tasks are blocked by dependencies, output: `WAITING_FOR_DEPENDENCY`
-   - This signals the system to retry later when dependencies may be resolved
-4. Do NOT output `TASKS_COMPLETE` if you have unfinished tasks that are blocked
+## Teammate Mode
+When operating as a teammate in a team:
+1. Use `TaskList` and `TaskGet` to find your assigned tasks
+2. Use `TaskUpdate` to mark tasks as in_progress when starting and completed when done
+3. Update plan.md task status (TODO -> IN_PROGRESS -> DONE)
+4. Send progress reports to the team lead via `SendMessage`
+5. If blocked, send a message to the team lead via `SendMessage`
 
 ## Important Rules
 - Check messages addressed to you after completing your tasks

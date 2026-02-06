@@ -46,8 +46,8 @@ Check each item:
    - Are there any pending requests?
 
 3. **Agent Status**
-   - Did all agents signal completion?
-   - Check logs for TASKS_COMPLETE signals
+   - Did all agents complete their work?
+   - Check plan.md for task completion status
 
 4. **Dependencies**
    - Were all dependencies respected?

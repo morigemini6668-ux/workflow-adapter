@@ -11,13 +11,54 @@ Review all fix documents using the reviewer agent as a subagent.
 
 ## Tasks to Perform
 
-### 1. Validate Prerequisites
+### 1. Validate Prerequisites and Check Versions
+
+**Step 1.1: Check prerequisites exist**
 Check that these files exist:
 - `.workflow-adapter/doc/fix_$1/context.md` (project context)
 - `.workflow-adapter/doc/fix_$1/triage.md` (triage report)
 - `.workflow-adapter/doc/fix_$1/plan.md` (implementation plan)
 
 If any are missing, inform user which steps to run first.
+
+**Step 1.2: Check version dependencies**
+
+If `.workflow-adapter/doc/fix_$1/review.md` already exists:
+
+1. Read review.md and extract YAML frontmatter `depends_on` section
+2. For each dependency (context.md, triage.md, plan.md):
+   - Read the dependency file's frontmatter `version` field
+   - Compare with the version recorded in review.md's `depends_on`
+
+3. If any dependency's current version differs from recorded version (or if review.md has no frontmatter/depends_on):
+
+   Show warning to user:
+   ```
+   ⚠️ review.md was generated based on older versions of prerequisites.
+
+   Version changes detected:
+   - {filename}: recorded {old_version} → current {new_version}
+   ```
+
+   Use AskUserQuestion to let user decide:
+   ```yaml
+   question: "review.md의 선행 문서가 업데이트되었습니다. 어떻게 진행할까요?"
+   header: "버전 충돌"
+   options:
+     - label: "재생성 (권장)"
+       description: "최신 선행 문서 기반으로 review.md 새로 생성"
+     - label: "기존 유지"
+       description: "현재 review.md 유지 (선행 문서와 불일치할 수 있음)"
+     - label: "취소"
+       description: "작업 중단"
+   ```
+
+   - If "재생성": Continue with review generation (Step 2)
+   - If "기존 유지": Skip review generation, proceed to summary
+   - If "취소": Stop execution
+
+4. If review.md doesn't exist OR user chose "재생성":
+   Proceed to Step 2 (Gather Fix Documents)
 
 ### 2. Gather Fix Documents
 Read all fix documents:
@@ -84,6 +125,14 @@ Provide a structured review with:
 Write the review feedback to `.workflow-adapter/doc/fix_$1/review.md`:
 
 ```markdown
+---
+version: "{CURRENT_TIMESTAMP_ISO8601}"
+depends_on:
+  context.md: "{VERSION_FROM_CONTEXT_MD}"
+  triage.md: "{VERSION_FROM_TRIAGE_MD}"
+  plan.md: "{VERSION_FROM_PLAN_MD}"
+---
+
 # Fix Review Feedback: {fix_name}
 
 ## Review Date

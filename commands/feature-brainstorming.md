@@ -20,114 +20,30 @@ Ensure feature name is provided. If not, ask the user for it.
 mkdir -p .workflow-adapter/doc/feature_$1
 ```
 
-### 3. Gather Project Context (IMPORTANT - Do this before brainstorming!)
+### 3. Context Research (IMPORTANT - Do this before brainstorming!)
 
-**Read project documentation:**
-- Check if `AGENT.md` exists and read it
-- Check if `CLAUDE.md` exists and read it
-- Check if `.claude/settings.json` exists and read it
+Check if context already exists at `.workflow-adapter/doc/feature_$1/context.md`.
 
-**Find existing features:**
-- Use Glob to find: `.workflow-adapter/doc/feature_*/spec.md`
-- Read each spec.md to understand what features are already implemented
-- Skip the current feature directory if it already exists
+**If context does NOT exist:**
+Invoke the Context Research skill with the feature name and description. This will:
+1. Dispatch expert teammates (codebase-analyst, web-researcher, + dynamic experts) in background
+2. Conduct interactive Q&A with the user to refine scope
+3. Forward accumulated context to experts after each Q&A round
+4. Synthesize findings into `.workflow-adapter/doc/feature_$1/context.md`
 
-**Write context summary to `.workflow-adapter/doc/feature_$1/context.md`:**
+**If context already exists** (e.g., from a prior `/workflow-adapter:feature` run):
+Read the existing context and show a summary to the user:
+```
+Existing context found for feature: {name}
+Created: {date from frontmatter}
+Experts used: {list from frontmatter}
 
-```markdown
----
-version: "{CURRENT_TIMESTAMP_ISO8601}"
-depends_on: {}
----
-
-# Feature Context: {feature_name}
-
-## User Request
-- **Feature Name**: {name}
-- **Initial Description**: {description from arguments}
-
-## Project Documentation
-
-### AGENT.md
-{Content summary or "Not found"}
-
-### CLAUDE.md
-{Content summary or "Not found"}
-
-## Existing Features
-{For each existing feature:}
-### feature_{name}
-- **Purpose**: {from spec overview}
-- **Key Requirements**: {summarized}
-
-## Context Summary
-- Total existing features: {count}
-- Related features: {list any that seem related to this new feature}
-
----
-_Context gathered: {timestamp}_
+Proceeding to brainstorming with this context...
 ```
 
-**Show summary to user:**
-```
-Project Context Gathered
+Ask the user if they want to re-run context research or proceed with existing context.
 
-Project docs: AGENT.md {check/cross}, CLAUDE.md {check/cross}
-Existing features: {count} found
-{list feature names briefly}
-
-Now researching best practices and similar solutions...
-```
-
-### 4. Web Research (Optional but Recommended)
-Use WebSearch to gather relevant information about the feature:
-
-**Search queries to consider:**
-- "{feature description} best practices"
-- "{feature description} implementation patterns"
-- "{technology stack} {feature type} examples"
-- "how to implement {feature} in {language/framework}"
-
-**For each relevant search result:**
-- Use WebFetch to get detailed information if needed
-- Extract key insights, patterns, and recommendations
-
-**Add research findings to context.md:**
-
-```markdown
-## Web Research
-
-### Best Practices Found
-- {practice 1 with source}
-- {practice 2 with source}
-
-### Similar Solutions
-- {solution 1}: {brief description}
-- {solution 2}: {brief description}
-
-### Key Insights
-- {insight 1}
-- {insight 2}
-
-### Recommended Approaches
-- {approach based on research}
-
-_Research conducted: {timestamp}_
-```
-
-**Show research summary to user:**
-```
-Web Research Complete
-
-Found insights on:
-- Best practices: {count} items
-- Similar solutions: {count} references
-- Key recommendations: {list briefly}
-
-Now starting interactive brainstorming with this research in mind...
-```
-
-### 5. Start Interactive Brainstorming
+### 4. Start Interactive Brainstorming
 Use AskUserQuestion to gather information. Ask questions one at a time or in small groups.
 
 **Reference the context when asking questions** - tailor questions based on:
@@ -168,7 +84,7 @@ Use AskUserQuestion to gather information. Ask questions one at a time or in sma
    - Should we adopt any of the similar solutions?
    - Any concerns about the recommended approaches?
 
-### 6. Document Brainstorming
+### 5. Document Brainstorming
 Write the brainstorming results to `.workflow-adapter/doc/feature_$1/brainstorming.md`:
 
 ```markdown
@@ -226,7 +142,7 @@ depends_on:
 _Brainstorming session completed: {timestamp}_
 ```
 
-### 6.5. Advocate Review (Automatic)
+### 5.5. Advocate Review (Automatic)
 
 **Only execute this step if the advocate agent is installed.**
 
@@ -235,17 +151,17 @@ Check if the advocate agent is installed:
 - If advocate is NOT installed, skip this step silently
 - If advocate IS installed, proceed:
 
-#### 6.5.1 Spawn Team
+#### 5.5.1 Spawn Team
 ```
 Teammate.spawnTeam("wa-brainstorm-{name}", "Brainstorming review: {name}")
 ```
 
-#### 6.5.2 Create Review Task
+#### 5.5.2 Create Review Task
 Use `TaskCreate` to create a review task:
 - subject: "Review brainstorming.md for feature: {name}"
 - description: "Critically review the brainstorming document. Challenge assumptions, find gaps, identify risks."
 
-#### 6.5.3 Spawn Advocate
+#### 5.5.3 Spawn Advocate
 Use `Task` tool to spawn advocate as a teammate:
 ```yaml
 team_name: "wa-brainstorm-{name}"
@@ -272,13 +188,13 @@ prompt: |
   Mark your task as completed via TaskUpdate.
 ```
 
-#### 6.5.4 Assign Task
+#### 5.5.4 Assign Task
 Use `TaskUpdate` to assign the review task to "advocate".
 
-#### 6.5.5 Receive Feedback
+#### 5.5.5 Receive Feedback
 Wait for advocate's feedback message.
 
-#### 6.5.6 Integrate Feedback
+#### 5.5.6 Integrate Feedback
 Add a "Devil's Advocate Feedback" section to brainstorming.md:
 ```markdown
 ## Devil's Advocate Feedback
@@ -299,10 +215,10 @@ Add a "Devil's Advocate Feedback" section to brainstorming.md:
 _Advocate review completed: {timestamp}_
 ```
 
-#### 6.5.7 Cleanup Team
+#### 5.5.7 Cleanup Team
 Send `shutdown_request` to advocate, then call `Teammate.cleanup()`.
 
-### 7. Output Summary
+### 6. Output Summary
 Confirm brainstorming is saved and suggest next step:
 ```
 Brainstorming for '{feature_name}' saved to:

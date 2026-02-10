@@ -13,7 +13,7 @@ Run the complete feature development workflow in one command.
 ## Workflow Stages
 
 This command runs all feature-* stages in sequence:
-0. context-gathering (NEW)
+0. context-research (via Context Research skill)
 1. feature-brainstorming
 2. feature-spec
 3. feature-plan
@@ -21,76 +21,29 @@ This command runs all feature-* stages in sequence:
 
 ## Tasks to Perform
 
-### Stage 0: Context Gathering
-Inform user: "Gathering project context for feature: {name}"
+### Stage 0: Context Research
+Inform user: "Starting context research for feature: {name}"
 
 **Create feature directory first:**
 ```bash
 mkdir -p .workflow-adapter/doc/feature_$1
 ```
 
-**Gather the following context:**
+**Invoke the Context Research skill** with feature workflow integration:
 
-1. **Project Documentation**
-   - Read `AGENT.md` if exists (project agent instructions)
-   - Read `CLAUDE.md` if exists (project-specific Claude instructions)
-   - Read `.claude/settings.json` if exists (project settings)
+1. Pass the feature name (`$1`) and initial description as the research topic
+2. The skill dispatches expert teammates (codebase-analyst, web-researcher, + dynamic experts) in background
+3. Simultaneously conducts interactive Q&A with the user to refine scope
+4. Forwards accumulated user context to experts via broadcast after each Q&A round
+5. Synthesizes expert findings + user Q&A into a unified context document
 
-2. **Existing Features**
-   - Use Glob to find: `.workflow-adapter/doc/feature_*/spec.md`
-   - Read each spec.md to understand implemented features
-   - Skip the current feature directory if it exists
+The skill saves the context to:
+- `.workflow-adapter/doc/context/{feature_name}.md` (canonical location)
+- `.workflow-adapter/doc/feature_$1/context.md` (feature workflow copy)
 
-3. **User Input**
-   - Feature name from $1
-   - Initial description from remaining arguments
-
-**Write context summary to `.workflow-adapter/doc/feature_$1/context.md`:**
-
-```markdown
-# Feature Context: {feature_name}
-
-## User Request
-- **Feature Name**: {name}
-- **Initial Description**: {description from arguments}
-
-## Project Documentation
-
-### AGENT.md
-{Content summary or "Not found"}
-
-### CLAUDE.md
-{Content summary or "Not found"}
-
-## Existing Features
-{For each existing feature:}
-### feature_{name}
-- **Purpose**: {from spec overview}
-- **Key Requirements**: {summarized}
-- **Status**: {if available}
-
-## Context Summary
-Based on the gathered context:
-- Total existing features: {count}
-- Related features: {list features that might be related}
-- Project conventions: {any patterns noticed}
-
----
-_Context gathered: {timestamp}_
+**After context research completes**, show transition message:
 ```
-
-**Show summary to user:**
-```
-Project Context Gathered
-
-Project docs found: AGENT.md check/cross, CLAUDE.md check/cross
-Existing features found: {count}
-{list feature names}
-
-Related features that might affect this implementation:
-- {feature_name}: {brief description}
-
-Proceeding to brainstorming phase...
+Context research complete. Proceeding to brainstorming phase...
 ```
 
 ### Stage 1: Brainstorming
@@ -191,7 +144,7 @@ If the advocate agent is installed (check for `advocate.md` in agents directory)
 Each stage spawns its own team, receives advocate feedback, integrates it, and cleans up before proceeding to the next stage. This ensures each document benefits from critical review before being used as input for the next stage.
 
 ## Notes
-- Stage 0 (context gathering) runs automatically before brainstorming
+- Stage 0 (context research) runs automatically before brainstorming, dispatching expert teammates
 - Each stage builds on the previous
 - User interaction is required in brainstorming stage
 - Review may identify issues requiring revision

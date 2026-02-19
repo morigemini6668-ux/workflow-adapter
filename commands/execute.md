@@ -105,6 +105,16 @@ If an executer encounters an unrecoverable error:
 3. If not possible, use AskUserQuestion to inform the user and get direction
 4. Consider spawning a replacement teammate if needed
 
+**Re-spawn on Context Exhaustion:**
+If an executer stops or becomes unresponsive while tasks remain incomplete:
+1. Read `.workflow-adapter/{subject}/checkpoint-{executer-name}.md`
+2. Check plan.md for the executer's remaining `[~]` or `[ ]` tasks
+3. Spawn a new executer with the same name, injecting checkpoint context:
+   - Include full checkpoint content in the prompt
+   - Assign the remaining incomplete tasks
+   - Instruct to read checkpoint file first
+4. The new executer continues from the saved checkpoint
+
 ## Step 8: Completion
 
 When ALL tasks in plan.md are marked `[x]` completed:

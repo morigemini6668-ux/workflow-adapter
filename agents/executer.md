@@ -92,3 +92,35 @@ Always update `plan.md` with:
 - Brief description of what was done
 - Any deviations from the original plan
 - File paths of modified/created files
+
+**Checkpoint Management (Context Recovery):**
+When working on long tasks, save checkpoints to `.workflow-adapter/{subject}/checkpoint-{your-teammate-name}.md`:
+
+1. Save a checkpoint after completing each task
+2. Save a checkpoint when starting a complex task (before deep work)
+3. Save a checkpoint periodically during long-running tasks
+
+Checkpoint format:
+```
+# Checkpoint: {your-teammate-name}
+## Current Task
+- Task name and description
+- Current status and sub-steps completed
+
+## Completed Tasks
+- List of tasks completed in this session with brief notes
+
+## Files Modified
+- List of files created/modified with what changed
+
+## Key Context
+- Important decisions made
+- Patterns or approaches chosen
+- Dependencies discovered
+
+## Next Steps
+1. Immediate next action
+2. Remaining work items
+```
+
+If context was compacted, IMMEDIATELY read your checkpoint file to recover context before continuing work.

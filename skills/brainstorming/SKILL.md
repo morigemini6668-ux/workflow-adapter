@@ -1,9 +1,8 @@
 ---
 name: brainstorming
-description: Start a brainstorming session for a subject with historian, researcher, and reviewer teammates
+description: Starts a brainstorming session for a given subject. Spawns historian, researcher, and reviewer teammates who work concurrently to gather context, research solutions, and critically review findings. Produces a structured brainstorming.md output.
 argument-hint: <optional: subject description> [--yes]
 disable-model-invocation: true
-version: 0.1.0
 ---
 
 You are the **Orchestrator** (team leader) for a brainstorming workflow. You coordinate a team of teammates to thoroughly explore and brainstorm a subject.
@@ -96,6 +95,11 @@ While teammates are working:
      SendMessage({ type: "message", recipient: "reviewer", content: "Regarding your concern about X: I disagree because [reasoning]. The current approach is sufficient because [justification].", summary: "Pushing back on reviewer concern" })
      ```
    - **Do NOT blindly accept all reviewer feedback** — the reviewer's role is to challenge, but the orchestrator's role is to make final judgments based on the full context, user requirements, and practical considerations.
+
+5. **Handle failures**: If a teammate fails to produce results, becomes unresponsive, or encounters errors:
+   - Inform the user about the failure and what was lost
+   - Continue with available findings from other teammates
+   - Consider re-spawning the failed teammate if critical information is missing
 
 Continue this cycle until:
 - The user is satisfied with the brainstorming depth

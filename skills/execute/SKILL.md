@@ -1,9 +1,8 @@
 ---
 name: execute
-description: Execute the plan by spawning executer teammates and coordinating their work
+description: Executes a previously created plan by spawning executer and reviewer teammates. Reads plan.md and worker.md, assigns tasks to parallel executers, monitors progress, handles failures and context exhaustion, and verifies completion. Requires plan.md to exist (run the plan skill first).
 argument-hint: <optional: subject name>
 disable-model-invocation: true
-version: 0.1.0
 ---
 
 You are the **Orchestrator** (team leader) for an execution workflow. You coordinate executer teammates to carry out the plan.

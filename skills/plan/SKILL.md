@@ -1,28 +1,41 @@
 ---
 name: plan
-description: Create an execution plan from brainstorming results with reviewer teammate
-argument-hint: <optional: subject name>
+description: Creates a detailed execution plan (plan.md and worker.md) from brainstorming or investigation results. Spawns a reviewer teammate to validate task definitions, completion criteria, and worker allocation. Requires a subject folder with brainstorming.md or investigation.md.
+argument-hint: <optional: subject name> [--yes]
 disable-model-invocation: true
-version: 0.1.0
 ---
 
-You are the **Orchestrator** (team leader) for a planning workflow. You create a detailed execution plan from brainstorming results.
+You are the **Orchestrator** (team leader) for a planning workflow. You create a detailed execution plan from brainstorming or investigation results.
 
 **Principle Compliance:**
 Before starting any work:
 1. Check if `.workflow-adapter/principle.md` exists. If it does, read it and follow all its directives.
 2. Check if `.workflow-adapter/principle.orchestrator.md` exists. If it does, follow its directives (takes priority over `principle.md` on conflicts).
 
+## Step 0: Parse Options
+
+Check if the user's argument contains `--yes` flag:
+- If `--yes` is present, set `auto_confirm = true` and remove `--yes` from the subject name
+- If `--yes` is absent, set `auto_confirm = false`
+
+When `auto_confirm = false`, a final confirmation step will be performed before finalizing (see Step 7).
+
 ## Step 1: Identify the Subject
 
 If a subject was provided as an argument, use it. Otherwise:
 1. Check `.workflow-adapter/` for existing subject folders
 2. If multiple subjects exist, use AskUserQuestion to ask which one to plan for
-3. If no subjects exist, inform the user to run `/workflow-adapter:brainstorming` first
+3. If no subjects exist, inform the user to run `/workflow-adapter:brainstorming` or `/workflow-adapter:investigate` first
 
-## Step 2: Read Brainstorming Results
+## Step 2: Read Source Results
 
-Read `.workflow-adapter/{subject}/brainstorming.md` thoroughly. Also read any research documents in `.workflow-adapter/{subject}/doc/`.
+Check which source documents exist in `.workflow-adapter/{subject}/`:
+- `brainstorming.md` — output from the brainstorming workflow
+- `investigation.md` — output from the investigate workflow
+
+Read whichever exists (or both if both exist). Also read any research documents in `.workflow-adapter/{subject}/doc/`.
+
+If neither `brainstorming.md` nor `investigation.md` exists, inform the user to run `/workflow-adapter:brainstorming` or `/workflow-adapter:investigate` first.
 
 ## Step 3: Ask About Worktree
 
@@ -124,15 +137,38 @@ Messages from the reviewer are automatically delivered to you. If the reviewer f
 SendMessage({ type: "message", recipient: "reviewer", content: "Plan updated. Please re-review.", summary: "Requesting plan re-review" })
 ```
 
-## Step 7: User Confirmation
+**Handle failures**: If the reviewer fails to spawn or becomes unresponsive:
+- Inform the user that plan review could not be performed automatically
+- Present the plan directly to the user for manual review in Step 7
+- Continue the workflow — do not block on reviewer failure
 
-Present the plan to the user with AskUserQuestion:
-- Summary of tasks and their allocation
-- Number of executers
-- Worktree configuration
-- Any concerns from the reviewer
+## Step 7: Final Confirmation (if auto_confirm = false)
 
-Wait for user approval. Make adjustments if requested.
+**Skip this step if `auto_confirm = true`.**
+
+Before finalizing, present the plan summary to the user using AskUserQuestion:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Here is the execution plan summary:\n\n**Tasks**: {number of tasks}\n**Executers**: {number and names}\n**Worktree**: {yes/no}\n\n**Task List:**\n{numbered list of tasks with assigned executer and dependencies}\n\n**Reviewer Concerns:**\n{any unresolved concerns, or 'None'}\n\nIs this plan appropriate? Select 'Approve' to finalize, or 'Revise' to make changes.",
+    header: "Confirm",
+    options: [
+      { label: "Approve plan", description: "Plan looks good. Finalize and proceed." },
+      { label: "Revise", description: "I want to adjust some tasks or allocation before finalizing." }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+If the user selects **"Revise"**:
+- Ask which specific aspects they want to change (tasks, allocation, dependencies, etc.)
+- Update plan.md and worker.md accordingly
+- Ask the reviewer to re-validate if changes are significant
+- Repeat this confirmation step after revisions are complete
+
+If the user selects **"Approve plan"**, proceed to Step 8.
 
 ## Step 8: Shutdown Team
 

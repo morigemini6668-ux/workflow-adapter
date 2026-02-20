@@ -1,7 +1,7 @@
 ---
 name: brainstorming
 description: Start a brainstorming session for a subject with historian, researcher, and reviewer teammates
-argument-hint: <optional: subject description>
+argument-hint: <optional: subject description> [--yes]
 disable-model-invocation: true
 version: 0.1.0
 ---
@@ -12,6 +12,14 @@ You are the **Orchestrator** (team leader) for a brainstorming workflow. You coo
 Before starting any work:
 1. Check if `.workflow-adapter/principle.md` exists. If it does, read it and follow all its directives.
 2. Check if `.workflow-adapter/principle.orchestrator.md` exists. If it does, follow its directives (takes priority over `principle.md` on conflicts).
+
+## Step 0: Parse Options
+
+Check if the user's argument contains `--yes` flag:
+- If `--yes` is present, set `auto_confirm = true` and remove `--yes` from the subject description
+- If `--yes` is absent, set `auto_confirm = false`
+
+When `auto_confirm = false`, a final confirmation step will be performed before saving results (see Step 5).
 
 ## Step 1: Determine the Subject
 
@@ -79,12 +87,49 @@ While teammates are working:
    SendMessage({ type: "message", recipient: "researcher", content: "Please also research: ...", summary: "Additional research request" })
    ```
 
+4. **Validate reviewer feedback**: When the reviewer sends issues or challenges, you MUST critically evaluate them before acting:
+   - **Assess relevance**: Is the reviewer's concern actually relevant to the current subject and scope?
+   - **Assess feasibility**: Is the reviewer's suggestion practically achievable given constraints?
+   - **Assess proportionality**: Is the severity level (Critical/Warning/Suggestion) appropriate, or is the reviewer being overly cautious?
+   - **Accept or push back**: If the reviewer's point is valid, incorporate it. If it is not, explain your reasoning and push back:
+     ```
+     SendMessage({ type: "message", recipient: "reviewer", content: "Regarding your concern about X: I disagree because [reasoning]. The current approach is sufficient because [justification].", summary: "Pushing back on reviewer concern" })
+     ```
+   - **Do NOT blindly accept all reviewer feedback** — the reviewer's role is to challenge, but the orchestrator's role is to make final judgments based on the full context, user requirements, and practical considerations.
+
 Continue this cycle until:
 - The user is satisfied with the brainstorming depth
 - All key questions have been answered
 - The reviewer confirms the brainstorming is thorough
 
-## Step 5: Save Results
+## Step 5: Final Confirmation (if auto_confirm = false)
+
+**Skip this step if `auto_confirm = true`.**
+
+Before saving results, present a summary of all key decisions and conclusions to the user using AskUserQuestion:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Here is a summary of all decisions made during brainstorming:\n\n{list all key decisions, conclusions, chosen directions, and rejected alternatives}\n\nAre all these decisions appropriate? Select 'Approve' to save results, or 'Revise' to discuss changes.",
+    header: "Confirm",
+    options: [
+      { label: "Approve all", description: "All decisions look good. Save results and proceed." },
+      { label: "Revise", description: "I want to revisit some decisions before finalizing." }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+If the user selects **"Revise"**:
+- Ask which specific decisions they want to change
+- Re-engage relevant teammates (researcher, reviewer) as needed to address the changes
+- Repeat this confirmation step after revisions are complete
+
+If the user selects **"Approve all"**, proceed to Step 6.
+
+## Step 6: Save Results
 
 Compile all brainstorming results into `.workflow-adapter/{subject}/brainstorming.md`:
 
@@ -113,7 +158,7 @@ Compile all brainstorming results into `.workflow-adapter/{subject}/brainstormin
 {reviewer's assessment and any concerns}
 ```
 
-## Step 6: Shutdown Team
+## Step 7: Shutdown Team
 
 After saving results, shut down all teammates:
 ```

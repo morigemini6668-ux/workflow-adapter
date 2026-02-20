@@ -35,6 +35,14 @@
 - 문제가 발견된 경우 team leader 혹은 orchestrator에게 즉시 보고해야함
 - **중요** plan.md의 완수 조건이 명확하지 않은 경우엔 무조건 명확히 해야함
 
+## Enricher
+- investigate 워크플로우에서 on-demand로 스폰되는 에이전트
+- researcher가 텔레메트리 부족으로 문제 진단이 어렵다고 보고할 때만 스폰됨
+- 코드에 최소한의 로깅/메트릭/트레이싱 계측을 추가하는 역할
+- 기존 프로젝트의 계측 패턴과 프레임워크를 따라야 함
+- **중요** 비즈니스 로직이나 제어 흐름을 변경해서는 안 됨 — 오직 관측성 코드만 추가
+- 작업 완료 후 orchestrator에게 보고하고, 필요하면 종료됨
+
 ## Orchestrator
 - team leader로서 모든 작업을 조율하는 에이전트
 - subagent로 실행되지 않고 메인 에이전트로 실행됨
@@ -62,6 +70,15 @@
   - `{basePath}/{subject}/worker.md`에 명시한다.
 - 작업 목록은 진행상태, 변경사항을 적을 수 있는 형태여야한다
 - **중요** 작업 목록의 검증 방법에 대한 내용이 꼭 있어야한다.
+
+## investigate
+- 문제 분석 및 원인 진단을 위한 스킬 (brainstorming과 유사하나 분석적 성격)
+- 유저가 문제를 기술하면 원인과 해결법에 대해 분석함
+- historian, researcher, reviewer를 spawn하여 문제를 분석함
+- researcher는 모든 분석 도구(Serena, Explorer, Context7, WebSearch, Datadog 등)를 사용하되 코드를 수정하면 안 됨
+- reviewer는 해결법의 타당성과 리스크를 검토함
+- researcher가 텔레메트리 부족을 보고하면 enricher를 on-demand로 스폰하여 계측 추가
+- 모든 결과를 `{basePath}/{subject}/investigation.md`에 저장함
 
 ## execute
 - command로 실행할 수 있다.

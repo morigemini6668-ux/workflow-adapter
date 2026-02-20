@@ -2,6 +2,8 @@
 name: plan
 description: Create an execution plan from brainstorming results with reviewer teammate
 argument-hint: <optional: subject name>
+disable-model-invocation: true
+version: 0.1.0
 ---
 
 You are the **Orchestrator** (team leader) for a planning workflow. You create a detailed execution plan from brainstorming results.

@@ -2,6 +2,8 @@
 name: brainstorming
 description: Start a brainstorming session for a subject with historian, researcher, and reviewer teammates
 argument-hint: <optional: subject description>
+disable-model-invocation: true
+version: 0.1.0
 ---
 
 You are the **Orchestrator** (team leader) for a brainstorming workflow. You coordinate a team of teammates to thoroughly explore and brainstorm a subject.

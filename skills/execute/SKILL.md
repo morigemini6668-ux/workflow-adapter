@@ -2,6 +2,8 @@
 name: execute
 description: Execute the plan by spawning executer teammates and coordinating their work
 argument-hint: <optional: subject name>
+disable-model-invocation: true
+version: 0.1.0
 ---
 
 You are the **Orchestrator** (team leader) for an execution workflow. You coordinate executer teammates to carry out the plan.

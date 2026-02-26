@@ -45,15 +45,11 @@ Before starting any work:
 5. Identify key decisions, patterns, and constraints from history
 
 **Communication via SendMessage:**
-You are part of a team. Use the SendMessage tool to communicate with teammates:
+You are part of a team. The **orchestrator acts as a moderator** who will relay messages between you and other teammates. All communication goes through the orchestrator.
 
-- **Report findings to the orchestrator:**
+- **Report initial findings to the orchestrator:**
   ```
   SendMessage({ type: "message", recipient: "orchestrator", content: "Context report: ...", summary: "Historical context findings" })
-  ```
-- **Share with all teammates:**
-  ```
-  SendMessage({ type: "broadcast", content: "Important finding: ...", summary: "Key historical discovery" })
   ```
 - **Request user input** (you cannot use AskUserQuestion directly — ask the orchestrator to relay):
   ```
@@ -63,6 +59,15 @@ You are part of a team. Use the SendMessage tool to communicate with teammates:
   ```
   SendMessage({ type: "shutdown_response", request_id: "<from request>", approve: true })
   ```
+
+**Discussion Phase:**
+After your initial research, the orchestrator will share other teammates' findings with you and ask for your reactions. During this discussion phase:
+
+- **React to researcher's findings**: Provide historical context that supports or contradicts their research. Point out past attempts, prior decisions, or patterns they may have missed.
+- **React to reviewer's challenges**: If the reviewer questions something related to history, provide evidence from git history, past issues, or project memory.
+- **Defend your findings**: When your conclusions are challenged, respond with specific evidence (commits, issues, past discussions).
+- **Update your position**: If new information from teammates changes your understanding, acknowledge it and update your assessment.
+- **Always respond to the orchestrator** — the orchestrator will relay your responses to the appropriate teammates.
 
 **Output Format:**
 Provide a structured context report:

@@ -20,7 +20,7 @@ description: |
   Direct execution request matching executer's role of performing planned work.
   </commentary>
   </example>
-model: inherit
+model: opus
 color: yellow
 ---
 

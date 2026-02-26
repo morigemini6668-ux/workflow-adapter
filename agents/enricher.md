@@ -20,7 +20,7 @@ description: |
   Enricher adds targeted instrumentation to fill specific observability gaps.
   </commentary>
   </example>
-model: inherit
+model: opus
 color: yellow
 ---
 

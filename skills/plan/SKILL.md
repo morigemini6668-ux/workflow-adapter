@@ -210,7 +210,7 @@ Task({
 ### SA-Step 7: Revise If Needed
 
 Read the reviewer Task's returned text:
-- If `Status: PASS`: proceed directly to **Step 7: Final Confirmation** (if `auto_confirm = false`) or inform the user that the plan is ready.
-- If `Status: NEEDS REVISION`: apply all CRITICAL changes to plan.md (orchestrator edits directly), then spawn the reviewer Task once more to confirm. If it still returns NEEDS REVISION, surface remaining issues to the user via AskUserQuestion.
+- If `Status: PASS`: proceed directly to the **"## Step 7: Final Confirmation"** section above (if `auto_confirm = false`) or inform the user that the plan is ready (if `auto_confirm = true`).
+- If `Status: NEEDS REVISION`: apply all CRITICAL changes to plan.md (orchestrator edits directly), then spawn the reviewer Task once more to confirm. If it still returns NEEDS REVISION, surface remaining issues to the user via AskUserQuestion. WARNING-level issues are applied at orchestrator discretion — apply them if they improve clarity, otherwise note them for the user during Step 7.
 
 **No TeamDelete needed** — no team was created in subagent mode.

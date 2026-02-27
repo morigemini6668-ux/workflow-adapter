@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Creates a detailed execution plan (plan.md and worker.md) from brainstorming or investigation results. Spawns a reviewer teammate to validate task definitions, completion criteria, and worker allocation. Requires a subject folder with brainstorming.md or investigation.md.
-argument-hint: <optional: subject name> [--yes]
+argument-hint: <optional: subject name> [--yes] [--subagent]
 disable-model-invocation: true
 ---
 
@@ -19,6 +19,12 @@ Check if the user's argument contains `--yes` flag:
 - If `--yes` is absent, set `auto_confirm = false`
 
 When `auto_confirm = false`, a final confirmation step will be performed before finalizing (see Step 7).
+
+Also check for `--subagent` flag:
+- If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the subject name
+- If `--subagent` is absent, set `subagent_mode = false`
+
+When `subagent_mode = true`, follow Steps 1–5 as normal, then **skip Steps 6 and 8 entirely and proceed to "## Subagent Mode"** below instead.
 
 ## Step 1: Identify the Subject
 
@@ -179,3 +185,32 @@ TeamDelete()
 ```
 
 Inform the user that the plan is ready and suggest running `/workflow-adapter:execute` to start execution.
+
+---
+
+## Subagent Mode
+
+_Used when `--subagent` flag is set. No TeamCreate. Reviewer runs as a single foreground Task instead of a teammate._
+
+Steps 1–5 (identify subject, read source, ask worktree, create plan.md, create worker.md) run unchanged.
+
+### SA-Step 6: Spawn Reviewer Subagent
+
+Spawn the reviewer as a **foreground Task** (do NOT set `run_in_background: true` — wait for result):
+
+```
+Task({
+  description: "Reviewer: validate plan",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "You are a Reviewer subagent. Review a draft execution plan.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nReview these files:\n- .workflow-adapter/{subject}/plan.md\n- .workflow-adapter/{subject}/worker.md\n\n(Substitute the actual subject name for {subject} above.)\n\nVerify:\n- Every task has clear, measurable completion criteria (reject vague criteria like 'improved performance' without a metric)\n- Every task has a verification method\n- Task dependencies are correctly ordered\n- Executer count and task allocation is balanced\n- No tasks are missing from the original brainstorming/investigation scope\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N or general)\nRecommendations:\n- {specific text to add or change in plan.md}"
+})
+```
+
+### SA-Step 7: Revise If Needed
+
+Read the reviewer Task's returned text:
+- If `Status: PASS`: proceed directly to **Step 7: Final Confirmation** (if `auto_confirm = false`) or inform the user that the plan is ready.
+- If `Status: NEEDS REVISION`: apply all CRITICAL changes to plan.md (orchestrator edits directly), then spawn the reviewer Task once more to confirm. If it still returns NEEDS REVISION, surface remaining issues to the user via AskUserQuestion.
+
+**No TeamDelete needed** — no team was created in subagent mode.

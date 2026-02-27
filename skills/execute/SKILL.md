@@ -18,7 +18,7 @@ Check if the user's argument contains `--subagent` flag:
 - If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the subject name
 - If `--subagent` is absent, set `subagent_mode = false`
 
-When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip to "## Subagent Mode"** below instead of continuing to Steps 3–8.
+When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–8 entirely and proceed directly to SA-Step 3 in the "## Subagent Mode" section** below.
 
 ## Step 1: Identify the Subject
 
@@ -179,11 +179,11 @@ Task({
   description: "Executer {slot}: implement tasks {task list}",
   subagent_type: "general-purpose",
   run_in_background: true,
-  prompt: "You are an Executer subagent responsible for implementation work.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.executer.md if it exists — it takes priority.\n\nSubject: {subject}\nPlan location: .workflow-adapter/{subject}/plan.md\nAssigned tasks: {task titles and numbers}\n\nExecution Process:\n1. Read plan.md to understand your assigned tasks and dependencies\n2. For each assigned task:\n   a. Mark task as [~] in progress in plan.md\n   b. Perform the implementation work using all available tools\n   c. Verify the work meets the completion criteria defined in plan.md\n   d. Mark task as [x] completed with a brief note of changes made\n   e. If blocked: mark as [!] and write BLOCKED: {reason} in plan.md\n3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md:\n   Format: ## Completed: {task}\n   ## Files Modified: {list}\n   ## Next: {next task or Done}\n\nNo messaging is available. Update plan.md directly for all status reporting."
+  prompt: "You are an Executer subagent responsible for implementation work.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.executer.md if it exists — it takes priority.\n\nSubject: {subject}\nPlan location: .workflow-adapter/{subject}/plan.md\nAssigned tasks: {task titles and numbers}\n\nExecution Process:\n1. Read plan.md to understand your assigned tasks and dependencies\n2. For each assigned task:\n   a. Mark task as [~] in progress in plan.md\n   b. Perform the implementation work using all available tools\n   c. Verify the work meets the completion criteria defined in plan.md\n   d. Mark task as [x] completed with a brief note of changes made\n   e. If blocked: mark as [!] and write BLOCKED: {reason} in plan.md\n3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md:\n   Format: ## Completed: {task}\n   ## Files Modified: {list}\n   ## Next: {next task or Done}\n\nNo messaging is available. Update plan.md directly for all status reporting. Write only to your own assigned task rows — do not overwrite other tasks' status lines."
 })
 ```
 
-Wait for all batch Tasks via `TaskOutput` (block=true for each).
+Wait for all batch Tasks using the `TaskOutput` tool (set `block=true` for each task_id) — this blocks until the Task result is returned.
 
 ### SA-Step 5: Spawn Reviewer Subagent After Each Batch
 
@@ -192,6 +192,7 @@ After collecting all batch TaskOutputs, spawn a reviewer as a **foreground Task*
 ```
 Task({
   description: "Reviewer: verify completed tasks",
+  run_in_background: false,
   subagent_type: "general-purpose",
   prompt: "You are a Reviewer subagent. Review the just-completed tasks against completion criteria.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nPlan location: .workflow-adapter/{subject}/plan.md\nCompleted tasks in this batch: {task titles}\n\nFor each completed task:\n1. Verify the completion criteria are actually met\n2. Check for correctness, security, consistency\n3. Verify verification methods were applied\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N)\nRecommendations:\n- {specific fix}"
 })
@@ -213,7 +214,10 @@ When all tasks are `[x]`:
 2. Spawn one final reviewer Task to confirm overall completion:
    ```
    Task({
-     prompt: "... Final review: confirm all plan.md tasks are [x] and verification plan is complete ..."
+     description: "Reviewer: final verification",
+     subagent_type: "general-purpose",
+     run_in_background: false,
+     prompt: "You are a Reviewer subagent performing a final verification.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nPlan location: .workflow-adapter/{subject}/plan.md\n\nVerify:\n1. All tasks in plan.md are marked [x] completed\n2. All verification steps in the Verification Plan section are checked off\n3. No tasks are marked [!] blocked or [~] in progress\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N)\nRecommendations:\n- {specific fix}"
    })
    ```
 3. If verification passes: update plan.md with final status, output **ALL JOB COMPLETE**

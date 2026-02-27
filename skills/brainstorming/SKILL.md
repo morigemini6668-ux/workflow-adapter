@@ -312,7 +312,7 @@ Task({
   description: "Reviewer: review brainstorming materials",
   subagent_type: "general-purpose",
   run_in_background: false,
-  prompt: "You are a Reviewer subagent. Critically review the brainstorming materials.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nSubject: {subject}\n\n(Substitute the actual subject for {subject} above.)\n\nReview these files:\n- .workflow-adapter/{subject}/doc/historian-context.md (if exists)\n- All files in .workflow-adapter/{subject}/doc/ (researcher documents)\n\nAct as Devil's Advocate: challenge assumptions, find gaps, propose alternatives.\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description}\nRecommendations:\n- {specific improvement}"
+  prompt: "You are a Reviewer subagent. Critically review the brainstorming materials.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nSubject: {subject}\n\n(Substitute the actual subject for ALL occurrences of {subject} in this prompt, including in file paths.)\n\nReview these files:\n- .workflow-adapter/{subject}/doc/historian-context.md (if exists)\n- All files in .workflow-adapter/{subject}/doc/ (researcher documents)\n\nAct as Devil's Advocate: challenge assumptions, find gaps, propose alternatives.\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description}\nRecommendations:\n- {specific improvement}"
 })
 ```
 
@@ -320,6 +320,8 @@ If reviewer returns `NEEDS REVISION` with CRITICAL issues:
 - Orchestrator decides which gaps to address: spawn a new researcher Task targeted at the specific gaps, or revise brainstorming materials directly
 - WARNING-level issues are applied at orchestrator discretion — apply if they improve the output, otherwise note them for the user
 - One revision round maximum; then continue
+
+If reviewer returns `PASS` (or after the revision round): proceed to **"## SA-Step 6 onward"** below.
 
 ### SA-Step 6 onward
 

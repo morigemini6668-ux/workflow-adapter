@@ -1,7 +1,7 @@
 ---
 name: investigate
 description: Investigates a problem by spawning historian, researcher, reviewer, and on-demand enricher teammates to analyze root causes and propose risk-assessed solutions. Produces a structured investigation.md with hypotheses, evidence chains, and recommended actions.
-argument-hint: <optional: problem description> [--yes]
+argument-hint: <optional: problem description> [--yes] [--subagent]
 disable-model-invocation: true
 ---
 
@@ -21,6 +21,12 @@ Check if the user's argument contains `--yes` flag:
 - If `--yes` is absent, set `auto_confirm = false`
 
 When `auto_confirm = false`, a final confirmation step will be performed before saving results (see Step 6).
+
+Also check for `--subagent` flag:
+- If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the problem description
+- If `--subagent` is absent, set `subagent_mode = false`
+
+When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–5 and 8 entirely and proceed to "## Subagent Mode"** below instead.
 
 ## Step 1: Understand the Problem
 
@@ -263,3 +269,95 @@ TeamDelete()
 ```
 
 Inform the user that investigation is complete and suggest running `/workflow-adapter:plan` to create an execution plan for implementing the chosen solution.
+
+---
+
+## Subagent Mode
+
+_Used when `--subagent` flag is set. No TeamCreate. Historian and researcher run as parallel background Tasks. Enricher spawned on-demand as a foreground Task if researcher reports a telemetry gap. Reviewer runs as a single foreground Task._
+
+Steps 1–2 (understand problem, create folder structure) run unchanged.
+
+### SA-Step 3: Spawn Historian and Researcher in Parallel
+
+Spawn both as **background Tasks simultaneously**:
+
+```
+Task({
+  description: "Historian: gather project context for investigation",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "You are a Historian subagent. Gather past context relevant to this problem.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.historian.md if it exists — it takes priority.\n\nSubject: {subject}\nProblem: {problem_description}\n\n(Substitute the actual subject and problem description for ALL occurrences of the placeholders above.)\n\nFocus on: git blame for affected areas, related past incidents, previous fix attempts, known constraints.\nGather from: CLAUDE.md, git log, GitLab/GitHub issues and PRs (via gh/glab CLI if available).\n\nWrite findings to: .workflow-adapter/{subject}/doc/historian-context.md\nReturn a brief summary of your key findings."
+})
+
+Task({
+  description: "Researcher: analyze problem",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "You are a Researcher subagent in INVESTIGATION mode.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.researcher.md if it exists — it takes priority.\n\nSubject: {subject}\nProblem: {problem_description}\n\n(Substitute the actual subject and problem description for ALL occurrences of the placeholders above.)\n\n**CRITICAL CONSTRAINT: You MUST NOT modify any code.** Read-only analysis only.\n\nAnalyze systematically:\n1. Identify affected code paths and components\n2. Trace data flow and control flow\n3. Look for anti-patterns, race conditions, misconfigurations\n4. Check dependency versions and known issues\n5. Propose hypotheses ranked by likelihood\n6. For each hypothesis: describe supporting/refuting evidence\n\nIf telemetry is insufficient to diagnose, write as the FIRST LINE of your response:\nTELEMETRY GAP: {specific gap} — Need instrumentation at {specific locations} to observe {specific behavior}\n\nSave analysis to .workflow-adapter/{subject}/doc/\nReturn a structured summary with hypotheses, evidence, and proposed solutions."
+})
+```
+
+Wait for both Tasks using the `TaskOutput` tool (set `block=true` for each task_id) — this blocks until each result is returned.
+
+### SA-Step 4: Handle Telemetry Gap (on-demand)
+
+If the researcher's returned text starts with `TELEMETRY GAP:`:
+
+1. Ask user whether to add instrumentation:
+   ```
+   AskUserQuestion({
+     questions: [{
+       question: "Researcher cannot fully diagnose due to missing telemetry:\n\n{gap details from researcher}\n\nShould I spawn an enricher to add the necessary instrumentation?",
+       header: "Telemetry",
+       options: [
+         { label: "Add telemetry", description: "Spawn enricher to add logging/metrics/tracing." },
+         { label: "Skip", description: "Continue investigation without additional telemetry." }
+       ],
+       multiSelect: false
+     }]
+   })
+   ```
+   (Substitute actual gap details for `{gap details from researcher}`.)
+
+2. If user approves, read `${CLAUDE_PLUGIN_ROOT}/agents/enricher.md` and spawn enricher as a **foreground Task**:
+   ```
+   Task({
+     description: "Enricher: add telemetry instrumentation",
+     subagent_type: "general-purpose",
+     run_in_background: false,
+     prompt: "<full content of enricher.md>\n\nSubject: {subject}\nProblem: {problem_description}\n\n(Substitute the actual subject and problem description for ALL occurrences of the placeholders.)\n\nTelemetry gap: {exact gap details from researcher}\n\nAdd the minimum necessary instrumentation. Return a summary of what was added."
+   })
+   ```
+
+3. After the enricher Task completes, spawn a new researcher Task with the enricher's results added to the prompt context. Wait for the new result via `TaskOutput`.
+
+4. If the new researcher result still starts with `TELEMETRY GAP:`, surface this to the user via AskUserQuestion and continue without further enrichment.
+
+5. If user skips enrichment: continue with the researcher's partial findings.
+
+### SA-Step 5: Spawn Reviewer Subagent
+
+Spawn the reviewer as a **foreground Task** (wait for result):
+
+```
+Task({
+  description: "Reviewer: validate investigation findings",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "You are a Reviewer subagent in INVESTIGATION REVIEW mode.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nSubject: {subject}\n\n(Substitute the actual subject for ALL occurrences of {subject} in this prompt, including in file paths.)\n\nReview files in .workflow-adapter/{subject}/doc/\n\nFocus on:\n1. Are proposed root causes actually supported by evidence?\n2. Are there alternative explanations the researcher missed?\n3. For each proposed solution: What are the risks? Side effects?\n4. Is the solution proportional — not over-engineered?\n5. Quick wins vs. long-term fixes — are they distinguished?\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description}\nRecommendations:\n- {specific improvement}"
+})
+```
+
+If reviewer returns `NEEDS REVISION` with CRITICAL issues:
+- Orchestrator decides which gaps require re-investigation (spawn a new targeted researcher Task if needed)
+- WARNING-level issues are applied at orchestrator discretion — apply if they improve the analysis, otherwise note them for the user
+- One revision round maximum; then continue
+
+If reviewer returns `PASS` (or after the revision round): proceed to **"## SA-Step 6 onward"** below.
+
+### SA-Step 6 onward
+
+Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
+
+**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls.

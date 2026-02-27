@@ -1,7 +1,7 @@
 ---
 name: execute
 description: Executes a previously created plan by spawning executer and reviewer teammates. Reads plan.md and worker.md, assigns tasks to parallel executers, monitors progress, handles failures and context exhaustion, and verifies completion. Requires plan.md to exist (run the plan skill first).
-argument-hint: <optional: subject name>
+argument-hint: <optional: subject name> [--subagent]
 disable-model-invocation: true
 ---
 
@@ -11,6 +11,14 @@ You are the **Orchestrator** (team leader) for an execution workflow. You coordi
 Before starting any work:
 1. Check if `.workflow-adapter/principle.md` exists. If it does, read it and follow all its directives.
 2. Check if `.workflow-adapter/principle.orchestrator.md` exists. If it does, follow its directives (takes priority over `principle.md` on conflicts).
+
+## Step 0: Parse Options
+
+Check if the user's argument contains `--subagent` flag:
+- If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the subject name
+- If `--subagent` is absent, set `subagent_mode = false`
+
+When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip to "## Subagent Mode"** below instead of continuing to Steps 3–8.
 
 ## Step 1: Identify the Subject
 
@@ -146,3 +154,69 @@ When ALL tasks in plan.md are marked `[x]` completed:
 - Always get reviewer approval before declaring completion
 - Keep plan.md updated throughout the entire process
 - Use AskUserQuestion for any decision that requires user input
+
+---
+
+## Subagent Mode
+
+_This section is used when `--subagent` flag is set. Skip TeamCreate and SendMessage. Use direct Task calls with file-based coordination via plan.md._
+
+### SA-Step 3: Group Tasks Into Batches
+
+Analyze `plan.md` and `worker.md` to group tasks into dependency-ordered batches:
+- **Batch 1**: all tasks with no unfinished dependencies
+- **Batch 2**: tasks whose dependencies are in Batch 1
+- ...and so on
+
+Assign tasks to executer slots (alpha, beta, gamma...) based on `worker.md` allocation.
+
+### SA-Step 4: Spawn Executer Subagents Per Batch
+
+For each batch, spawn all assigned executer slots as **background Task calls simultaneously**:
+
+```
+Task({
+  description: "Executer {slot}: implement tasks {task list}",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "You are an Executer subagent responsible for implementation work.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.executer.md if it exists — it takes priority.\n\nSubject: {subject}\nPlan location: .workflow-adapter/{subject}/plan.md\nAssigned tasks: {task titles and numbers}\n\nExecution Process:\n1. Read plan.md to understand your assigned tasks and dependencies\n2. For each assigned task:\n   a. Mark task as [~] in progress in plan.md\n   b. Perform the implementation work using all available tools\n   c. Verify the work meets the completion criteria defined in plan.md\n   d. Mark task as [x] completed with a brief note of changes made\n   e. If blocked: mark as [!] and write BLOCKED: {reason} in plan.md\n3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md:\n   Format: ## Completed: {task}\n   ## Files Modified: {list}\n   ## Next: {next task or Done}\n\nNo messaging is available. Update plan.md directly for all status reporting."
+})
+```
+
+Wait for all batch Tasks via `TaskOutput` (block=true for each).
+
+### SA-Step 5: Spawn Reviewer Subagent After Each Batch
+
+After collecting all batch TaskOutputs, spawn a reviewer as a **foreground Task** (wait for result):
+
+```
+Task({
+  description: "Reviewer: verify completed tasks",
+  subagent_type: "general-purpose",
+  prompt: "You are a Reviewer subagent. Review the just-completed tasks against completion criteria.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nPlan location: .workflow-adapter/{subject}/plan.md\nCompleted tasks in this batch: {task titles}\n\nFor each completed task:\n1. Verify the completion criteria are actually met\n2. Check for correctness, security, consistency\n3. Verify verification methods were applied\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N)\nRecommendations:\n- {specific fix}"
+})
+```
+
+If reviewer returns `NEEDS REVISION`:
+1. For each CRITICAL issue: spawn a fix Task for the relevant executer slot, wait for result
+2. Re-run the reviewer Task once more to confirm fixes
+3. If still failing: use AskUserQuestion to inform user and get direction
+
+### SA-Step 6: Continue to Next Batch
+
+Repeat SA-Steps 4–5 for each subsequent batch until all tasks in plan.md are `[x]`.
+
+### SA-Step 7: Final Verification
+
+When all tasks are `[x]`:
+1. Run the verification steps listed in plan.md's "Verification Plan" section directly (orchestrator executes)
+2. Spawn one final reviewer Task to confirm overall completion:
+   ```
+   Task({
+     prompt: "... Final review: confirm all plan.md tasks are [x] and verification plan is complete ..."
+   })
+   ```
+3. If verification passes: update plan.md with final status, output **ALL JOB COMPLETE**
+4. If verification fails: identify failing items and spawn fix Tasks, repeat
+
+**No TeamDelete needed** — no team was created in subagent mode.

@@ -1,7 +1,7 @@
 ---
 name: brainstorming
 description: Starts a brainstorming session for a given subject. Spawns historian, researcher, and reviewer teammates who work concurrently, then the orchestrator moderates a group discussion where teammates debate and react to each other's findings. Produces a structured brainstorming.md output.
-argument-hint: <optional: subject description> [--yes]
+argument-hint: <optional: subject description> [--yes] [--subagent]
 disable-model-invocation: true
 ---
 
@@ -19,6 +19,12 @@ Check if the user's argument contains `--yes` flag:
 - If `--yes` is absent, set `auto_confirm = false`
 
 When `auto_confirm = false`, a final confirmation step will be performed before saving results (see Step 6).
+
+Also check for `--subagent` flag:
+- If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the subject description
+- If `--subagent` is absent, set `subagent_mode = false`
+
+When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–5 and 8 entirely and proceed to "## Subagent Mode"** below instead.
 
 ## Step 1: Determine the Subject
 
@@ -259,3 +265,64 @@ TeamDelete()
 ```
 
 Inform the user that brainstorming is complete and suggest running `/workflow-adapter:plan` to create an execution plan.
+
+---
+
+## Subagent Mode
+
+_Used when `--subagent` flag is set. No TeamCreate, no discussion phase. Historian and researcher run as parallel background Tasks. Reviewer runs as a single foreground Task._
+
+Steps 1–2 (determine subject, create folder structure) run unchanged.
+
+### SA-Step 3: Spawn Historian and Researcher in Parallel
+
+Spawn both as **background Tasks simultaneously**:
+
+```
+Task({
+  description: "Historian: gather project context",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "You are a Historian subagent. Gather past context relevant to this subject.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.historian.md if it exists — it takes priority.\n\nSubject: {subject}\nDescription: {user_request}\n\n(Substitute the actual subject and user request for the placeholders above.)\n\nGather context from:\n- Project CLAUDE.md, CLAUDE.local.md, AGENTS.md (if they exist)\n- Recent git log entries related to the subject area\n- GitLab/GitHub issues and PRs if available via gh/glab CLI\n\nWrite findings to: .workflow-adapter/{subject}/doc/historian-context.md\nReturn a brief summary of your key findings."
+})
+
+Task({
+  description: "Researcher: research subject",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "You are a Researcher subagent. Research this subject thoroughly.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.researcher.md if it exists — it takes priority.\n\nSubject: {subject}\nDescription: {user_request}\n\n(Substitute the actual subject and user request for the placeholders above.)\n\nResearch using all available tools (web search, Context7, codebase exploration, etc.).\nSave research documents to: .workflow-adapter/{subject}/doc/\n\nIf you need user input to proceed, write NEEDS USER INPUT: {your question} as the first line of your response — the orchestrator will collect it.\n\nReturn a structured summary of your key findings and recommendations."
+})
+```
+
+Wait for both Tasks using the `TaskOutput` tool (set `block=true` for each task_id) — this blocks until each result is returned.
+
+### SA-Step 4: Handle User Input Requests
+
+If the researcher's returned text starts with `NEEDS USER INPUT:`:
+1. Extract the question and use AskUserQuestion to get the user's answer
+2. Spawn a new researcher Task with the user's answer appended to the original prompt context
+3. Wait for the new result via `TaskOutput`
+
+### SA-Step 5: Spawn Reviewer Subagent
+
+Spawn the reviewer as a **foreground Task** (wait for result):
+
+```
+Task({
+  description: "Reviewer: review brainstorming materials",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "You are a Reviewer subagent. Critically review the brainstorming materials.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nSubject: {subject}\n\n(Substitute the actual subject for {subject} above.)\n\nReview these files:\n- .workflow-adapter/{subject}/doc/historian-context.md (if exists)\n- All files in .workflow-adapter/{subject}/doc/ (researcher documents)\n\nAct as Devil's Advocate: challenge assumptions, find gaps, propose alternatives.\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description}\nRecommendations:\n- {specific improvement}"
+})
+```
+
+If reviewer returns `NEEDS REVISION` with CRITICAL issues:
+- Orchestrator decides which gaps to address: spawn a new researcher Task targeted at the specific gaps, or revise brainstorming materials directly
+- WARNING-level issues are applied at orchestrator discretion — apply if they improve the output, otherwise note them for the user
+- One revision round maximum; then continue
+
+### SA-Step 6 onward
+
+Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
+
+**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls.

@@ -294,7 +294,7 @@ Task({
   description: "Researcher: analyze problem",
   subagent_type: "general-purpose",
   run_in_background: true,
-  prompt: "You are a Researcher subagent in INVESTIGATION mode.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.researcher.md if it exists — it takes priority.\n\nSubject: {subject}\nProblem: {problem_description}\n\n(Substitute the actual subject and problem description for ALL occurrences of the placeholders above.)\n\n**CRITICAL CONSTRAINT: You MUST NOT modify any code.** Read-only analysis only.\n\nAnalyze systematically:\n1. Identify affected code paths and components\n2. Trace data flow and control flow\n3. Look for anti-patterns, race conditions, misconfigurations\n4. Check dependency versions and known issues\n5. Propose hypotheses ranked by likelihood\n6. For each hypothesis: describe supporting/refuting evidence\n\nIf telemetry is insufficient to diagnose, write as the FIRST LINE of your response:\nTELEMETRY GAP: {specific gap} — Need instrumentation at {specific locations} to observe {specific behavior}\n\nSave analysis to .workflow-adapter/{subject}/doc/\nReturn a structured summary with hypotheses, evidence, and proposed solutions."
+  prompt: "You are a Researcher subagent in INVESTIGATION mode.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.researcher.md if it exists — it takes priority.\n\nSubject: {subject}\nProblem: {problem_description}\n\n(Substitute the actual subject and problem description for ALL occurrences of the placeholders above.)\n\n**CRITICAL CONSTRAINT: You MUST NOT modify any code.** Read-only analysis only.\n\nAnalyze systematically:\n1. Identify affected code paths and components\n2. Trace data flow and control flow\n3. Look for anti-patterns, race conditions, misconfigurations\n4. Check dependency versions and known issues\n5. Propose hypotheses ranked by likelihood\n6. For each hypothesis: describe supporting/refuting evidence\n\nIf telemetry is insufficient to diagnose, write as the FIRST LINE of your response:\nTELEMETRY GAP: {specific gap} — Need instrumentation at {specific locations} to observe {specific behavior}\n\nSave analysis to .workflow-adapter/{subject}/doc/researcher-analysis.md (add numbered suffixes like -2.md for additional documents)\nReturn a structured summary with hypotheses, evidence, and proposed solutions."
 })
 ```
 
@@ -330,9 +330,32 @@ If the researcher's returned text starts with `TELEMETRY GAP:`:
    })
    ```
 
-3. After the enricher Task completes, spawn a new researcher Task with the enricher's results added to the prompt context. Wait for the new result via `TaskOutput`.
+3. After the enricher Task completes, spawn a new researcher Task to re-analyze with the new telemetry context. Wait for the new result via `TaskOutput`:
+   ```
+   Task({
+     description: "Researcher: re-analyze with new telemetry",
+     subagent_type: "general-purpose",
+     run_in_background: false,
+     prompt: "You are a Researcher subagent in INVESTIGATION mode re-analyzing after telemetry was added.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.researcher.md if it exists — it takes priority.\n\nSubject: {subject}\nProblem: {problem_description}\n\n(Substitute the actual subject and problem description for ALL occurrences of the placeholders above.)\n\n**CRITICAL CONSTRAINT: You MUST NOT modify any code.** Read-only analysis only.\n\nTelemetry was just added at: {enricher_summary}\n\nRe-analyze using the new instrumentation. Update your existing analysis documents in .workflow-adapter/{subject}/doc/ with new findings.\n\nIf telemetry is still insufficient, write as the FIRST LINE:\nTELEMETRY GAP: {specific remaining gap}\n\nOtherwise return an updated summary with revised hypotheses and evidence."
+   })
+   ```
+   (Note: substitute the actual enricher summary for `{enricher_summary}` before issuing this prompt.)
 
-4. If the new researcher result still starts with `TELEMETRY GAP:`, surface this to the user via AskUserQuestion and continue without further enrichment.
+4. If the new researcher result still starts with `TELEMETRY GAP:`, surface this to the user:
+   ```
+   AskUserQuestion({
+     questions: [{
+       question: "After adding instrumentation, the researcher still reports a telemetry gap:\n\n{gap details}\n\nHow should we proceed?",
+       header: "Telemetry",
+       options: [
+         { label: "Continue anyway", description: "Proceed with partial findings — the analysis may be incomplete." },
+         { label: "Abort", description: "Stop the investigation. Add telemetry manually, then restart." }
+       ],
+       multiSelect: false
+     }]
+   })
+   ```
+   (Substitute the actual gap details for `{gap details}`. If user selects "Abort": inform user and stop. If user selects "Continue anyway": proceed with available researcher findings.)
 
 5. If user skips enrichment: continue with the researcher's partial findings.
 

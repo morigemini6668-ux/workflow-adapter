@@ -50,6 +50,9 @@ function updateFrontmatter(
     const regex = new RegExp(`^${key}:.*$`, "m");
     if (regex.test(fm)) {
       fm = fm.replace(regex, `${key}: ${value}`);
+    } else {
+      // Field doesn't exist — append it
+      fm = fm.trimEnd() + `\n${key}: ${value}\n`;
     }
   }
   parts[1] = fm;
@@ -154,6 +157,16 @@ try {
   const iteration = Number(frontmatter.iteration);
   const maxIterations = Number(frontmatter.max_iterations);
   const completionPromise = String(frontmatter.completion_promise);
+  const storedSessionId = frontmatter.session_id
+    ? String(frontmatter.session_id)
+    : null;
+  const currentSessionId: string | undefined = input.session_id;
+
+  // Session isolation: if state file is bound to a session, only that session can continue the loop
+  if (storedSessionId && currentSessionId && storedSessionId !== currentSessionId) {
+    // This stopping session doesn't own the loop — let it stop normally
+    process.exit(0);
+  }
 
   // Check for NaN values (corrupted numeric fields)
   if (isNaN(iteration) || isNaN(maxIterations)) {
@@ -181,11 +194,13 @@ try {
     process.exit(0);
   }
 
-  // Increment iteration and update state file
+  // Increment iteration and update state file, binding session_id on first stop
   const newIteration = iteration + 1;
-  const updatedContent = updateFrontmatter(content, {
-    iteration: newIteration,
-  });
+  const updates: Record<string, string | number> = { iteration: newIteration };
+  if (!storedSessionId && currentSessionId) {
+    updates.session_id = currentSessionId;
+  }
+  const updatedContent = updateFrontmatter(content, updates);
 
   try {
     await Bun.write(stateFilePath, updatedContent);

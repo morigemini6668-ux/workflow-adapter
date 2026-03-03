@@ -96,7 +96,11 @@ Execution Process:
 No messaging is available. Update plan.md directly for all status reporting.
 Write only to your own assigned task rows — do not overwrite other tasks' status lines.
 
-{failure_context_from_loop_state_section_if_any}"
+{failure_context_from_loop_state_section_if_any}
+
+Final output: When all assigned tasks are done, output ONLY this one line:
+Executer {slot}: {completed}/{total} tasks done. Details in checkpoint-{slot}.md
+Do not output verbose summaries — all details are already in plan.md and checkpoint-{slot}.md."
 })
 ```
 
@@ -129,20 +133,26 @@ For each completed task:
 2. Check for correctness, security, and consistency
 3. Verify that verification methods were applied where specified
 
-Return this exact format:
+Write your full review to .workflow-adapter/{subject}/iter-{N}-review.md in this format:
 Status: PASS or NEEDS REVISION
 Issues:
 - [CRITICAL|WARNING] {description} (Task N)
 Recommendations:
-- {specific fix}"
+- {specific fix}
+
+Then output ONLY this one line:
+Status: PASS
+or
+Status: NEEDS REVISION — {1-2 sentence summary of the most critical issues}"
 })
 ```
 
 **If the reviewer returns `NEEDS REVISION`:**
-1. For each CRITICAL issue: spawn a fix subagent (foreground, `run_in_background: false`) assigned to the relevant executer slot. Provide the issue description and the specific task to fix.
-2. After the fix subagent completes, re-run the reviewer subagent once more to confirm the fix.
-3. Repeat this retry cycle at most **2 times** total within this iteration.
-4. If still failing after 2 retry cycles, proceed to Step 6 with the unresolved issues noted.
+1. Read `.workflow-adapter/{subject}/iter-{N}-review.md` to get the full list of CRITICAL issues.
+2. For each CRITICAL issue: spawn a fix subagent (foreground, `run_in_background: false`). Pass the review file path and task number — instruct the fix subagent to read the file directly rather than receiving the issues inline. Instruct it to output only: "Fix applied: {file} — {one-line description}".
+3. After the fix subagent completes, re-run the reviewer subagent once more to confirm the fix.
+4. Repeat this retry cycle at most **2 times** total within this iteration.
+5. If still failing after 2 retry cycles, proceed to Step 6 with the unresolved issues noted.
 
 ## Step 6: Update Loop State
 

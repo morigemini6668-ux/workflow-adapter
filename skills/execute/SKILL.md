@@ -1,7 +1,7 @@
 ---
 name: execute
 description: Executes a previously created plan by spawning executer and reviewer teammates. Reads plan.md and worker.md, assigns tasks to parallel executers, monitors progress, handles failures and context exhaustion, and verifies completion. Requires plan.md to exist (run the plan skill first).
-argument-hint: <optional: subject name> [--subagent]
+argument-hint: "<optional: subject name> [--subagent]"
 disable-model-invocation: true
 ---
 

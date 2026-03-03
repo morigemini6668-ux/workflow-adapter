@@ -1,7 +1,7 @@
 ---
 name: brainstorming
 description: Starts a brainstorming session for a given subject. Spawns historian, researcher, and reviewer teammates who work concurrently, then the orchestrator moderates a group discussion where teammates debate and react to each other's findings. Produces a structured brainstorming.md output.
-argument-hint: <optional: subject description> [--yes] [--subagent]
+argument-hint: "<optional: subject description> [--yes] [--subagent]"
 disable-model-invocation: true
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Creates a detailed execution plan (plan.md and worker.md) from brainstorming or investigation results. Spawns a reviewer teammate to validate task definitions, completion criteria, and worker allocation. Requires a subject folder with brainstorming.md or investigation.md.
-argument-hint: <optional: subject name> [--yes] [--subagent]
+argument-hint: "<optional: subject name> [--yes] [--subagent]"
 disable-model-invocation: true
 ---
 

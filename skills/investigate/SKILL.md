@@ -1,7 +1,7 @@
 ---
 name: investigate
 description: Investigates a problem by spawning historian, researcher, reviewer, and on-demand enricher teammates to analyze root causes and propose risk-assessed solutions. Produces a structured investigation.md with hypotheses, evidence chains, and recommended actions.
-argument-hint: <optional: problem description> [--yes] [--subagent]
+argument-hint: "<optional: problem description> [--yes] [--subagent]"
 disable-model-invocation: true
 ---
 

@@ -11,10 +11,7 @@ Send a message to the locally running GitHub Copilot CLI server and return the r
 ## Prerequisites
 
 - Copilot CLI 설치 필요 (`copilot` 또는 `$COPILOT_CLI_PATH`)
-- 서버 실행 필요:
-  ```bash
-  bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-server-start.ts" [--port 4321]
-  ```
+- 서버가 자동으로 시작됨 (수동 시작도 가능)
 
 ## Workflow
 
@@ -22,8 +19,9 @@ Send a message to the locally running GitHub Copilot CLI server and return the r
    ```bash
    bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-client.ts" --prompt "사용자 메시지"
    ```
+   서버가 실행 중이 아니면 자동으로 시작된다.
 2. 스크립트 출력(Copilot의 응답)을 사용자에게 그대로 보여준다.
-3. 서버 연결 실패 시 에러 메시지를 확인하고 사용자에게 안내한다. 상세 내용은 `references/troubleshooting.md` 참조.
+3. 에러 발생 시 `references/troubleshooting.md` 참조.
 
 ## Server Lifecycle
 

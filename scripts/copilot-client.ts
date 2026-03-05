@@ -14,6 +14,7 @@
  */
 
 import { existsSync } from "fs";
+import { join } from "path";
 import net from "net";
 import { findCopilot, readPortFile, pingServer } from "./copilot-utils";
 
@@ -183,14 +184,33 @@ async function connectToServer(host: string, port: number): Promise<net.Socket |
   });
 }
 
-async function runServerMode(args: Args): Promise<void> {
-  const port = readPortFile(args.session || undefined);
-  if (port === null) {
-    process.stderr.write(
-      `[copilot-client] ERROR: No active copilot server found.\n` +
-      `  Start with: bun scripts/copilot-server-start.ts\n`
-    );
+async function autoStartServer(session?: string): Promise<number> {
+  process.stderr.write("[copilot-client] No active server found. Starting one...\n");
+  const startScript = join(import.meta.dir, "copilot-server-start.ts");
+  const startArgs = ["bun", startScript];
+  if (session) startArgs.push("--session", session);
+  const startProc = Bun.spawn(startArgs, {
+    stdout: "pipe",
+    stderr: "inherit",
+    stdin: "ignore",
+  });
+  const exitCode = await startProc.exited;
+  if (exitCode !== 0) {
+    process.stderr.write("[copilot-client] ERROR: Failed to auto-start server\n");
     process.exit(1);
+  }
+  const port = readPortFile(session || undefined);
+  if (port === null) {
+    process.stderr.write("[copilot-client] ERROR: Server started but port file not found\n");
+    process.exit(1);
+  }
+  return port;
+}
+
+async function runServerMode(args: Args): Promise<void> {
+  let port = readPortFile(args.session || undefined);
+  if (port === null) {
+    port = await autoStartServer(args.session || undefined);
   }
 
   // Connect (try IPv6 then IPv4)

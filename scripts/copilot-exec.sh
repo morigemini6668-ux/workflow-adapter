@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Defaults
 PROMPT_FILE=""
-MODEL="codex 5.3 xhigh"
+MODEL="gpt-5.3-codex"
 TIMEOUT=600
 
 # Parse arguments

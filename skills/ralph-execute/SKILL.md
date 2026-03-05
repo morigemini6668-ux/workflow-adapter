@@ -18,7 +18,7 @@ Extract from the skill arguments:
 - `subject` (required) — the workflow subject name (e.g., `my-feature`)
 - `--max-iterations N` (optional) — maximum loop iterations before giving up; default is `10`
 - `--copilot` (optional) — delegate Executer and Reviewer roles to Copilot CLI instead of Claude subagents
-- `--copilot-model MODEL` (optional) — model for Copilot CLI; default is `codex 5.3 xhigh`
+- `--copilot-model MODEL` (optional) — model for Copilot CLI; default is `gpt-5.3-codex`
 
 If `--copilot` is present, set `copilot_mode = true` and remove it from the subject name.
 

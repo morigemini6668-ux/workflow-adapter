@@ -22,7 +22,7 @@ Extract from the skill arguments:
 - `subject` (required) — a short name for this session (e.g., `auth-refactor`, `ci-fix`)
 - `--max-iterations N` (optional) — maximum loop iterations; default is `10`
 - `--copilot` (optional) — delegate Analyzer, Executor, and Verifier roles to Copilot CLI instead of Claude subagents
-- `--copilot-model MODEL` (optional) — model for Copilot CLI; default is `codex 5.3 xhigh`
+- `--copilot-model MODEL` (optional) — model for Copilot CLI; default is `gpt-5.3-codex`
 
 If `--copilot` is present, set `copilot_mode = true` and remove it from the subject name.
 

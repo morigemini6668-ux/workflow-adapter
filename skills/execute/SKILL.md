@@ -17,7 +17,7 @@ Before starting any work:
 Check if the user's argument contains these flags:
 - `--subagent`: set `subagent_mode = true`, remove from subject name
 - `--copilot`: set `copilot_mode = true`, remove from subject name
-- `--copilot-model MODEL`: set `copilot_model = MODEL`, remove from subject name (default: `codex 5.3 xhigh`)
+- `--copilot-model MODEL`: set `copilot_model = MODEL`, remove from subject name (default: `gpt-5.3-codex`)
 - If neither `--subagent` nor `--copilot` is present, both are `false`
 
 When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–8 entirely and proceed directly to SA-Step 3 in the "## Subagent Mode" section** below.

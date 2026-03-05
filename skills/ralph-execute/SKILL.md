@@ -1,7 +1,7 @@
 ---
 name: ralph-execute
 description: Runs a Ralph Wiggum-style iterative execution loop. Reads plan.md, spawns one-shot executer subagents, verifies completion, and loops until all tasks complete or max iterations reached.
-argument-hint: "<subject> [--max-iterations N]"
+argument-hint: "<subject> [--max-iterations N] [--copilot] [--copilot-model MODEL]"
 disable-model-invocation: true
 ---
 
@@ -17,6 +17,10 @@ Before starting any work:
 Extract from the skill arguments:
 - `subject` (required) — the workflow subject name (e.g., `my-feature`)
 - `--max-iterations N` (optional) — maximum loop iterations before giving up; default is `10`
+- `--copilot` (optional) — delegate Executer and Reviewer roles to Copilot CLI instead of Claude subagents
+- `--copilot-model MODEL` (optional) — model for Copilot CLI; default is `codex 5.3 xhigh`
+
+If `--copilot` is present, set `copilot_mode = true` and remove it from the subject name.
 
 If no subject is provided, check `.workflow-adapter/` for exactly one folder with a `plan.md`. If zero or multiple found, use AskUserQuestion to ask the user which subject to run.
 
@@ -41,9 +45,11 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
   ```
   (Replace `{N}` with the parsed `--max-iterations` value, or `10` if not specified.)
 - If the script exits with a non-zero code, output its stderr message and stop.
+- If `copilot_mode = true`, add `copilot_mode: true` and `copilot_model: "{copilot_model}"` to the frontmatter of the created `ralph-state.md` file using the Edit tool.
 
 **If it DOES exist** (subsequent iteration or leftover):
 - Read the state file to obtain the current `iteration` value and `max_iterations`.
+- If the frontmatter contains `copilot_mode: true`, set `copilot_mode = true` and read `copilot_model` from frontmatter (preserves mode across re-injections).
 - **Edge case — leftover state file**: If plan.md currently has NO pending tasks (`[ ]`, `[~]`, or `[!]`), the state file may be a leftover from a previous run. Use AskUserQuestion to ask: "A `ralph-state.md` already exists for subject `{subject}`. Cancel the old loop first with `/workflow-adapter:ralph-cancel`, or continue with the existing state?" If the user says cancel, stop. If continue, proceed with the existing state.
 
 ## Step 3: Identify Pending Tasks
@@ -61,6 +67,8 @@ Read the `## Loop State` section of plan.md (if present). Extract failure contex
 ## Step 4: Spawn One-Shot Executer Subagents
 
 Read `.workflow-adapter/{subject}/worker.md` to understand executer allocation (which tasks are assigned to which executer slot: alpha, beta, gamma, etc.).
+
+**If `copilot_mode = false` (default):**
 
 For each executer slot that has pending tasks, spawn a **background one-shot subagent** using the Agent tool:
 
@@ -104,6 +112,56 @@ Do not output verbose summaries — all details are already in plan.md and check
 })
 ```
 
+**If `copilot_mode = true`:**
+
+For each executer slot that has pending tasks, spawn a **background Task** that writes a prompt file and invokes Copilot CLI:
+
+```
+Task({
+  description: "Copilot executer {slot}: implement tasks",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "You are a Copilot dispatcher. Write a prompt file and run Copilot CLI.
+
+Subject: {subject}
+Executer slot: {slot}
+Copilot model: {copilot_model}
+
+Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-{slot}.md using the Write tool:
+
+---
+You are an Executer responsible for implementation work.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+
+Subject: {subject}
+Plan location: .workflow-adapter/{subject}/plan.md
+Assigned tasks: {task numbers and titles — pending only}
+
+{failure_context_from_loop_state_section_if_any}
+
+Execution Process:
+1. Read plan.md to understand your assigned tasks and dependencies
+2. For each assigned task:
+   a. Mark task as [~] in progress in plan.md
+   b. Perform the implementation work
+   c. Verify the work meets the completion criteria defined in plan.md
+   d. Mark task as [x] completed with a brief note of changes made
+   e. If blocked: mark as [!] and write BLOCKED: {reason} in plan.md
+3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md
+
+Write only to your own assigned task rows — do not overwrite other tasks' status lines.
+---
+
+Step 2: Run Copilot CLI via Bash:
+bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --model '{copilot_model}' --timeout 600
+
+Step 3: Check the exit code. If non-zero, report the error.
+Step 4: Read plan.md and verify the assigned tasks were updated.
+Output ONLY: Copilot executer {slot}: {completed}/{total} tasks done."
+})
+```
+
 Do **not** include SendMessage instructions — this is one-shot mode, not teammate mode.
 
 Spawn all executer subagents simultaneously (all `run_in_background: true`).
@@ -112,7 +170,11 @@ Wait for all subagents to complete using the TaskOutput tool — call it with `b
 
 ## Step 5: Spawn Reviewer Subagent
 
-After all executer subagents have finished, spawn a **foreground reviewer** (wait for result):
+After all executer subagents have finished, spawn a reviewer.
+
+**If `copilot_mode = false` (default):**
+
+Spawn a **foreground reviewer** (wait for result):
 
 ```
 Task({
@@ -144,6 +206,53 @@ Then output ONLY this one line:
 Status: PASS
 or
 Status: NEEDS REVISION — {1-2 sentence summary of the most critical issues}"
+})
+```
+
+**If `copilot_mode = true`:**
+
+Spawn a **foreground Copilot reviewer Task**:
+
+```
+Task({
+  description: "Copilot reviewer: verify tasks this iteration",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "You are a Copilot dispatcher for review. Write a prompt file and run Copilot CLI.
+
+Subject: {subject}
+Copilot model: {copilot_model}
+Tasks completed this iteration: {list of tasks that were pending at start of this iteration}
+
+Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-reviewer.md using the Write tool:
+
+---
+You are a Reviewer. Review the tasks completed in this iteration.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+Also read .workflow-adapter/principle.reviewer.md if it exists (takes priority).
+
+Plan location: .workflow-adapter/{subject}/plan.md
+Tasks completed this iteration: {task list}
+
+For each completed task:
+1. Verify the completion criteria listed in plan.md are actually met
+2. Check for correctness, security, and consistency
+3. Verify that verification methods were applied where specified
+
+Write your full review to .workflow-adapter/{subject}/iter-{N}-review.md in this format:
+Status: PASS or NEEDS REVISION
+Issues:
+- [CRITICAL|WARNING] {description} (Task N)
+Recommendations:
+- {specific fix}
+---
+
+Step 2: Run Copilot CLI via Bash:
+bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --model '{copilot_model}' --timeout 600
+
+Step 3: Read .workflow-adapter/{subject}/iter-{N}-review.md and extract the Status line.
+Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}"
 })
 ```
 

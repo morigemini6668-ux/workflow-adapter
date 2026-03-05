@@ -1,7 +1,7 @@
 ---
 name: execute
 description: Executes a previously created plan by spawning executer and reviewer teammates. Reads plan.md and worker.md, assigns tasks to parallel executers, monitors progress, handles failures and context exhaustion, and verifies completion. Requires plan.md to exist (run the plan skill first).
-argument-hint: "<optional: subject name> [--subagent]"
+argument-hint: "<optional: subject name> [--subagent] [--copilot] [--copilot-model MODEL]"
 disable-model-invocation: true
 ---
 
@@ -14,11 +14,15 @@ Before starting any work:
 
 ## Step 0: Parse Options
 
-Check if the user's argument contains `--subagent` flag:
-- If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the subject name
-- If `--subagent` is absent, set `subagent_mode = false`
+Check if the user's argument contains these flags:
+- `--subagent`: set `subagent_mode = true`, remove from subject name
+- `--copilot`: set `copilot_mode = true`, remove from subject name
+- `--copilot-model MODEL`: set `copilot_model = MODEL`, remove from subject name (default: `codex 5.3 xhigh`)
+- If neither `--subagent` nor `--copilot` is present, both are `false`
 
 When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–8 entirely and proceed directly to SA-Step 3 in the "## Subagent Mode" section** below.
+
+When `copilot_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–8 and SA-Steps entirely and proceed directly to CP-Step 3 in the "## Copilot Mode" section** below.
 
 ## Step 1: Identify the Subject
 
@@ -224,3 +228,133 @@ When all tasks are `[x]`:
 4. If verification fails: identify failing items and spawn fix Tasks, repeat
 
 **No TeamDelete needed** — no team was created in subagent mode.
+
+---
+
+## Copilot Mode
+
+_This section is used when `--copilot` flag is set. All Analyzer, Executor, and Reviewer roles are delegated to Copilot CLI via `copilot-exec.sh`. The orchestrator (Claude) manages batching, progress tracking, and completion decisions._
+
+### CP-Step 3: Group Tasks Into Batches
+
+Same as SA-Step 3 — analyze `plan.md` and `worker.md` to group tasks into dependency-ordered batches:
+- **Batch 1**: all tasks with no unfinished dependencies
+- **Batch 2**: tasks whose dependencies are in Batch 1
+- ...and so on
+
+Assign tasks to executer slots (alpha, beta, gamma...) based on `worker.md` allocation.
+
+### CP-Step 4: Spawn Copilot Executer Subagents Per Batch
+
+For each batch, spawn all assigned executer slots as **background Task calls simultaneously**. Each Task subagent writes a prompt file and invokes `copilot-exec.sh`:
+
+```
+Task({
+  description: "Copilot executer {slot}: implement tasks",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "You are a Copilot dispatcher. Your job is to write a prompt file and run Copilot CLI.
+
+Subject: {subject}
+Executer slot: {slot}
+Copilot model: {copilot_model}
+
+Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-{slot}.md using the Write tool:
+
+---
+You are an Executer responsible for implementation work.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+
+Subject: {subject}
+Plan location: .workflow-adapter/{subject}/plan.md
+Assigned tasks: {task numbers and titles — pending only}
+
+Execution Process:
+1. Read plan.md to understand your assigned tasks and dependencies
+2. For each assigned task:
+   a. Mark task as [~] in progress in plan.md
+   b. Perform the implementation work
+   c. Verify the work meets the completion criteria defined in plan.md
+   d. Mark task as [x] completed with a brief note of changes made
+   e. If blocked: mark as [!] and write BLOCKED: {reason} in plan.md
+3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md
+
+Write only to your own assigned task rows — do not overwrite other tasks' status lines.
+---
+
+Step 2: Run Copilot CLI via Bash:
+bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --model '{copilot_model}' --timeout 600
+
+Step 3: Check the exit code. If non-zero, report the error.
+
+Step 4: Read plan.md and verify the assigned tasks were updated. Output a one-line summary:
+Copilot executer {slot}: {completed}/{total} tasks done."
+})
+```
+
+Wait for all batch Tasks using the `TaskOutput` tool (set `block=true` for each task_id).
+
+### CP-Step 5: Spawn Copilot Reviewer After Each Batch
+
+After collecting all batch TaskOutputs, spawn a reviewer as a **foreground Task** (wait for result):
+
+```
+Task({
+  description: "Copilot reviewer: verify completed tasks",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "You are a Copilot dispatcher for review. Write a prompt file and run Copilot CLI.
+
+Subject: {subject}
+Copilot model: {copilot_model}
+Completed tasks in this batch: {task titles}
+
+Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-reviewer.md using the Write tool:
+
+---
+You are a Reviewer. Review the just-completed tasks against completion criteria.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+Also read .workflow-adapter/principle.reviewer.md if it exists (takes priority).
+
+Plan location: .workflow-adapter/{subject}/plan.md
+Completed tasks in this batch: {task titles}
+
+For each completed task:
+1. Verify the completion criteria are actually met
+2. Check for correctness, security, consistency
+3. Verify verification methods were applied
+
+Write your review to .workflow-adapter/{subject}/review-batch-{N}.md in this format:
+Status: PASS or NEEDS REVISION
+Issues:
+- [CRITICAL|WARNING] {description} (Task N)
+Recommendations:
+- {specific fix}
+---
+
+Step 2: Run Copilot CLI via Bash:
+bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --model '{copilot_model}' --timeout 600
+
+Step 3: Read .workflow-adapter/{subject}/review-batch-{N}.md and extract the Status line.
+Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}"
+})
+```
+
+If reviewer returns `NEEDS REVISION`:
+1. For each CRITICAL issue: spawn a fix Task (same Copilot pattern), wait for result
+2. Re-run the reviewer Task once more to confirm fixes
+3. If still failing after 2 retry cycles: use AskUserQuestion to inform user and get direction
+
+### CP-Step 6: Continue to Next Batch
+
+Repeat CP-Steps 4–5 for each subsequent batch until all tasks in plan.md are `[x]`.
+
+### CP-Step 7: Final Verification
+
+When all tasks are `[x]`:
+1. Run the verification steps listed in plan.md's "Verification Plan" section directly (orchestrator executes)
+2. Spawn one final Copilot reviewer Task (same pattern as CP-Step 5) to confirm overall completion
+3. If verification passes: update plan.md with final status, clean up prompt-*.md files, output **ALL JOB COMPLETE**
+4. If verification fails: identify failing items and spawn fix Tasks, repeat

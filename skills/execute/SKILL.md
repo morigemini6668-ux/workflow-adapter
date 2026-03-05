@@ -233,7 +233,7 @@ When all tasks are `[x]`:
 
 ## Copilot Mode
 
-_This section is used when `--copilot` flag is set. All Analyzer, Executor, and Reviewer roles are delegated to Copilot CLI via `copilot-exec.sh`. The orchestrator (Claude) manages batching, progress tracking, and completion decisions._
+_This section is used when `--copilot` flag is set. All Analyzer, Executor, and Reviewer roles are delegated to Copilot CLI via `copilot-exec.ts`. The orchestrator (Claude) manages batching, progress tracking, and completion decisions._
 
 ### CP-Step 3: Group Tasks Into Batches
 
@@ -256,7 +256,7 @@ Task({
   subagent_type: "general-purpose",
   run_in_background: true,
   prompt: "<copilot-dispatcher-prompt>
-You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
 Executer slot: {slot}
@@ -287,7 +287,7 @@ Execution Process:
 Write only to your own assigned task rows — do not overwrite other tasks' status lines.
 
 2. Use the Bash tool to run:
-bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --model '{copilot_model}' --timeout 600
 
 3. Check the exit code. If non-zero, report the error.
 4. Read plan.md and verify the assigned tasks were updated.
@@ -310,7 +310,7 @@ Task({
   subagent_type: "general-purpose",
   run_in_background: false,
   prompt: "<copilot-dispatcher-prompt>
-You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
 Copilot model: {copilot_model}
@@ -341,7 +341,7 @@ Recommendations:
 - {specific fix}
 
 2. Use the Bash tool to run:
-bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --model '{copilot_model}' --timeout 600
 
 3. Read .workflow-adapter/{subject}/review-batch-{N}.md and extract the Status line.
 Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}

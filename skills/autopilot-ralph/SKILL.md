@@ -175,7 +175,7 @@ Task({
   subagent_type: "general-purpose",
   run_in_background: false,
   prompt: "<copilot-dispatcher-prompt>
-You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
 Copilot model: {copilot_model}
@@ -212,7 +212,7 @@ Write your analysis to .workflow-adapter/{subject}/iter-{N}-analysis.md in this 
 {what should change after execution}
 
 2. Use the Bash tool to run:
-bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-analyzer.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-analyzer.md' --model '{copilot_model}' --timeout 600
 
 3. Verify .workflow-adapter/{subject}/iter-{N}-analysis.md was created.
 Output ONLY: Analysis complete: iter-{N}-analysis.md
@@ -275,7 +275,7 @@ Task({
   subagent_type: "general-purpose",
   run_in_background: false,
   prompt: "<copilot-dispatcher-prompt>
-You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
 Copilot model: {copilot_model}
@@ -312,7 +312,7 @@ Write an execution summary to .workflow-adapter/{subject}/iter-{N}-execution.md 
 {any caveats or observations}
 
 2. Use the Bash tool to run:
-bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-executor.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-executor.md' --model '{copilot_model}' --timeout 600
 
 3. Verify .workflow-adapter/{subject}/iter-{N}-execution.md was created.
 Output ONLY: Execution complete: {files changed} — {one-line description}
@@ -372,7 +372,7 @@ Task({
   subagent_type: "general-purpose",
   run_in_background: false,
   prompt: "<copilot-dispatcher-prompt>
-You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
 Copilot model: {copilot_model}
@@ -405,7 +405,7 @@ Verification process:
 - **Evidence**: {key output line or observation}
 
 2. Use the Bash tool to run:
-bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-verifier.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-verifier.md' --model '{copilot_model}' --timeout 600
 
 3. Read the updated ## Iteration History in autopilot-target.md to check the result.
 Output ONLY: PASS or FAIL: {one-sentence reason}

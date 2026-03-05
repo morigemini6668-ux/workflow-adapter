@@ -7,7 +7,6 @@
  * Usage: bun scripts/copilot-server-start.ts [--port PORT] [--session NAME] [--model MODEL] [--mode readonly|edit|full]
  */
 
-import { resolve } from "path";
 import { writeFileSync, unlinkSync } from "fs";
 import { findCopilot, readPortFile, pingServer, generateSessionId, portFilePath, logFilePath } from "./copilot-utils";
 

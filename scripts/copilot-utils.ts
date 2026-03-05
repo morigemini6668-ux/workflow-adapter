@@ -4,10 +4,23 @@
  * Shared utilities for copilot CLI scripts.
  */
 
-import { existsSync } from "fs";
-import { join, resolve } from "path";
+import { existsSync, mkdirSync } from "fs";
+import { join } from "path";
 import { readFileSync, readdirSync } from "fs";
 import { randomBytes } from "crypto";
+
+const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+const CONFIG_DIR = join(home, ".claude", "workflow-adapter");
+
+/**
+ * Ensure the config directory exists and return its path.
+ */
+export function configDir(): string {
+  if (!existsSync(CONFIG_DIR)) {
+    mkdirSync(CONFIG_DIR, { recursive: true });
+  }
+  return CONFIG_DIR;
+}
 
 /**
  * Generate a short random session ID (6 hex chars).
@@ -18,20 +31,20 @@ export function generateSessionId(): string {
 
 /**
  * Get the port file path for a given session.
- * If no session specified, returns the pattern for discovery.
  */
 export function portFilePath(session?: string): string {
+  const dir = configDir();
   if (session) {
-    return resolve(`copilot-server-port.${session}.conf`);
+    return join(dir, `copilot-server-port.${session}.conf`);
   }
-  return resolve("copilot-server-port.*.conf");
+  return join(dir, "copilot-server-port.*.conf");
 }
 
 /**
  * Get the log file path for a given session.
  */
 export function logFilePath(session: string): string {
-  return resolve(`copilot-server.${session}.log`);
+  return join(configDir(), `copilot-server.${session}.log`);
 }
 
 /**
@@ -39,14 +52,14 @@ export function logFilePath(session: string): string {
  * Returns array of { session, portFile } objects.
  */
 export function findSessions(): Array<{ session: string; portFile: string }> {
-  const cwd = process.cwd();
+  const dir = configDir();
   try {
-    const files = readdirSync(cwd);
+    const files = readdirSync(dir);
     return files
       .filter((f) => f.startsWith("copilot-server-port.") && f.endsWith(".conf"))
       .map((f) => {
         const session = f.replace("copilot-server-port.", "").replace(".conf", "");
-        return { session, portFile: resolve(f) };
+        return { session, portFile: join(dir, f) };
       });
   } catch {
     return [];
@@ -71,7 +84,6 @@ export function findCopilot(): string | null {
     return whichResult;
   }
 
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
   const candidates: string[] = [];
 
   if (process.platform === "darwin") {

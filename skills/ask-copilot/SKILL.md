@@ -1,95 +1,52 @@
 ---
 name: ask-copilot
-description: "This skill should be used when the user asks to \"ask copilot\", \"copilot한테 물어봐\", \"copilot에게 질문\", \"copilot에게 질문해\", \"copilot 의견\", \"copilot 의견 들어봐\", \"copilot chat\", \"코파일럿한테 물어봐\", \"코파일럿에게 질문\", or wants to send a message to the GitHub Copilot agent running locally."
-version: 0.3.0
+description: "This skill should be used when the user asks to \"ask copilot\", \"ask GitHub Copilot\", \"send to copilot\", \"get copilot's opinion\", \"copilot help\", \"copilot chat\", \"copilot한테 물어봐\", \"copilot에게 질문\", \"copilot에게 질문해\", \"copilot 의견\", \"copilot 의견 들어봐\", \"코파일럿한테 물어봐\", \"코파일럿에게 질문\", or wants to send a message to the GitHub Copilot agent running locally via JSON-RPC."
+version: 0.4.0
 ---
 
 # Ask Copilot
 
-로컬에서 실행 중인 GitHub Copilot CLI 서버에 JSON-RPC 2.0 프로토콜로 메시지를 보내고 응답을 받는 스킬.
+Send a message to the locally running GitHub Copilot CLI server and return the response.
 
 ## Prerequisites
 
-- Copilot CLI가 설치되어 있어야 함 (`copilot` 또는 `$COPILOT_CLI_PATH`)
-- Copilot CLI 서버가 실행 중이어야 함:
+- Copilot CLI 설치 필요 (`copilot` 또는 `$COPILOT_CLI_PATH`)
+- 서버 실행 필요:
   ```bash
-  bun scripts/copilot-server-start.ts [--port 4321] [--model MODEL]
+  bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-server-start.ts" [--port 4321]
   ```
-- 서버 시작 시 `copilot-server-port.{session}.conf` 파일이 자동 생성됨
 
-## Usage
+## Workflow
 
-사용자의 메시지를 Copilot에게 전달하려면:
-
-```bash
-# 세션이 하나일 때 (자동 감지)
-bun scripts/copilot-client.ts --prompt "사용자 메시지"
-
-# 특정 세션 지정
-bun scripts/copilot-client.ts --session abc123 --prompt "사용자 메시지"
-
-# CLI one-shot 모드 (서버 불필요)
-bun scripts/copilot-client.ts --cli --prompt "사용자 메시지"
-```
+1. 사용자의 메시지를 아래 명령으로 Copilot에게 전달한다:
+   ```bash
+   bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-client.ts" --prompt "사용자 메시지"
+   ```
+2. 스크립트 출력(Copilot의 응답)을 사용자에게 그대로 보여준다.
+3. 서버 연결 실패 시 에러 메시지를 확인하고 사용자에게 안내한다. 상세 내용은 `references/troubleshooting.md` 참조.
 
 ## Server Lifecycle
 
 ```bash
 # 서버 시작 (세션 ID 자동 생성)
-bun scripts/copilot-server-start.ts [--port 4321] [--model MODEL]
+bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-server-start.ts" [--port 4321] [--model MODEL]
 
-# 특정 세션 이름으로 시작
-bun scripts/copilot-server-start.ts --session my-session --port 4321
+# 특정 세션으로 시작
+bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-server-start.ts" --session my-session --port 4321
 
-# 특정 세션 종료
-bun scripts/copilot-server-stop.ts --session my-session
+# 세션 종료 (하나일 때 자동 감지)
+bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-server-stop.ts"
 
 # 모든 세션 종료
-bun scripts/copilot-server-stop.ts --all
-
-# 세션 하나일 때 (자동 감지)
-bun scripts/copilot-server-stop.ts
+bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-server-stop.ts" --all
 ```
 
-서버는 시작 시 자동으로 health-check (ping/pong)를 수행하며, 최대 10초간 대기한다.
+## Usage Variants
 
-## Workflow
-
-1. 사용자가 Copilot에게 보낼 메시지를 전달하면, 위 스크립트를 실행한다.
-2. 스크립트 출력(Copilot의 응답)을 사용자에게 그대로 보여준다.
-3. 서버 연결 실패 시 에러 메시지를 사용자에게 안내한다.
-
-## Health Check
-
-스크립트 실행 시 다음 순서로 health-check가 수행된다:
-
-1. **Port 파일 확인**: `copilot-server-port.{session}.conf` 파일이 없으면 서버가 시작되지 않은 것
-   - 안내: `"No active copilot server found. Start with: bun scripts/copilot-server-start.ts"`
-2. **다중 세션 감지**: 세션이 여러 개면 `--session` 지정 안내
-3. **Ping 확인**: 서버에 JSON-RPC ping을 보내 pong 응답을 확인
-   - 실패 시 안내: `"Server not responding. Restart: bun scripts/copilot-server-start.ts"`
-4. **응답 대기**: 프롬프트 전송 후 응답 수집 (기본 타임아웃: 60초)
-   - 타임아웃 시 안내: `"Server timed out. Check server logs."`
-
-## Troubleshooting
-
-| 증상 | 원인 | 해결 |
-|------|------|------|
-| "No active copilot server found" | 서버가 실행되지 않음 | `bun scripts/copilot-server-start.ts` 실행 |
-| "Multiple sessions found" | 여러 서버가 실행 중 | `--session NAME` 지정 |
-| "Server not responding" | 서버 프로세스가 죽음 | `bun scripts/copilot-server-stop.ts --all` 후 재시작 |
-| 타임아웃 | 서버가 응답을 생성하지 못함 | `--timeout` 값 증가, 서버 로그 확인 |
-| 인증 에러 | Copilot CLI 인증 만료 | `copilot auth login` 실행 후 서버 재시작 |
-| 서버 시작 실패 | 포트 충돌 또는 바이너리 없음 | 다른 포트 지정 (`--port`), CLI 설치 확인 |
-
-서버 로그 확인:
 ```bash
-cat copilot-server.{session}.log
+# 특정 세션 지정
+bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-client.ts" --session abc123 --prompt "메시지"
+
+# CLI one-shot 모드 (서버 불필요)
+bun "${CLAUDE_PLUGIN_ROOT}/scripts/copilot-client.ts" --cli --prompt "메시지"
 ```
-
-## Notes
-
-- Copilot 서버는 IPv6 `::1` (localhost)로 접속한다.
-- 프로토콜: LSP-style framing (`Content-Length` 헤더) + JSON-RPC 2.0
-- 스트리밍 응답을 수집하여 완성된 텍스트를 반환한다.
-- 세션별 port 파일과 log 파일이 분리되어 다중 프로세스 충돌 없음.

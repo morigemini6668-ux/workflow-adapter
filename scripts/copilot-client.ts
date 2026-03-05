@@ -297,7 +297,7 @@ async function runCliMode(args: Args): Promise<void> {
   if (prompt) {
     cmdArgs.push("-p", prompt);
   }
-  cmdArgs.push("-s", "--allow-all-tools", "--autopilot", "--add-dir", process.cwd());
+  cmdArgs.push("-s", "--allow-all", "--autopilot", "--no-ask-user", "--add-dir", process.cwd());
   if (args.model) cmdArgs.push("--model", args.model);
 
   const useInherit = args.interactive;

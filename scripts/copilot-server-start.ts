@@ -84,7 +84,7 @@ async function main(): Promise<void> {
   }
 
   // Build command
-  const cmdArgs = ["--headless", "--port", String(port), "--allow-all"];
+  const cmdArgs = ["--headless", "--port", String(port), "--allow-all", "--no-ask-user", "--autopilot"];
   if (model) cmdArgs.push("--model", model);
 
   // Start server process

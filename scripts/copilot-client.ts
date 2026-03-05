@@ -17,7 +17,7 @@ import { existsSync } from "fs";
 import net from "net";
 import { findCopilot, readPortFile, pingServer } from "./copilot-utils";
 
-const DEFAULT_MODEL = "gpt-5.3-codex";
+const DEFAULT_MODEL = ""; // empty = use copilot CLI default
 const DEFAULT_SERVER_TIMEOUT = 60;
 const DEFAULT_CLI_TIMEOUT = 600;
 
@@ -277,7 +277,8 @@ async function runCliMode(args: Args): Promise<void> {
   if (prompt) {
     cmdArgs.push("-p", prompt);
   }
-  cmdArgs.push("-s", "--allow-all-tools", "--autopilot", "--model", args.model, "--add-dir", process.cwd());
+  cmdArgs.push("-s", "--allow-all-tools", "--autopilot", "--add-dir", process.cwd());
+  if (args.model) cmdArgs.push("--model", args.model);
 
   const useInherit = args.interactive;
 
@@ -334,7 +335,7 @@ async function main(): Promise<void> {
       "\nOptions:\n" +
       "  --cli            Use one-shot CLI mode (default: server mode)\n" +
       "  --interactive    Inherit stdio (CLI mode only)\n" +
-      "  --model MODEL    Model to use (default: gpt-5.3-codex)\n" +
+      "  --model MODEL    Model to use (default: copilot CLI default)\n" +
       "  --timeout SECS   Timeout (default: 60 server, 600 CLI)\n" +
       "  --session NAME   Connect to specific session (server mode)\n"
     );

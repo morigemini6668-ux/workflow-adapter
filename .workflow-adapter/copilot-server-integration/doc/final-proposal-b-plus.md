@@ -131,14 +131,16 @@ skills/ask-copilot/SKILL.md       (minor update: health-check docs)
 - Need to see tool execution events (Copilot using tools during response)
 - Need session reuse / persistence across calls
 - Need scoped permissions (readonly vs edit vs full)
+- Need interactive user dialogue (Copilot ↔ user 양방향 대화)
 - SDK exits Technical Preview
-- JSON-RPC protocol changes break `copilot_chat.py`
+- JSON-RPC protocol changes break current client
 
 **What changes:**
 - Add `scripts/copilot-sdk-client.ts` using `@github/copilot-sdk`
 - Add `@github/copilot-sdk` as dependency (pinned version)
-- Update `ask-copilot` skill to use SDK client instead of Python script
+- Update `ask-copilot` skill to use SDK client
 - Implement permission tiers (readonly/edit/full) via `onPreToolUse` hook
+- Implement `onAskUser` callback for interactive dialogue
 
 **What stays (as fallback):**
 - `copilot_chat.py` -- kept as emergency fallback, not actively used
@@ -162,6 +164,25 @@ bun scripts/copilot-sdk-client.ts --prompt "Continue" --session-id my-session
 # Read prompt from file
 bun scripts/copilot-sdk-client.ts --prompt-file /tmp/prompt.md --mode edit
 ```
+
+**Interactive dialogue (onAskUser):**
+
+SDK의 `onAskUser` 콜백을 통해 Copilot ↔ 사용자 양방향 대화가 가능해진다.
+현재 CLI 방식은 one-shot이라 Copilot이 사용자에게 질문을 할 수 없지만, SDK에서는:
+
+```typescript
+const session = await client.createSession({
+  onAskUser: async (question) => {
+    // Claude Code skill에서 AskUserQuestion으로 사용자에게 질문
+    // 사용자 답변을 Copilot에게 반환
+    return userAnswer;
+  },
+});
+```
+
+이를 통해 "1번과 2번 중 어떤 걸 원하시나요?" 같은 Copilot의 질문을
+Claude Code가 받아서 사용자에게 전달하고, 답변을 다시 Copilot에게 돌려주는
+양방향 대화가 가능해진다. 세션 유지 + `onAskUser` 조합으로 구현.
 
 **SDK risk mitigation:**
 - Pin version: `"@github/copilot-sdk": "0.x.y"` (exact, no range)

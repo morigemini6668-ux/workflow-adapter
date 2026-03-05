@@ -136,9 +136,10 @@ ask-copilot skill 호출
 
 ## Open Questions
 
-1. **고정 포트 vs 동적 포트**: 고정이 설정 단순, 동적이 충돌 방지 (Phase 1에서 결정)
+1. **고정 포트 vs 동적 포트**: 고정이 설정 단순, 동적이 충돌 방지 (Phase 1에서 결정 → 세션별 분리로 해결)
 2. **BYOK 지원**: GitHub 구독 없이 자체 API 키로 Copilot runtime 사용 (Phase 4+ 고려)
-3. **멀티 프로젝트**: 여러 프로젝트에서 동시에 같은 서버 사용할지 (현재는 프로젝트별 서버 가정)
+3. **멀티 프로젝트**: 여러 프로젝트에서 동시에 같은 서버 사용할지 (세션별 분리로 해결)
+4. **양방향 대화 (Phase 2)**: SDK의 `onAskUser` 콜백으로 Copilot이 사용자에게 질문 → Claude Code가 중계 → 답변을 Copilot에 전달하는 interactive dialogue. 현재 CLI one-shot 방식에서는 불가능, SDK 마이그레이션 시 구현 가능.
 
 ## Review Notes (from Reviewer)
 

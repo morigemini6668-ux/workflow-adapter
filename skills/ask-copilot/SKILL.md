@@ -22,17 +22,11 @@ version: 0.2.0
 사용자의 메시지를 Copilot에게 전달하려면:
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/ask-copilot/scripts/copilot_chat.py" "사용자 메시지"
-```
-
-또는 TypeScript 클라이언트 사용:
-```bash
 bun scripts/copilot-client.ts --prompt "사용자 메시지"
 ```
 
 포트 파일이 기본 위치(`copilot-server-port.conf`)가 아닌 경우:
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/ask-copilot/scripts/copilot_chat.py" --port-file /path/to/port.conf "사용자 메시지"
 bun scripts/copilot-client.ts --port-file /path/to/port.conf --prompt "사용자 메시지"
 ```
 

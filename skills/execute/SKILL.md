@@ -246,22 +246,26 @@ Assign tasks to executer slots (alpha, beta, gamma...) based on `worker.md` allo
 
 ### CP-Step 4: Spawn Copilot Executer Subagents Per Batch
 
-For each batch, spawn all assigned executer slots as **background Task calls simultaneously**. Each Task subagent writes a prompt file and invokes `copilot-exec.sh`:
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn subagents for each executer slot. Do NOT run the steps inside the prompt yourself. The entire content below is each subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+
+For each batch, spawn all assigned executer slots as **background Task calls simultaneously**:
 
 ```
 Task({
   description: "Copilot executer {slot}: implement tasks",
   subagent_type: "general-purpose",
   run_in_background: true,
-  prompt: "You are a Copilot dispatcher. Your job is to write a prompt file and run Copilot CLI.
+  prompt: "<copilot-dispatcher-prompt>
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
 
 Subject: {subject}
 Executer slot: {slot}
 Copilot model: {copilot_model}
 
-Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-{slot}.md using the Write tool:
+Do these steps in order:
 
----
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-{slot}.md with this exact content:
+
 You are an Executer responsible for implementation work.
 
 Before starting, read .workflow-adapter/principle.md if it exists and follow it.
@@ -281,21 +285,22 @@ Execution Process:
 3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md
 
 Write only to your own assigned task rows — do not overwrite other tasks' status lines.
----
 
-Step 2: Run Copilot CLI via Bash:
+2. Use the Bash tool to run:
 bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --model '{copilot_model}' --timeout 600
 
-Step 3: Check the exit code. If non-zero, report the error.
-
-Step 4: Read plan.md and verify the assigned tasks were updated. Output a one-line summary:
-Copilot executer {slot}: {completed}/{total} tasks done."
+3. Check the exit code. If non-zero, report the error.
+4. Read plan.md and verify the assigned tasks were updated.
+Output ONLY: Copilot executer {slot}: {completed}/{total} tasks done.
+</copilot-dispatcher-prompt>"
 })
 ```
 
 Wait for all batch Tasks using the `TaskOutput` tool (set `block=true` for each task_id).
 
 ### CP-Step 5: Spawn Copilot Reviewer After Each Batch
+
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run the steps inside the prompt yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
 
 After collecting all batch TaskOutputs, spawn a reviewer as a **foreground Task** (wait for result):
 
@@ -304,15 +309,17 @@ Task({
   description: "Copilot reviewer: verify completed tasks",
   subagent_type: "general-purpose",
   run_in_background: false,
-  prompt: "You are a Copilot dispatcher for review. Write a prompt file and run Copilot CLI.
+  prompt: "<copilot-dispatcher-prompt>
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
 
 Subject: {subject}
 Copilot model: {copilot_model}
 Completed tasks in this batch: {task titles}
 
-Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-reviewer.md using the Write tool:
+Do these steps in order:
 
----
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-reviewer.md with this exact content:
+
 You are a Reviewer. Review the just-completed tasks against completion criteria.
 
 Before starting, read .workflow-adapter/principle.md if it exists and follow it.
@@ -332,13 +339,13 @@ Issues:
 - [CRITICAL|WARNING] {description} (Task N)
 Recommendations:
 - {specific fix}
----
 
-Step 2: Run Copilot CLI via Bash:
+2. Use the Bash tool to run:
 bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --model '{copilot_model}' --timeout 600
 
-Step 3: Read .workflow-adapter/{subject}/review-batch-{N}.md and extract the Status line.
-Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}"
+3. Read .workflow-adapter/{subject}/review-batch-{N}.md and extract the Status line.
+Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}
+</copilot-dispatcher-prompt>"
 })
 ```
 

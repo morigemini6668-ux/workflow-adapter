@@ -159,21 +159,23 @@ Then output ONLY this one line: Analysis complete: iter-{N}-analysis.md"
 
 **If `copilot_mode = true`:**
 
-Spawn a **foreground Copilot analyzer Task**:
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run these steps yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
 
 ```
 Task({
   description: "Copilot analyzer: identify root cause",
   subagent_type: "general-purpose",
   run_in_background: false,
-  prompt: "You are a Copilot dispatcher for root cause analysis. Write a prompt file and run Copilot CLI.
+  prompt: "<copilot-dispatcher-prompt>
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
 
 Subject: {subject}
 Copilot model: {copilot_model}
 
-Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-analyzer.md using the Write tool:
+Do these steps in order:
 
----
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-analyzer.md with this exact content:
+
 You are a Root Cause Analyzer. Identify why a bug exists.
 
 Before starting, read .workflow-adapter/principle.md if it exists and follow it.
@@ -195,13 +197,13 @@ Root Cause Analysis:
 - Hypothesis 3 (LOW confidence): {description} — {file:line}
 
 Recommended Fix: {specific, actionable fix for Hypothesis 1}
----
 
-Step 2: Run Copilot CLI via Bash:
+2. Use the Bash tool to run:
 bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-analyzer.md' --model '{copilot_model}' --timeout 600
 
-Step 3: Verify .workflow-adapter/{subject}/iter-{N}-analysis.md was created.
-Output ONLY: Analysis complete: iter-{N}-analysis.md"
+3. Verify .workflow-adapter/{subject}/iter-{N}-analysis.md was created.
+Output ONLY: Analysis complete: iter-{N}-analysis.md
+</copilot-dispatcher-prompt>"
 })
 ```
 
@@ -246,21 +248,23 @@ Then output ONLY this one line: Fix applied: {file} — {one-line description}"
 
 **If `copilot_mode = true`:**
 
-Spawn a **foreground Copilot fixer Task**:
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run these steps yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
 
 ```
 Task({
   description: "Copilot fixer: apply fix based on analysis",
   subagent_type: "general-purpose",
   run_in_background: false,
-  prompt: "You are a Copilot dispatcher for fixing. Write a prompt file and run Copilot CLI.
+  prompt: "<copilot-dispatcher-prompt>
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
 
 Subject: {subject}
 Copilot model: {copilot_model}
 
-Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-fixer.md using the Write tool:
+Do these steps in order:
 
----
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-fixer.md with this exact content:
+
 You are a Fixer. Apply a surgical fix to resolve the bug.
 
 Before starting, read .workflow-adapter/principle.md if it exists and follow it.
@@ -281,13 +285,13 @@ Fix Applied:
 - Change: {description of what was changed and why}
 - Root Cause Addressed: {which hypothesis from analysis}
 - Notes: {any caveats or follow-up needed}
----
 
-Step 2: Run Copilot CLI via Bash:
+2. Use the Bash tool to run:
 bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-fixer.md' --model '{copilot_model}' --timeout 600
 
-Step 3: Verify .workflow-adapter/{subject}/iter-{N}-fix.md was created.
-Output ONLY: Fix applied: {file} — {one-line description}"
+3. Verify .workflow-adapter/{subject}/iter-{N}-fix.md was created.
+Output ONLY: Fix applied: {file} — {one-line description}
+</copilot-dispatcher-prompt>"
 })
 ```
 
@@ -335,21 +339,23 @@ or: FAIL: {one-sentence reason}"
 
 **If `copilot_mode = true`:**
 
-Spawn a **foreground Copilot verifier Task**:
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run these steps yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
 
 ```
 Task({
   description: "Copilot verifier: confirm fix resolves the bug",
   subagent_type: "general-purpose",
   run_in_background: false,
-  prompt: "You are a Copilot dispatcher for verification. Write a prompt file and run Copilot CLI.
+  prompt: "<copilot-dispatcher-prompt>
+You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.sh via Bash, (3) report the result.
 
 Subject: {subject}
 Copilot model: {copilot_model}
 
-Step 1: Write the prompt file to .workflow-adapter/{subject}/prompt-verifier.md using the Write tool:
+Do these steps in order:
 
----
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-verifier.md with this exact content:
+
 You are a Verifier. Confirm whether the applied fix resolves the bug.
 
 Before starting, read .workflow-adapter/principle.md if it exists and follow it.
@@ -372,13 +378,13 @@ Verification process:
 - **Fix Applied**: {summary from iter-{N}-fix.md}
 - **Verification**: {method used} → {PASS|FAIL}
 - **Evidence**: {key output line or observation}
----
 
-Step 2: Run Copilot CLI via Bash:
+2. Use the Bash tool to run:
 bash '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.sh' --prompt-file '.workflow-adapter/{subject}/prompt-verifier.md' --model '{copilot_model}' --timeout 600
 
-Step 3: Read the updated ## Debug History in debug-target.md to check the result.
-Output ONLY: PASS or FAIL: {one-sentence reason}"
+3. Read the updated ## Debug History in debug-target.md to check the result.
+Output ONLY: PASS or FAIL: {one-sentence reason}
+</copilot-dispatcher-prompt>"
 })
 ```
 

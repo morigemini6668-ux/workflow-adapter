@@ -20,7 +20,6 @@ import { findCopilot, readPortFile, pingServer } from "./copilot-utils";
 const DEFAULT_MODEL = "gpt-5.3-codex";
 const DEFAULT_SERVER_TIMEOUT = 60;
 const DEFAULT_CLI_TIMEOUT = 600;
-const DEFAULT_PORT_FILE = "copilot-server-port.conf";
 
 interface Args {
   prompt: string;
@@ -29,7 +28,7 @@ interface Args {
   interactive: boolean;
   model: string;
   timeout: number;
-  portFile: string;
+  session: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -40,7 +39,7 @@ function parseArgs(argv: string[]): Args {
     interactive: false,
     model: DEFAULT_MODEL,
     timeout: -1, // sentinel: use mode-specific default
-    portFile: DEFAULT_PORT_FILE,
+    session: "",
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -69,8 +68,12 @@ function parseArgs(argv: string[]): Args {
         args.timeout = val;
         break;
       }
+      case "--session":
+        args.session = argv[++i] ?? "";
+        break;
       case "--port-file":
-        args.portFile = argv[++i] ?? DEFAULT_PORT_FILE;
+        // Legacy compat: ignore, use --session instead
+        argv[++i];
         break;
       default:
         process.stderr.write(`[copilot-client] ERROR: Unknown argument: ${argv[i]}\n`);
@@ -181,11 +184,11 @@ async function connectToServer(host: string, port: number): Promise<net.Socket |
 }
 
 async function runServerMode(args: Args): Promise<void> {
-  const port = readPortFile(args.portFile);
+  const port = readPortFile(args.session || undefined);
   if (port === null) {
     process.stderr.write(
-      `[copilot-client] ERROR: Port file not found: ${args.portFile}\n` +
-      `  Server not running. Start with: bun scripts/copilot-server-start.ts\n`
+      `[copilot-client] ERROR: No active copilot server found.\n` +
+      `  Start with: bun scripts/copilot-server-start.ts\n`
     );
     process.exit(1);
   }
@@ -333,7 +336,7 @@ async function main(): Promise<void> {
       "  --interactive    Inherit stdio (CLI mode only)\n" +
       "  --model MODEL    Model to use (default: gpt-5.3-codex)\n" +
       "  --timeout SECS   Timeout (default: 60 server, 600 CLI)\n" +
-      "  --port-file PATH Port file path (server mode, default: copilot-server-port.conf)\n"
+      "  --session NAME   Connect to specific session (server mode)\n"
     );
     process.exit(1);
   }

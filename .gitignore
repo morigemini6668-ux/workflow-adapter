@@ -1,2 +1,2 @@
-copilot-server-port.conf
-copilot-server.log
+copilot-server-port.*.conf
+copilot-server.*.log

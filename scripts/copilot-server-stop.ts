@@ -4,20 +4,19 @@
  *
  * Stop the Copilot CLI headless server.
  *
- * Usage: bun scripts/copilot-server-stop.ts
+ * Usage: bun scripts/copilot-server-stop.ts [--session NAME] [--all]
  */
 
-import { resolve } from "path";
 import { unlinkSync } from "fs";
-import { readPortFile } from "./copilot-utils";
+import { readPortFile, findSessions, portFilePath, logFilePath } from "./copilot-utils";
 
-const PORT_FILE = "copilot-server-port.conf";
+async function stopSession(session: string): Promise<void> {
+  const port = readPortFile(session);
+  const pFile = portFilePath(session);
 
-async function main(): Promise<void> {
-  const port = readPortFile(PORT_FILE);
   if (port === null) {
-    process.stderr.write("[copilot-server] Server is not running (no port file found)\n");
-    process.exit(0);
+    process.stderr.write(`[copilot-server] Session '${session}' is not running (no port file)\n`);
+    return;
   }
 
   // Find and kill the process listening on the port
@@ -36,9 +35,9 @@ async function main(): Promise<void> {
           process.kill(Number(pid), "SIGTERM");
         } catch {}
       }
-      process.stderr.write(`[copilot-server] Stopped server on port ${port} (PID: ${pids.join(", ")})\n`);
+      process.stderr.write(`[copilot-server] Stopped session '${session}' on port ${port} (PID: ${pids.join(", ")})\n`);
     } else {
-      process.stderr.write(`[copilot-server] No process found on port ${port}\n`);
+      process.stderr.write(`[copilot-server] No process found for session '${session}' on port ${port}\n`);
     }
   } catch {
     process.stderr.write(`[copilot-server] Warning: Could not check for process on port ${port}\n`);
@@ -46,9 +45,61 @@ async function main(): Promise<void> {
 
   // Remove port file
   try {
-    unlinkSync(resolve(PORT_FILE));
-    process.stderr.write(`[copilot-server] Removed ${PORT_FILE}\n`);
+    unlinkSync(pFile);
   } catch {}
+}
+
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+  let session = "";
+  let stopAll = false;
+
+  for (let i = 0; i < argv.length; i++) {
+    switch (argv[i]) {
+      case "--session":
+        session = argv[++i] ?? "";
+        break;
+      case "--all":
+        stopAll = true;
+        break;
+      default:
+        process.stderr.write(`[copilot-server] ERROR: Unknown argument: ${argv[i]}\n`);
+        process.exit(1);
+    }
+  }
+
+  if (stopAll) {
+    const sessions = findSessions();
+    if (sessions.length === 0) {
+      process.stderr.write("[copilot-server] No active sessions found\n");
+      return;
+    }
+    for (const s of sessions) {
+      await stopSession(s.session);
+    }
+    return;
+  }
+
+  if (!session) {
+    // Try to find a single session
+    const sessions = findSessions();
+    if (sessions.length === 0) {
+      process.stderr.write("[copilot-server] No active sessions found\n");
+      process.exit(0);
+    }
+    if (sessions.length === 1) {
+      session = sessions[0].session;
+    } else {
+      process.stderr.write(
+        `[copilot-server] Multiple sessions found. Specify --session or use --all:\n` +
+        sessions.map((s) => `  --session ${s.session}`).join("\n") + "\n" +
+        "  --all (stop all sessions)\n"
+      );
+      process.exit(1);
+    }
+  }
+
+  await stopSession(session);
 }
 
 main();

@@ -6,9 +6,52 @@
 
 import { existsSync } from "fs";
 import { join, resolve } from "path";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
+import { randomBytes } from "crypto";
 
-const DEFAULT_PORT_FILE = "copilot-server-port.conf";
+/**
+ * Generate a short random session ID (6 hex chars).
+ */
+export function generateSessionId(): string {
+  return randomBytes(3).toString("hex");
+}
+
+/**
+ * Get the port file path for a given session.
+ * If no session specified, returns the pattern for discovery.
+ */
+export function portFilePath(session?: string): string {
+  if (session) {
+    return resolve(`copilot-server-port.${session}.conf`);
+  }
+  return resolve("copilot-server-port.*.conf");
+}
+
+/**
+ * Get the log file path for a given session.
+ */
+export function logFilePath(session: string): string {
+  return resolve(`copilot-server.${session}.log`);
+}
+
+/**
+ * Find all active session port files.
+ * Returns array of { session, portFile } objects.
+ */
+export function findSessions(): Array<{ session: string; portFile: string }> {
+  const cwd = process.cwd();
+  try {
+    const files = readdirSync(cwd);
+    return files
+      .filter((f) => f.startsWith("copilot-server-port.") && f.endsWith(".conf"))
+      .map((f) => {
+        const session = f.replace("copilot-server-port.", "").replace(".conf", "");
+        return { session, portFile: resolve(f) };
+      });
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Find copilot CLI binary path.
@@ -59,19 +102,33 @@ export function findCopilot(): string | null {
 
 /**
  * Read port number from the port configuration file.
- * Returns the port number, or null if the file doesn't exist.
+ * If session is provided, reads session-specific file.
+ * If no session, tries to find a single active session.
  */
-export function readPortFile(portFilePath?: string): number | null {
-  const filePath = resolve(portFilePath ?? DEFAULT_PORT_FILE);
-  if (!existsSync(filePath)) {
-    return null;
+export function readPortFile(session?: string): number | null {
+  if (session) {
+    const filePath = portFilePath(session);
+    if (!existsSync(filePath)) return null;
+    const content = readFileSync(filePath, "utf-8").trim();
+    const port = Number(content);
+    return isNaN(port) || port <= 0 || port > 65535 ? null : port;
   }
-  const content = readFileSync(filePath, "utf-8").trim();
-  const port = Number(content);
-  if (isNaN(port) || port <= 0 || port > 65535) {
-    return null;
+
+  // No session specified: find active sessions
+  const sessions = findSessions();
+  if (sessions.length === 0) return null;
+  if (sessions.length === 1) {
+    const content = readFileSync(sessions[0].portFile, "utf-8").trim();
+    const port = Number(content);
+    return isNaN(port) || port <= 0 || port > 65535 ? null : port;
   }
-  return port;
+
+  // Multiple sessions: report them
+  process.stderr.write(
+    `[copilot] Multiple sessions found. Specify --session:\n` +
+    sessions.map((s) => `  --session ${s.session}`).join("\n") + "\n"
+  );
+  return null;
 }
 
 /**

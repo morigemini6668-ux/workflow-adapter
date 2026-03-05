@@ -4,21 +4,20 @@
  *
  * Start the Copilot CLI headless server.
  *
- * Usage: bun scripts/copilot-server-start.ts [--port PORT] [--model MODEL] [--mode readonly|edit|full]
+ * Usage: bun scripts/copilot-server-start.ts [--port PORT] [--session NAME] [--model MODEL] [--mode readonly|edit|full]
  */
 
 import { resolve } from "path";
 import { writeFileSync, unlinkSync } from "fs";
-import { findCopilot, readPortFile, pingServer } from "./copilot-utils";
+import { findCopilot, readPortFile, pingServer, generateSessionId, portFilePath, logFilePath } from "./copilot-utils";
 
 const DEFAULT_PORT = 4321;
-const PORT_FILE = "copilot-server-port.conf";
-const LOG_FILE = "copilot-server.log";
 const PING_TIMEOUT_MS = 10_000;
 const PING_INTERVAL_MS = 1_000;
 
-function parseArgs(argv: string[]): { port: number; model?: string; mode?: string } {
+function parseArgs(argv: string[]): { port: number; session: string; model?: string; mode?: string } {
   let port = DEFAULT_PORT;
+  let session = "";
   let model: string | undefined;
   let mode: string | undefined;
 
@@ -33,6 +32,9 @@ function parseArgs(argv: string[]): { port: number; model?: string; mode?: strin
         port = val;
         break;
       }
+      case "--session":
+        session = argv[++i] ?? "";
+        break;
       case "--model":
         model = argv[++i];
         break;
@@ -49,22 +51,28 @@ function parseArgs(argv: string[]): { port: number; model?: string; mode?: strin
     }
   }
 
-  return { port, model, mode };
+  if (!session) {
+    session = generateSessionId();
+  }
+
+  return { port, session, model, mode };
 }
 
 async function main(): Promise<void> {
-  const { port, model, mode } = parseArgs(process.argv.slice(2));
+  const { port, session, model, mode } = parseArgs(process.argv.slice(2));
+  const pFile = portFilePath(session);
+  const lFile = logFilePath(session);
 
-  // Check if server is already running
-  const existingPort = readPortFile(PORT_FILE);
+  // Check if this session is already running
+  const existingPort = readPortFile(session);
   if (existingPort !== null) {
     const alive = await pingServer(existingPort);
     if (alive) {
-      process.stderr.write(`[copilot-server] Server already running on port ${existingPort}\n`);
+      process.stderr.write(`[copilot-server] Session '${session}' already running on port ${existingPort}\n`);
       process.exit(0);
     }
     // Stale port file, clean up
-    unlinkSync(resolve(PORT_FILE));
+    unlinkSync(pFile);
   }
 
   const copilotBin = findCopilot();
@@ -81,8 +89,7 @@ async function main(): Promise<void> {
   if (model) cmdArgs.push("--model", model);
 
   // Start server process
-  const logPath = resolve(LOG_FILE);
-  const logFile = Bun.file(logPath).writer();
+  const logFile = Bun.file(lFile).writer();
 
   const proc = Bun.spawn([copilotBin, ...cmdArgs], {
     stdout: "pipe",
@@ -110,7 +117,7 @@ async function main(): Promise<void> {
   pipeToLog(proc.stderr as ReadableStream<Uint8Array>, "[stderr] ");
 
   // Write port file
-  writeFileSync(resolve(PORT_FILE), String(port));
+  writeFileSync(pFile, String(port));
 
   // Wait for server to become ready (ping with retries)
   const startTime = Date.now();
@@ -122,19 +129,17 @@ async function main(): Promise<void> {
   }
 
   if (ready) {
-    process.stderr.write(`[copilot-server] Copilot server started on port ${port}\n`);
-    process.stderr.write(`[copilot-server] Log file: ${logPath}\n`);
+    process.stderr.write(`[copilot-server] Session '${session}' started on port ${port}\n`);
+    process.stderr.write(`[copilot-server] Log: ${lFile}\n`);
+    process.stderr.write(`[copilot-server] Connect with: --session ${session}\n`);
   } else {
     process.stderr.write("[copilot-server] ERROR: Server failed to respond within timeout\n");
-    process.stderr.write(`[copilot-server] Check logs: ${logPath}\n`);
+    process.stderr.write(`[copilot-server] Check logs: ${lFile}\n`);
     proc.kill();
-    unlinkSync(resolve(PORT_FILE));
+    unlinkSync(pFile);
     process.exit(1);
   }
 
-  // Keep process alive to maintain the server
-  // The server process is a child; if this script exits, the child continues
-  // but we detach cleanly
   proc.unref();
 }
 

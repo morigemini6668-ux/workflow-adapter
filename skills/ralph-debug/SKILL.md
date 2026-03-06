@@ -1,7 +1,7 @@
 ---
 name: ralph-debug
 description: This skill should be used when the user asks to "ralph debug", "debug this in a loop", "auto-fix this bug", "iterative debugging loop", "ralph-debug", "반복 디버깅", "자동 디버깅 루프", "루프로 버그 고쳐줘", "버그 자동 수정", or wants to run an automated root cause analysis → fix → verify loop that keeps iterating until a bug is resolved or max iterations is reached.
-argument-hint: "<subject> [--max-iterations N] [--copilot] [--copilot-model MODEL]"
+argument-hint: "<subject> [--max-iterations N] [--copilot]"
 disable-model-invocation: true
 ---
 
@@ -19,7 +19,6 @@ Extract from the skill arguments:
 - `subject` (required) — a short name for this debug session (e.g., `login-bug`, `api-timeout`)
 - `--max-iterations N` (optional) — maximum loop iterations before stopping; default is `5`
 - `--copilot` (optional) — delegate Analyzer, Fixer, and Verifier roles to Copilot CLI instead of Claude subagents
-- `--copilot-model MODEL` (optional) — model for Copilot CLI; default is `gpt-5.3-codex`
 
 If `--copilot` is present, set `copilot_mode = true` and remove it from the subject name.
 
@@ -31,7 +30,7 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
 
 **If it DOES exist:**
 - Read it. If it contains `type: debug`, this is a resume or leftover from a previous ralph-debug session.
-- If the frontmatter contains `copilot_mode: true`, set `copilot_mode = true` and read `copilot_model` from frontmatter (preserves mode across re-injections).
+- If the frontmatter contains `copilot_mode: true`, set `copilot_mode = true` (preserves mode across re-injections).
 - Use AskUserQuestion: "A `ralph-debug-state.md` already exists for subject `{subject}`. Resume the existing debug loop, or cancel it and start fresh?"
 - If resume: skip to Step 3 (re-run the loop directly). If fresh: delete `ralph-state.md` and `debug-target.md`, then proceed to Step 2.
 - If the state file does NOT contain `type: debug` (it may be a ralph-execute state): warn the user and stop.
@@ -81,7 +80,7 @@ mkdir -p ".workflow-adapter/{subject}"
 date -u +"%Y-%m-%dT%H:%M:%SZ"
 ```
 
-**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting `{subject}`, `{N}`, and `{timestamp}` with actual values (include `copilot_mode` and `copilot_model` lines only if `copilot_mode = true`):
+**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting `{subject}`, `{N}`, and `{timestamp}` with actual values (include `copilot_mode` line only if `copilot_mode = true`):
 ```markdown
 ---
 iteration: 0
@@ -91,7 +90,6 @@ subject: {subject}
 started_at: "{timestamp}"
 type: debug
 copilot_mode: true          # only if --copilot flag was set
-copilot_model: "{copilot_model}"  # only if --copilot flag was set
 ---
 
 You are the Ralph-Debug orchestrator for subject '{subject}'. Continue the debug loop.
@@ -170,7 +168,6 @@ Task({
 You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
-Copilot model: {copilot_model}
 
 Do these steps in order:
 
@@ -199,7 +196,7 @@ Root Cause Analysis:
 Recommended Fix: {specific, actionable fix for Hypothesis 1}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-analyzer.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-analyzer.md' --timeout 600
 
 3. Verify .workflow-adapter/{subject}/iter-{N}-analysis.md was created.
 Output ONLY: Analysis complete: iter-{N}-analysis.md
@@ -259,7 +256,6 @@ Task({
 You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
-Copilot model: {copilot_model}
 
 Do these steps in order:
 
@@ -287,7 +283,7 @@ Fix Applied:
 - Notes: {any caveats or follow-up needed}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-fixer.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-fixer.md' --timeout 600
 
 3. Verify .workflow-adapter/{subject}/iter-{N}-fix.md was created.
 Output ONLY: Fix applied: {file} — {one-line description}
@@ -350,7 +346,6 @@ Task({
 You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
-Copilot model: {copilot_model}
 
 Do these steps in order:
 
@@ -380,7 +375,7 @@ Verification process:
 - **Evidence**: {key output line or observation}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-verifier.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-verifier.md' --timeout 600
 
 3. Read the updated ## Debug History in debug-target.md to check the result.
 Output ONLY: PASS or FAIL: {one-sentence reason}

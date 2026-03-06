@@ -2,10 +2,10 @@
 /**
  * copilot-exec.ts
  *
- * Thin wrapper around copilot-client.ts --cli for backward compatibility.
+ * Thin wrapper around copilot-client.ts (ACP mode) for backward compatibility.
  * Runs copilot with a prompt file and returns the result.
  *
- * Usage: bun scripts/copilot-exec.ts --prompt-file <path> [--model MODEL] [--timeout SECS]
+ * Usage: bun scripts/copilot-exec.ts --prompt-file <path> [--timeout SECS]
  */
 
 import { resolve } from "path";
@@ -15,14 +15,20 @@ async function main(): Promise<void> {
 
   if (args.length === 0) {
     process.stderr.write(
-      "Usage: bun scripts/copilot-exec.ts --prompt-file <path> [--model MODEL] [--timeout SECS]\n"
+      "Usage: bun scripts/copilot-exec.ts --prompt-file <path> [--timeout SECS]\n"
     );
     process.exit(1);
   }
 
-  // Delegate to copilot-client.ts --cli, passing all args through
+  // Delegate to copilot-client.ts (ACP mode), passing all args through
   const clientScript = resolve(import.meta.dir, "copilot-client.ts");
-  const proc = Bun.spawn(["bun", clientScript, "--cli", ...args], {
+  // Filter out --model args (no longer supported; uses user's copilot CLI default)
+  const filteredArgs: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--model") { i++; continue; } // skip --model and its value
+    filteredArgs.push(args[i]);
+  }
+  const proc = Bun.spawn(["bun", clientScript, ...filteredArgs], {
     stdout: "inherit",
     stderr: "inherit",
     stdin: "ignore",

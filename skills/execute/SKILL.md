@@ -1,7 +1,7 @@
 ---
 name: execute
 description: Executes a previously created plan by spawning executer and reviewer teammates. Reads plan.md and worker.md, assigns tasks to parallel executers, monitors progress, handles failures and context exhaustion, and verifies completion. Requires plan.md to exist (run the plan skill first).
-argument-hint: "<optional: subject name> [--subagent] [--copilot] [--copilot-model MODEL]"
+argument-hint: "<optional: subject name> [--subagent] [--copilot]"
 disable-model-invocation: true
 ---
 
@@ -17,7 +17,7 @@ Before starting any work:
 Check if the user's argument contains these flags:
 - `--subagent`: set `subagent_mode = true`, remove from subject name
 - `--copilot`: set `copilot_mode = true`, remove from subject name
-- `--copilot-model MODEL`: set `copilot_model = MODEL`, remove from subject name (default: `gpt-5.3-codex`)
+- If `--copilot` is present, `copilot_mode = true`
 - If neither `--subagent` nor `--copilot` is present, both are `false`
 
 When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–8 entirely and proceed directly to SA-Step 3 in the "## Subagent Mode" section** below.
@@ -260,7 +260,6 @@ You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt f
 
 Subject: {subject}
 Executer slot: {slot}
-Copilot model: {copilot_model}
 
 Do these steps in order:
 
@@ -287,7 +286,7 @@ Execution Process:
 Write only to your own assigned task rows — do not overwrite other tasks' status lines.
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --timeout 600
 
 3. Check the exit code. If non-zero, report the error.
 4. Read plan.md and verify the assigned tasks were updated.
@@ -313,7 +312,6 @@ Task({
 You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
-Copilot model: {copilot_model}
 Completed tasks in this batch: {task titles}
 
 Do these steps in order:
@@ -341,7 +339,7 @@ Recommendations:
 - {specific fix}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --timeout 600
 
 3. Read .workflow-adapter/{subject}/review-batch-{N}.md and extract the Status line.
 Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}

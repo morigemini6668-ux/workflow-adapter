@@ -1,7 +1,7 @@
 ---
 name: ralph-execute
 description: Runs a Ralph Wiggum-style iterative execution loop. Reads plan.md, spawns one-shot executer subagents, verifies completion, and loops until all tasks complete or max iterations reached.
-argument-hint: "<subject> [--max-iterations N] [--copilot] [--copilot-model MODEL]"
+argument-hint: "<subject> [--max-iterations N] [--copilot]"
 disable-model-invocation: true
 ---
 
@@ -18,7 +18,6 @@ Extract from the skill arguments:
 - `subject` (required) — the workflow subject name (e.g., `my-feature`)
 - `--max-iterations N` (optional) — maximum loop iterations before giving up; default is `10`
 - `--copilot` (optional) — delegate Executer and Reviewer roles to Copilot CLI instead of Claude subagents
-- `--copilot-model MODEL` (optional) — model for Copilot CLI; default is `gpt-5.3-codex`
 
 If `--copilot` is present, set `copilot_mode = true` and remove it from the subject name.
 
@@ -45,11 +44,11 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
   ```
   (Replace `{N}` with the parsed `--max-iterations` value, or `10` if not specified.)
 - If the script exits with a non-zero code, output its stderr message and stop.
-- If `copilot_mode = true`, add `copilot_mode: true` and `copilot_model: "{copilot_model}"` to the frontmatter of the created `ralph-state.md` file using the Edit tool.
+- If `copilot_mode = true`, add `copilot_mode: true` to the frontmatter of the created `ralph-state.md` file using the Edit tool.
 
 **If it DOES exist** (subsequent iteration or leftover):
 - Read the state file to obtain the current `iteration` value and `max_iterations`.
-- If the frontmatter contains `copilot_mode: true`, set `copilot_mode = true` and read `copilot_model` from frontmatter (preserves mode across re-injections).
+- If the frontmatter contains `copilot_mode: true`, set `copilot_mode = true` (preserves mode across re-injections).
 - **Edge case — leftover state file**: If plan.md currently has NO pending tasks (`[ ]`, `[~]`, or `[!]`), the state file may be a leftover from a previous run. Use AskUserQuestion to ask: "A `ralph-state.md` already exists for subject `{subject}`. Cancel the old loop first with `/workflow-adapter:ralph-cancel`, or continue with the existing state?" If the user says cancel, stop. If continue, proceed with the existing state.
 
 ## Step 3: Identify Pending Tasks
@@ -128,7 +127,6 @@ You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt f
 
 Subject: {subject}
 Executer slot: {slot}
-Copilot model: {copilot_model}
 
 Do these steps in order:
 
@@ -157,7 +155,7 @@ Execution Process:
 Write only to your own assigned task rows — do not overwrite other tasks' status lines.
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --timeout 600
 
 3. Check the exit code. If non-zero, report the error.
 4. Read plan.md and verify the assigned tasks were updated.
@@ -226,7 +224,6 @@ Task({
 You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 
 Subject: {subject}
-Copilot model: {copilot_model}
 Tasks completed this iteration: {list of tasks that were pending at start of this iteration}
 
 Do these steps in order:
@@ -254,7 +251,7 @@ Recommendations:
 - {specific fix}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --model '{copilot_model}' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --timeout 600
 
 3. Read .workflow-adapter/{subject}/iter-{N}-review.md and extract the Status line.
 Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}

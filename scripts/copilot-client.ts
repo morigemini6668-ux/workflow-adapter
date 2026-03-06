@@ -3,7 +3,7 @@
  * copilot-client.ts
  *
  * Unified Copilot client with two modes:
- *   - Server mode (default): connect to headless server via JSON-RPC
+ *   - ACP mode (default): spawn copilot --acp --stdio, one-shot per request
  *   - CLI mode (--cli): run `copilot -p "prompt"` directly
  *
  * Usage:
@@ -14,12 +14,10 @@
  */
 
 import { existsSync } from "fs";
-import { join } from "path";
-import net from "net";
-import { findCopilot, readPortFile, pingServer } from "./copilot-utils";
+import { findCopilot } from "./copilot-utils";
 
 const DEFAULT_MODEL = ""; // empty = use copilot CLI default
-const DEFAULT_SERVER_TIMEOUT = 60;
+const DEFAULT_ACP_TIMEOUT = 120;
 const DEFAULT_CLI_TIMEOUT = 600;
 
 interface Args {
@@ -29,7 +27,6 @@ interface Args {
   interactive: boolean;
   model: string;
   timeout: number;
-  session: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -40,7 +37,6 @@ function parseArgs(argv: string[]): Args {
     interactive: false,
     model: DEFAULT_MODEL,
     timeout: -1, // sentinel: use mode-specific default
-    session: "",
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -70,10 +66,8 @@ function parseArgs(argv: string[]): Args {
         break;
       }
       case "--session":
-        args.session = argv[++i] ?? "";
-        break;
       case "--port-file":
-        // Legacy compat: ignore, use --session instead
+        // Legacy compat: ignore
         argv[++i];
         break;
       default:
@@ -83,195 +77,229 @@ function parseArgs(argv: string[]): Args {
   }
 
   if (args.timeout < 0) {
-    args.timeout = args.cli ? DEFAULT_CLI_TIMEOUT : DEFAULT_SERVER_TIMEOUT;
+    args.timeout = args.cli ? DEFAULT_CLI_TIMEOUT : DEFAULT_ACP_TIMEOUT;
   }
 
   return args;
 }
 
-// --- JSON-RPC helpers (LSP-style framing) ---
+// --- ACP mode (Agent Client Protocol via stdio) ---
 
-function sendJsonRpc(socket: net.Socket, method: string, params: Record<string, unknown>, id: number): void {
-  const payload = JSON.stringify({ jsonrpc: "2.0", method, params, id });
-  const payloadBytes = Buffer.from(payload, "utf-8");
-  const header = `Content-Length: ${payloadBytes.length}\r\n\r\n`;
-  socket.write(header + payload);
+interface AcpMessage {
+  jsonrpc: string;
+  id?: number;
+  method?: string;
+  result?: Record<string, unknown>;
+  error?: { code: number; message: string; data?: unknown };
+  params?: Record<string, unknown>;
 }
 
-function parseMessages(raw: string): any[] {
-  const messages: any[] = [];
-  const rawBytes = Buffer.from(raw, "utf-8");
-  let pos = 0;
-  const headerPattern = /Content-Length: (\d+)\r\n\r\n/g;
-  let match;
-  while ((match = headerPattern.exec(raw)) !== null) {
-    const contentLength = Number(match[1]);
-    const bodyStartStr = match.index + match[0].length;
-    // Convert string offset to byte offset for body extraction
-    const headerBytes = Buffer.from(raw.substring(0, bodyStartStr), "utf-8");
-    const bodyEnd = headerBytes.length + contentLength;
-    if (bodyEnd > rawBytes.length) break;
-    const bodyBytes = rawBytes.subarray(headerBytes.length, bodyEnd);
+class AcpClient {
+  private proc: ReturnType<typeof Bun.spawn>;
+  private buffer = "";
+  private pendingResolvers = new Map<number, (msg: AcpMessage) => void>();
+  private notificationHandlers: ((msg: AcpMessage) => void)[] = [];
+  private nextId = 1;
+  private readLoop: Promise<void>;
+
+  constructor(copilotBin: string, args: string[]) {
+    this.proc = Bun.spawn([copilotBin, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: "pipe",
+      env: { ...process.env },
+    });
+
+    // Pipe stderr for diagnostics
+    this.pipeStderr();
+
+    // Start reading stdout
+    this.readLoop = this.startReading();
+  }
+
+  private async pipeStderr(): Promise<void> {
+    const stream = this.proc.stderr as ReadableStream<Uint8Array> | null;
+    if (!stream) return;
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
     try {
-      messages.push(JSON.parse(bodyBytes.toString("utf-8")));
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        // Suppress stderr unless debugging
+        if (process.env.COPILOT_DEBUG) {
+          process.stderr.write(`[copilot-acp] ${decoder.decode(value, { stream: true })}`);
+        }
+      }
     } catch {}
   }
-  return messages;
-}
 
-function extractAssistantText(messages: any[]): string {
-  const deltas: string[] = [];
-  let fullContent: string | null = null;
+  private async startReading(): Promise<void> {
+    const stream = this.proc.stdout as ReadableStream<Uint8Array> | null;
+    if (!stream) return;
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
 
-  for (const msg of messages) {
-    const event = msg?.params?.event ?? {};
-    const etype = event.type ?? "";
-    const data = event.data ?? {};
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        this.buffer += decoder.decode(value, { stream: true });
+        this.processBuffer();
+      }
+    } catch {}
+  }
 
-    if (etype === "assistant.message_delta") {
-      deltas.push(data.delta ?? "");
-    } else if (etype === "assistant.message") {
-      if (data.content) fullContent = data.content;
+  private processBuffer(): void {
+    const lines = this.buffer.split("\n");
+    this.buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const msg: AcpMessage = JSON.parse(line);
+        this.handleMessage(msg);
+      } catch {}
     }
   }
 
-  if (fullContent) return fullContent;
-  if (deltas.length) return deltas.join("");
-  return "";
-}
+  private handleMessage(msg: AcpMessage): void {
+    // Response to a request we sent
+    if (msg.id !== undefined && this.pendingResolvers.has(msg.id)) {
+      const resolve = this.pendingResolvers.get(msg.id)!;
+      this.pendingResolvers.delete(msg.id);
+      resolve(msg);
+      return;
+    }
 
-function recvUntil(socket: net.Socket, markers: string[], timeoutSecs: number): Promise<string> {
-  return new Promise((resolve) => {
-    let buf = "";
-    const timer = setTimeout(() => {
-      socket.destroy();
-      resolve(buf);
-    }, timeoutSecs * 1000);
-
-    socket.on("data", (chunk) => {
-      buf += chunk.toString("utf-8");
-      for (const marker of markers) {
-        if (buf.includes(marker)) {
-          clearTimeout(timer);
-          // Drain briefly for remaining data
-          setTimeout(() => {
-            socket.removeAllListeners("data");
-            resolve(buf);
-          }, 500);
-          return;
-        }
+    // Server-initiated request (e.g. permission request)
+    if (msg.method && msg.id !== undefined) {
+      // Auto-approve permission requests
+      if (msg.method === "session/requestPermission") {
+        this.sendRaw({ jsonrpc: "2.0", id: msg.id, result: { permission: "allow" } });
+        return;
       }
-    });
+    }
 
-    socket.on("error", () => {
-      clearTimeout(timer);
-      resolve(buf);
-    });
+    // Notification (no id, has method)
+    for (const handler of this.notificationHandlers) {
+      handler(msg);
+    }
+  }
 
-    socket.on("close", () => {
-      clearTimeout(timer);
-      resolve(buf);
+  private sendRaw(obj: Record<string, unknown>): void {
+    this.proc.stdin!.write(JSON.stringify(obj) + "\n");
+  }
+
+  async request(method: string, params: Record<string, unknown>): Promise<AcpMessage> {
+    const id = this.nextId++;
+    return new Promise((resolve) => {
+      this.pendingResolvers.set(id, resolve);
+      this.sendRaw({ jsonrpc: "2.0", method, id, params });
     });
-  });
+  }
+
+  onNotification(handler: (msg: AcpMessage) => void): void {
+    this.notificationHandlers.push(handler);
+  }
+
+  async kill(): Promise<void> {
+    this.proc.kill();
+    await this.proc.exited;
+  }
 }
 
-// --- Server mode ---
-
-async function connectToServer(host: string, port: number): Promise<net.Socket | null> {
-  return new Promise((resolve) => {
-    const socket = net.createConnection({ host, port }, () => resolve(socket));
-    socket.on("error", () => resolve(null));
-  });
-}
-
-async function autoStartServer(session?: string): Promise<number> {
-  process.stderr.write("[copilot-client] No active server found. Starting one...\n");
-  const startScript = join(import.meta.dir, "copilot-server-start.ts");
-  const startArgs = ["bun", startScript];
-  if (session) startArgs.push("--session", session);
-  const startProc = Bun.spawn(startArgs, {
-    stdout: "pipe",
-    stderr: "inherit",
-    stdin: "ignore",
-  });
-  const exitCode = await startProc.exited;
-  if (exitCode !== 0) {
-    process.stderr.write("[copilot-client] ERROR: Failed to auto-start server\n");
-    process.exit(1);
-  }
-  const port = readPortFile(session || undefined);
-  if (port === null) {
-    process.stderr.write("[copilot-client] ERROR: Server started but port file not found\n");
-    process.exit(1);
-  }
-  return port;
-}
-
-async function runServerMode(args: Args): Promise<void> {
-  let port = readPortFile(args.session || undefined);
-  if (port === null) {
-    port = await autoStartServer(args.session || undefined);
-  }
-
-  // Connect (try IPv6 then IPv4)
-  let socket: net.Socket | null = null;
-  for (const host of ["::1", "127.0.0.1"]) {
-    socket = await connectToServer(host, port);
-    if (socket) break;
-  }
-  if (!socket) {
+async function runAcpMode(args: Args): Promise<void> {
+  const copilotBin = findCopilot();
+  if (!copilotBin) {
     process.stderr.write(
-      `[copilot-client] ERROR: Cannot connect to server on port ${port}\n` +
-      `  Server not responding. Restart with: bun scripts/copilot-server-start.ts\n`
+      "[copilot-client] ERROR: copilot CLI not found.\n" +
+      "  Set COPILOT_CLI_PATH env var or install copilot CLI.\n"
     );
+    process.exit(127);
+  }
+
+  const prompt = args.prompt || (args.promptFile ? await Bun.file(args.promptFile).text() : "");
+  if (!prompt) {
+    process.stderr.write("[copilot-client] ERROR: --prompt or --prompt-file required\n");
     process.exit(1);
   }
+
+  const cmdArgs = ["--acp", "--stdio", "--yolo", "--no-ask-user", "--autopilot", "--add-dir", process.cwd()];
+  if (args.model) cmdArgs.push("--model", args.model);
+
+  const client = new AcpClient(copilotBin, cmdArgs);
+
+  // Collect streaming text
+  const chunks: string[] = [];
+  client.onNotification((msg) => {
+    const params = msg.params as Record<string, unknown> | undefined;
+    const update = params?.update as Record<string, unknown> | undefined;
+    if (!update) return;
+
+    const updateType = update.sessionUpdate as string | undefined;
+    if (updateType === "agent_message_chunk") {
+      const content = update.content as Record<string, unknown> | undefined;
+      if (content?.type === "text" && typeof content.text === "string") {
+        chunks.push(content.text);
+      }
+    }
+  });
+
+  const timer = setTimeout(async () => {
+    process.stderr.write(`[copilot-client] ERROR: Timed out after ${args.timeout}s\n`);
+    await client.kill();
+    process.exit(124);
+  }, args.timeout * 1000);
 
   try {
-    // Step 1: Ping
-    sendJsonRpc(socket, "ping", {}, 1);
-    let raw = await recvUntil(socket, ['"pong"'], 5);
-    if (!raw.includes('"pong"')) {
-      process.stderr.write("[copilot-client] ERROR: Server did not respond to ping\n");
+    // Step 1: Initialize
+    const initResp = await client.request("initialize", {
+      protocolVersion: 1,
+      clientInfo: { name: "workflow-adapter", version: "1.0.0" },
+      capabilities: {},
+    });
+    if (initResp.error) {
+      process.stderr.write(`[copilot-client] ERROR: Initialize failed: ${initResp.error.message}\n`);
       process.exit(1);
     }
 
     // Step 2: Create session
-    sendJsonRpc(socket, "session.create", {}, 2);
-    raw = await recvUntil(socket, ["session.start"], 10);
-    const sessionMsgs = parseMessages(raw);
-    let sessionId: string | null = null;
-    for (const msg of sessionMsgs) {
-      const event = msg?.params?.event ?? {};
-      if (event.type === "session.start") {
-        sessionId = event.data?.sessionId ?? null;
-        break;
-      }
-      const sid = msg?.params?.sessionId;
-      if (sid) { sessionId = sid; break; }
+    const sessionResp = await client.request("session/new", {
+      cwd: process.cwd(),
+      mcpServers: [],
+    });
+    if (sessionResp.error) {
+      process.stderr.write(`[copilot-client] ERROR: Session creation failed: ${sessionResp.error.message}\n`);
+      process.exit(1);
     }
+    const sessionId = (sessionResp.result as Record<string, unknown>)?.sessionId as string;
     if (!sessionId) {
-      process.stderr.write("[copilot-client] ERROR: Failed to create session\n");
+      process.stderr.write("[copilot-client] ERROR: No sessionId in response\n");
       process.exit(1);
     }
 
-    // Step 3: Send prompt
-    const prompt = args.prompt || (args.promptFile ? await Bun.file(args.promptFile).text() : "");
-    sendJsonRpc(socket, "session.send", { sessionId, prompt }, 3);
+    // Step 3: Send prompt and wait for completion
+    const promptResp = await client.request("session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: prompt }],
+    });
+    if (promptResp.error) {
+      process.stderr.write(`[copilot-client] ERROR: Prompt failed: ${promptResp.error.message}\n`);
+      process.exit(1);
+    }
 
-    // Step 4: Collect response
-    raw = await recvUntil(socket, ["session.idle"], args.timeout);
-    const msgs = parseMessages(raw);
-    const text = extractAssistantText(msgs);
-
+    // Output collected text
+    const text = chunks.join("");
     if (text) {
       process.stdout.write(text);
       if (!text.endsWith("\n")) process.stdout.write("\n");
     } else {
-      process.stderr.write("[copilot-client] WARNING: No response received from server\n");
+      process.stderr.write("[copilot-client] WARNING: No response text received\n");
     }
   } finally {
-    socket.destroy();
+    clearTimeout(timer);
+    await client.kill();
   }
 }
 
@@ -297,7 +325,7 @@ async function runCliMode(args: Args): Promise<void> {
   if (prompt) {
     cmdArgs.push("-p", prompt);
   }
-  cmdArgs.push("-s", "--allow-all", "--autopilot", "--no-ask-user", "--add-dir", process.cwd());
+  cmdArgs.push("-s", "--yolo", "--autopilot", "--no-ask-user", "--add-dir", process.cwd());
   if (args.model) cmdArgs.push("--model", args.model);
 
   const useInherit = args.interactive;
@@ -315,7 +343,6 @@ async function runCliMode(args: Args): Promise<void> {
     proc.kill();
   }, args.timeout * 1000);
 
-  // If pipe mode, relay stdout while also allowing capture via shell redirect
   if (!useInherit && proc.stdout) {
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
@@ -353,11 +380,10 @@ async function main(): Promise<void> {
       "       bun scripts/copilot-client.ts [--cli] --prompt-file path [options]\n" +
       "       bun scripts/copilot-client.ts --cli --interactive [options]\n" +
       "\nOptions:\n" +
-      "  --cli            Use one-shot CLI mode (default: server mode)\n" +
+      "  --cli            Use one-shot CLI mode (default: ACP mode)\n" +
       "  --interactive    Inherit stdio (CLI mode only)\n" +
       "  --model MODEL    Model to use (default: copilot CLI default)\n" +
-      "  --timeout SECS   Timeout (default: 60 server, 600 CLI)\n" +
-      "  --session NAME   Connect to specific session (server mode)\n"
+      "  --timeout SECS   Timeout (default: 120 ACP, 600 CLI)\n"
     );
     process.exit(1);
   }
@@ -377,7 +403,7 @@ async function main(): Promise<void> {
   if (args.cli) {
     await runCliMode(args);
   } else {
-    await runServerMode(args);
+    await runAcpMode(args);
   }
 }
 

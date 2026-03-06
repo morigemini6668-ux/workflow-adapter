@@ -30,40 +30,10 @@ export function generateSessionId(): string {
 }
 
 /**
- * Get the port file path for a given session.
- */
-export function portFilePath(session?: string): string {
-  const dir = configDir();
-  if (session) {
-    return join(dir, `copilot-server-port.${session}.conf`);
-  }
-  return join(dir, "copilot-server-port.*.conf");
-}
-
-/**
  * Get the log file path for a given session.
  */
 export function logFilePath(session: string): string {
   return join(configDir(), `copilot-server.${session}.log`);
-}
-
-/**
- * Find all active session port files.
- * Returns array of { session, portFile } objects.
- */
-export function findSessions(): Array<{ session: string; portFile: string }> {
-  const dir = configDir();
-  try {
-    const files = readdirSync(dir);
-    return files
-      .filter((f) => f.startsWith("copilot-server-port.") && f.endsWith(".conf"))
-      .map((f) => {
-        const session = f.replace("copilot-server-port.", "").replace(".conf", "");
-        return { session, portFile: join(dir, f) };
-      });
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -112,10 +82,39 @@ export function findCopilot(): string | null {
   return null;
 }
 
+// --- Legacy port-file helpers (kept for backward compat with server-stop) ---
+
+/**
+ * Get the port file path for a given session.
+ */
+export function portFilePath(session?: string): string {
+  const dir = configDir();
+  if (session) {
+    return join(dir, `copilot-server-port.${session}.conf`);
+  }
+  return join(dir, "copilot-server-port.*.conf");
+}
+
+/**
+ * Find all active session port files.
+ */
+export function findSessions(): Array<{ session: string; portFile: string }> {
+  const dir = configDir();
+  try {
+    const files = readdirSync(dir);
+    return files
+      .filter((f) => f.startsWith("copilot-server-port.") && f.endsWith(".conf"))
+      .map((f) => {
+        const session = f.replace("copilot-server-port.", "").replace(".conf", "");
+        return { session, portFile: join(dir, f) };
+      });
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Read port number from the port configuration file.
- * If session is provided, reads session-specific file.
- * If no session, tries to find a single active session.
  */
 export function readPortFile(session?: string): number | null {
   if (session) {
@@ -126,7 +125,6 @@ export function readPortFile(session?: string): number | null {
     return isNaN(port) || port <= 0 || port > 65535 ? null : port;
   }
 
-  // No session specified: find active sessions
   const sessions = findSessions();
   if (sessions.length === 0) return null;
   if (sessions.length === 1) {
@@ -135,7 +133,6 @@ export function readPortFile(session?: string): number | null {
     return isNaN(port) || port <= 0 || port > 65535 ? null : port;
   }
 
-  // Multiple sessions: report them
   process.stderr.write(
     `[copilot] Multiple sessions found. Specify --session:\n` +
     sessions.map((s) => `  --session ${s.session}`).join("\n") + "\n"
@@ -144,8 +141,7 @@ export function readPortFile(session?: string): number | null {
 }
 
 /**
- * Ping the copilot headless server via JSON-RPC.
- * Returns true if the server responds with "pong".
+ * Ping the copilot headless server via JSON-RPC (legacy).
  */
 export async function pingServer(port: number, timeoutMs = 5000): Promise<boolean> {
   const net = await import("net");

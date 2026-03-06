@@ -1,7 +1,7 @@
 ---
 name: autopilot-ralph
 description: This skill should be used when the user asks to "autopilot ralph", "autopilot-ralph", "자동 루프", "문제 해결 루프", "autopilot loop", "알아서 고쳐줘", "루프 돌면서 해결해줘", "자동으로 해결", "keep fixing until done", or wants an autonomous problem-solving loop that first clarifies the problem and verification method via interactive Q&A, then iterates Analyze-Execute-Verify until resolved.
-argument-hint: "<subject> [--max-iterations N] [--copilot]"
+argument-hint: "<subject> [--max-iterations N] [--copilot] [--worktree|--no-worktree]"
 disable-model-invocation: true
 ---
 
@@ -22,8 +22,12 @@ Extract from the skill arguments:
 - `subject` (required) — a short name for this session (e.g., `auth-refactor`, `ci-fix`)
 - `--max-iterations N` (optional) — maximum loop iterations; default is `10`
 - `--copilot` (optional) — delegate Analyzer, Executor, and Verifier roles to Copilot CLI instead of Claude subagents
+- `--worktree` (optional) — run executor subagents in isolated git worktrees
+- `--no-worktree` (optional) — explicitly disable worktree isolation
 
 If `--copilot` is present, set `copilot_mode = true` and remove it from the subject name.
+If `--worktree` is present, set `worktree_mode = true`. If `--no-worktree` is present, set `worktree_mode = false`.
+If neither is specified, set `worktree_mode = null` (will ask the user in Step 2).
 
 If no subject is provided, check `.workflow-adapter/` for exactly one folder containing both a `ralph-state.md` with `type: autopilot` and an `autopilot-target.md`. If found, offer to resume. If zero or multiple found, use AskUserQuestion to ask for the subject name.
 
@@ -34,6 +38,7 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
 **If it DOES exist:**
 - Read it. If it contains `type: autopilot`, this is a resume or leftover from a previous autopilot session.
 - If the frontmatter contains `copilot_mode: true`, set `copilot_mode = true` (preserves mode across re-injections).
+- If the frontmatter contains `worktree_mode: true`, set `worktree_mode = true` (preserves mode across re-injections).
 - Use AskUserQuestion: "A previous autopilot-ralph session exists for `{subject}`. Resume or start fresh?"
 - If resume: skip to Step 3. If fresh: delete `ralph-state.md` and `autopilot-target.md`, then proceed to Step 2.
 - If the state file does NOT contain `type: autopilot` (may be execute or debug): warn the user and stop.
@@ -54,7 +59,12 @@ Use AskUserQuestion to collect the following, one question at a time:
 "결과를 어떻게 검증하나요? 실행 가능한 커맨드나 확인 방법을 알려주세요. (How do we verify success? Provide a shell command or describe the check.)"
 - Examples: `bun test`, `npm run build`, `curl -f localhost:3000/health`, or a description like "All TypeScript errors resolved and build passes"
 
-After collecting all three answers, create the session files:
+**Question 4 — Worktree isolation (only if `worktree_mode = null`):**
+"Executor 서브에이전트를 별도의 git worktree에서 실행할까요? worktree를 사용하면 메인 브랜치에 영향 없이 작업하고, 실패 시 쉽게 되돌릴 수 있습니다. (Run executor in an isolated git worktree? This protects the main branch and makes rollback easy.) [y/n]"
+- If user answers yes: set `worktree_mode = true`
+- If user answers no: set `worktree_mode = false`
+
+After collecting answers, create the session files:
 
 **Create the subject directory:**
 ```bash
@@ -83,7 +93,7 @@ mkdir -p ".workflow-adapter/{subject}"
 date -u +"%Y-%m-%dT%H:%M:%SZ"
 ```
 
-**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting actual values (include `copilot_mode` line only if `copilot_mode = true`):
+**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting actual values (include `copilot_mode` and `worktree_mode` lines only when `true`):
 ```markdown
 ---
 iteration: 0
@@ -93,6 +103,7 @@ subject: {subject}
 started_at: "{timestamp}"
 type: autopilot
 copilot_mode: true          # only if --copilot flag was set
+worktree_mode: true         # only if worktree_mode = true
 ---
 
 You are the Autopilot-Ralph orchestrator for subject '{subject}'. Continue the problem-solving loop.
@@ -223,13 +234,14 @@ Wait for the analyzer to complete before proceeding.
 
 **If `copilot_mode = false` (default):**
 
-Spawn a **foreground** executor subagent:
+Spawn a **foreground** executor subagent. If `worktree_mode = true`, add `isolation: "worktree"` to the Task call:
 
 ```
 Task({
   description: "Executor: implement the planned changes",
   subagent_type: "general-purpose",
   run_in_background: false,
+  isolation: "worktree",  // ONLY if worktree_mode = true; omit this line otherwise
   prompt: "You are an Executor subagent. Implement the planned changes.
 
 Before starting:
@@ -271,6 +283,7 @@ Task({
   description: "Copilot executor: implement planned changes",
   subagent_type: "general-purpose",
   run_in_background: false,
+  isolation: "worktree",  // ONLY if worktree_mode = true; omit this line otherwise
   prompt: "<copilot-dispatcher-prompt>
 You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
 

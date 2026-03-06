@@ -116,81 +116,99 @@ try {
     process.exit(0);
   }
 
-  // Use the first state file found (only one Ralph loop should be active)
-  const stateFilePath = files[0];
-
-  let content: string;
-  try {
-    content = await Bun.file(stateFilePath).text();
-  } catch {
-    // Can't read state file — allow stop
-    process.exit(0);
-  }
-
-  // Parse YAML frontmatter
-  const parts = content.split("---\n");
-  if (parts.length < 3) {
-    // Corrupted state: missing frontmatter delimiters
-    process.stderr.write(
-      `[ralph] WARNING: Corrupted state file (missing frontmatter): ${stateFilePath}. Deleting.\n`
-    );
-    safeDelete(stateFilePath);
-    process.exit(0);
-  }
-
-  const frontmatterText = parts[1];
-  const body = parts.slice(2).join("---\n").trim();
-  const frontmatter = parseFrontmatter(frontmatterText);
-
-  // Validate required fields
-  const requiredFields = ["iteration", "max_iterations", "completion_promise"];
-  for (const field of requiredFields) {
-    if (frontmatter[field] === undefined || frontmatter[field] === "") {
-      process.stderr.write(
-        `[ralph] WARNING: Corrupted state file (missing field '${field}'): ${stateFilePath}. Deleting.\n`
-      );
-      safeDelete(stateFilePath);
-      process.exit(0);
-    }
-  }
-
-  const iteration = Number(frontmatter.iteration);
-  const maxIterations = Number(frontmatter.max_iterations);
-  const completionPromise = String(frontmatter.completion_promise);
-  const storedSessionId = frontmatter.session_id
-    ? String(frontmatter.session_id)
-    : null;
   const currentSessionId: string | undefined = input.session_id;
 
-  // Session isolation: if state file is bound to a session, only that session can continue the loop
-  if (storedSessionId && currentSessionId && storedSessionId !== currentSessionId) {
-    // This stopping session doesn't own the loop — let it stop normally
+  // Iterate all state files to find the one owned by (or claimable by) this session
+  let matchedStatePath: string | null = null;
+  let matchedContent: string | null = null;
+  let matchedFrontmatter: Record<string, string | number> | null = null;
+  let matchedBody: string | null = null;
+
+  for (const stateFilePath of files) {
+    let content: string;
+    try {
+      content = await Bun.file(stateFilePath).text();
+    } catch {
+      continue;
+    }
+
+    const parts = content.split("---\n");
+    if (parts.length < 3) {
+      process.stderr.write(
+        `[ralph] WARNING: Corrupted state file (missing frontmatter): ${stateFilePath}. Deleting.\n`
+      );
+      safeDelete(stateFilePath);
+      continue;
+    }
+
+    const frontmatter = parseFrontmatter(parts[1]);
+
+    // Validate required fields
+    const requiredFields = ["iteration", "max_iterations", "completion_promise"];
+    let corrupted = false;
+    for (const field of requiredFields) {
+      if (frontmatter[field] === undefined || frontmatter[field] === "") {
+        process.stderr.write(
+          `[ralph] WARNING: Corrupted state file (missing field '${field}'): ${stateFilePath}. Deleting.\n`
+        );
+        safeDelete(stateFilePath);
+        corrupted = true;
+        break;
+      }
+    }
+    if (corrupted) continue;
+
+    if (isNaN(Number(frontmatter.iteration)) || isNaN(Number(frontmatter.max_iterations))) {
+      process.stderr.write(
+        `[ralph] WARNING: Corrupted state file (non-numeric iteration fields): ${stateFilePath}. Deleting.\n`
+      );
+      safeDelete(stateFilePath);
+      continue;
+    }
+
+    const storedSessionId = frontmatter.session_id
+      ? String(frontmatter.session_id)
+      : null;
+
+    // Session isolation: skip files owned by a different session
+    if (storedSessionId && currentSessionId && storedSessionId !== currentSessionId) {
+      continue;
+    }
+
+    // This file is either owned by this session or unbound — claim it
+    matchedStatePath = stateFilePath;
+    matchedContent = content;
+    matchedFrontmatter = frontmatter;
+    matchedBody = parts.slice(2).join("---\n").trim();
+    break;
+  }
+
+  if (!matchedStatePath || !matchedContent || !matchedFrontmatter || !matchedBody) {
+    // No state file matched this session — allow stop
     process.exit(0);
   }
 
-  // Check for NaN values (corrupted numeric fields)
-  if (isNaN(iteration) || isNaN(maxIterations)) {
-    process.stderr.write(
-      `[ralph] WARNING: Corrupted state file (non-numeric iteration fields): ${stateFilePath}. Deleting.\n`
-    );
-    safeDelete(stateFilePath);
-    process.exit(0);
-  }
+  const iteration = Number(matchedFrontmatter.iteration);
+  const maxIterations = Number(matchedFrontmatter.max_iterations);
+  const completionPromise = String(matchedFrontmatter.completion_promise);
+  const storedSessionId = matchedFrontmatter.session_id
+    ? String(matchedFrontmatter.session_id)
+    : null;
 
   // Check if orchestrator signalled completion via promise tag
   const completionTag = `<promise>${completionPromise}</promise>`;
   if (lastMsg.includes(completionTag)) {
     // Loop is complete — delete state file and allow stop
-    safeDelete(stateFilePath);
+    safeDelete(matchedStatePath);
     process.exit(0);
   }
 
   // Check if max iterations reached
   if (iteration >= maxIterations) {
     process.stderr.write(
-      `[ralph] WARNING: Max iterations (${maxIterations}) reached for state file: ${stateFilePath}. Stopping loop.\n`
+      `[ralph] WARNING: Max iterations (${maxIterations}) reached for state file: ${matchedStatePath}. Stopping loop.\n`
     );
-    safeDelete(stateFilePath);
+    safeDelete(matchedStatePath);
     process.exit(0);
   }
 
@@ -200,13 +218,13 @@ try {
   if (!storedSessionId && currentSessionId) {
     updates.session_id = currentSessionId;
   }
-  const updatedContent = updateFrontmatter(content, updates);
+  const updatedContent = updateFrontmatter(matchedContent, updates);
 
   try {
-    await Bun.write(stateFilePath, updatedContent);
+    await Bun.write(matchedStatePath, updatedContent);
   } catch (err) {
     process.stderr.write(
-      `[ralph] WARNING: Failed to update state file: ${stateFilePath}. ${err}\n`
+      `[ralph] WARNING: Failed to update state file: ${matchedStatePath}. ${err}\n`
     );
     process.exit(0);
   }
@@ -214,7 +232,7 @@ try {
   // Build block decision to re-inject the orchestrator prompt
   const blockOutput: BlockDecision = {
     decision: "block",
-    reason: body,
+    reason: matchedBody,
     systemMessage: `🔄 Ralph iteration ${newIteration}/${maxIterations}`,
   };
 

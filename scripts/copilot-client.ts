@@ -17,8 +17,8 @@ import { existsSync } from "fs";
 import { findCopilot } from "./copilot-utils";
 
 const DEFAULT_MODEL = ""; // empty = use copilot CLI default
-const DEFAULT_ACP_TIMEOUT = 120;
-const DEFAULT_CLI_TIMEOUT = 600;
+const DEFAULT_ACP_TIMEOUT = 600;
+const DEFAULT_CLI_TIMEOUT = 1200;
 
 interface Args {
   prompt: string;
@@ -230,7 +230,7 @@ async function runAcpMode(args: Args): Promise<void> {
 
   const client = new AcpClient(copilotBin, cmdArgs);
 
-  // Collect streaming text
+  // Collect streaming text and print in real-time to stderr
   const chunks: string[] = [];
   client.onNotification((msg) => {
     const params = msg.params as Record<string, unknown> | undefined;
@@ -242,6 +242,7 @@ async function runAcpMode(args: Args): Promise<void> {
       const content = update.content as Record<string, unknown> | undefined;
       if (content?.type === "text" && typeof content.text === "string") {
         chunks.push(content.text);
+        process.stderr.write(content.text);
       }
     }
   });
@@ -289,11 +290,11 @@ async function runAcpMode(args: Args): Promise<void> {
       process.exit(1);
     }
 
-    // Output collected text
+    // Flush stderr stream with a newline if needed, then echo to stdout for downstream consumers
     const text = chunks.join("");
     if (text) {
-      process.stdout.write(text);
-      if (!text.endsWith("\n")) process.stdout.write("\n");
+      if (!text.endsWith("\n")) process.stderr.write("\n");
+      process.stdout.write(text + (text.endsWith("\n") ? "" : "\n"));
     } else {
       process.stderr.write("[copilot-client] WARNING: No response text received\n");
     }

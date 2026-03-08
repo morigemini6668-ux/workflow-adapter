@@ -31,29 +31,6 @@ If neither is specified, set `worktree_mode = null` (will ask the user in Step 2
 
 If no subject is provided, check `.workflow-adapter/` for exactly one folder containing both a `ralph-state.md` with `type: autopilot` and an `autopilot-target.md`. If found, offer to resume. If zero or multiple found, use AskUserQuestion to ask for the subject name.
 
-## Step 0.5: Check for Uncommitted Changes
-
-Run:
-```bash
-git status --porcelain
-```
-
-If the output is **non-empty** (uncommitted or untracked files exist), use AskUserQuestion to ask:
-
-"커밋되지 않은 변경 파일이 있습니다: (There are uncommitted changes in the working tree:)
-{git status --short output}
-
-어떻게 할까요? (How would you like to proceed?)
-1. **stash** — 변경사항을 임시 저장하고 계속 진행 (stash changes and continue)
-2. **continue** — 그대로 계속 진행 (proceed with dirty working tree)
-3. **abort** — 취소하고 직접 처리 (abort so you can handle it manually)"
-
-- If **stash**: run `git stash push -m "autopilot-ralph({subject}) pre-session stash"` then continue.
-- If **continue**: proceed as-is.
-- If **abort**: stop here and inform the user to commit or stash manually before retrying.
-
-If the output is empty, proceed immediately without asking.
-
 ## Step 1: Check Existing State
 
 Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
@@ -83,6 +60,29 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
 **If it does NOT exist:** proceed to Step 2.
 
 ## Step 2: Gather Context via Interactive Q&A
+
+**Pre-flight: Check for uncommitted changes (fresh start only — skip if resuming from Step 1)**
+
+Run:
+```bash
+git status --porcelain
+```
+
+If the output is **non-empty**, use AskUserQuestion to ask:
+
+"커밋되지 않은 변경 파일이 있습니다: (There are uncommitted changes in the working tree:)
+{git status --short output}
+
+어떻게 할까요? (How would you like to proceed?)
+1. **stash** — 변경사항을 임시 저장하고 계속 진행 (stash changes and continue)
+2. **continue** — 그대로 계속 진행 (proceed with dirty working tree)
+3. **abort** — 취소하고 직접 처리 (abort so you can handle it manually)"
+
+- If **stash**: run `git stash push -m "autopilot-ralph({subject}) pre-session stash"` then continue.
+- If **continue**: proceed as-is.
+- If **abort**: stop here and inform the user to commit or stash manually before retrying.
+
+If the output is empty, proceed immediately.
 
 Use AskUserQuestion to collect the following, one question at a time:
 

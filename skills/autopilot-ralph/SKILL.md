@@ -273,8 +273,7 @@ Write analysis to {session_dir}/iter-{N}-analysis.md:
 ## Expected Outcome
 ...
 
-2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-analyzer.md' --timeout 600
-
+2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-analyzer.md'
 3. Verify {session_dir}/iter-{N}-analysis.md was created.
 Output ONLY: Analysis complete: iter-{N}-analysis.md
 </copilot-dispatcher-prompt>"
@@ -365,8 +364,7 @@ Write execution summary to {session_dir}/iter-{N}-execution.md:
 ## Notes
 ...
 
-2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-executor.md' --timeout 600
-
+2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-executor.md'
 3. Verify {session_dir}/iter-{N}-execution.md was created.
 Output ONLY: Execution complete: {files changed} — {one-line description}
 </copilot-dispatcher-prompt>"
@@ -452,8 +450,7 @@ Before starting, read {session_dir}/../principle.md if it exists and follow it.
 - **Verification**: {method} → {PASS|FAIL}
 - **Evidence**: {key output}
 
-2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-verifier.md' --timeout 600
-
+2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-verifier.md'
 3. Read the updated ## Iteration History to check the result.
 Output ONLY: PASS or FAIL: {one-sentence reason}
 </copilot-dispatcher-prompt>"

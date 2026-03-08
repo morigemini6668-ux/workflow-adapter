@@ -74,13 +74,15 @@ If the output is **non-empty**, use AskUserQuestion to ask:
 {git status --short output}
 
 어떻게 할까요? (How would you like to proceed?)
-1. **stash** — 변경사항을 임시 저장하고 계속 진행 (stash changes and continue)
-2. **continue** — 그대로 계속 진행 (proceed with dirty working tree)
-3. **abort** — 취소하고 직접 처리 (abort so you can handle it manually)"
+1. **commit** — 지금 커밋하고 계속 진행 (commit now and continue)
+2. **stash** — 변경사항을 임시 저장하고 계속 진행 (stash changes and continue)
+3. **continue** — 그대로 계속 진행 (proceed with dirty working tree)
+4. **abort** — 취소하고 직접 처리 (abort so you can handle it manually)"
 
+- If **commit**: use AskUserQuestion to ask for a commit message, then run `git add -A && git commit -m "{message}"`, then continue.
 - If **stash**: run `git stash push -m "autopilot-ralph({subject}) pre-session stash"` then continue.
 - If **continue**: proceed as-is.
-- If **abort**: stop here and inform the user to commit or stash manually before retrying.
+- If **abort**: stop here and inform the user to handle it manually before retrying.
 
 If the output is empty, proceed immediately.
 

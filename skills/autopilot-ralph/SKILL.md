@@ -169,27 +169,51 @@ You are the Autopilot-Ralph orchestrator for subject '{subject}'. Continue the p
 Read {session_dir}/autopilot-target.md for: problem description, desired outcome, verification method, and the ## Iteration History of all previous attempts.
 
 Execute this iteration (N = current iteration number from frontmatter):
+0. TODOS: Create iteration todos using TodoWrite:
+   - { id: "iter-{N}-analyze", content: "iter-{N}: Analyze — plan the approach", status: "pending" }
+   - { id: "iter-{N}-execute", content: "iter-{N}: Execute — implement changes", status: "pending" }
+   - { id: "iter-{N}-verify", content: "iter-{N}: Verify — run verification", status: "pending" }
+   - { id: "iter-{N}-commit", content: "iter-{N}: Commit — record iteration", status: "pending" }
 1. ANALYZE: Spawn a foreground analyzer subagent.
    - Read autopilot-target.md's ## Iteration History — do NOT repeat previously failed approaches.
    - Write analysis to {session_dir}/iter-{N}-analysis.md
    - Return only: "Analysis complete: iter-{N}-analysis.md"
+   - After it returns: mark iter-{N}-analyze as completed.
 2. EXECUTE: Spawn a foreground executor subagent.
    - Read {session_dir}/iter-{N}-analysis.md for the plan.
    - Implement the changes. Be thorough but surgical.
    - Write execution summary to {session_dir}/iter-{N}-execution.md
    - Return only: "Execution complete: {files changed} — {one-line description}"
+   - After it returns: mark iter-{N}-execute as completed.
 3. VERIFY: Spawn a foreground verifier subagent.
    - Read {session_dir}/iter-{N}-execution.md for what was changed.
    - Run the verification method from autopilot-target.md exactly.
    - Append results to ## Iteration History in autopilot-target.md directly.
    - Return only: "PASS" or "FAIL: {one-sentence reason}"
+   - After it returns: mark iter-{N}-verify as completed.
 4. COMMIT: After verifier returns, commit the worktree (see Step 5.5). Skip if worktree_mode is not set.
+   - After commit: mark iter-{N}-commit as completed.
 5. COMPLETE:
    - If verifier returns PASS: output <promise>ALL JOB COMPLETE</promise>
    - If verifier returns FAIL: output a status summary. Stop hook will re-inject this prompt for the next iteration.
 ```
 
-## Step 3: Spawn Analyzer
+## Step 3: Create Iteration Todos
+
+Before spawning any subagent, create the 4 todos for this iteration using TodoWrite:
+
+```
+TodoWrite([
+  { id: "iter-{N}-analyze", content: "iter-{N}: Analyze — plan the approach", status: "pending" },
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — implement changes",  status: "pending" },
+  { id: "iter-{N}-verify",  content: "iter-{N}: Verify — run verification",    status: "pending" },
+  { id: "iter-{N}-commit",  content: "iter-{N}: Commit — record iteration",    status: "pending" },
+])
+```
+
+Then proceed to spawn the Analyzer.
+
+## Step 4: Spawn Analyzer
 
 **If `copilot_mode = false` (default):**
 
@@ -280,9 +304,17 @@ Output ONLY: Analysis complete: iter-{N}-analysis.md
 })
 ```
 
-Wait for the analyzer to complete before proceeding.
+Wait for the analyzer to complete, then mark the todo:
+```
+TodoWrite([
+  { id: "iter-{N}-analyze", content: "iter-{N}: Analyze — plan the approach", status: "completed" },
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — implement changes",  status: "in_progress" },
+  { id: "iter-{N}-verify",  content: "iter-{N}: Verify — run verification",    status: "pending" },
+  { id: "iter-{N}-commit",  content: "iter-{N}: Commit — record iteration",    status: "pending" },
+])
+```
 
-## Step 4: Spawn Executor
+## Step 5: Spawn Executor
 
 **If `copilot_mode = false` (default):**
 
@@ -371,9 +403,17 @@ Output ONLY: Execution complete: {files changed} — {one-line description}
 })
 ```
 
-Wait for the executor to complete before proceeding.
+Wait for the executor to complete, then mark the todo:
+```
+TodoWrite([
+  { id: "iter-{N}-analyze", content: "iter-{N}: Analyze — plan the approach", status: "completed" },
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — implement changes",  status: "completed" },
+  { id: "iter-{N}-verify",  content: "iter-{N}: Verify — run verification",    status: "in_progress" },
+  { id: "iter-{N}-commit",  content: "iter-{N}: Commit — record iteration",    status: "pending" },
+])
+```
 
-## Step 5: Spawn Verifier
+## Step 6: Spawn Verifier
 
 **If `copilot_mode = false` (default):**
 
@@ -457,9 +497,17 @@ Output ONLY: PASS or FAIL: {one-sentence reason}
 })
 ```
 
-Wait for the verifier to complete.
+Wait for the verifier to complete, then mark the todo:
+```
+TodoWrite([
+  { id: "iter-{N}-analyze", content: "iter-{N}: Analyze — plan the approach", status: "completed" },
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — implement changes",  status: "completed" },
+  { id: "iter-{N}-verify",  content: "iter-{N}: Verify — run verification",    status: "completed" },
+  { id: "iter-{N}-commit",  content: "iter-{N}: Commit — record iteration",    status: "in_progress" },
+])
+```
 
-## Step 5.5: Commit Iteration (only if `worktree_mode = true`)
+## Step 6.5: Commit Iteration (only if `worktree_mode = true`)
 
 After the verifier returns, commit the worktree state:
 
@@ -471,7 +519,17 @@ git commit --allow-empty -m "autopilot({subject}) iter-{N}: {PASS|FAIL} — {one
 
 `--allow-empty` ensures the commit is always created, even if the executor failed to produce changes. Each commit maps to one iteration, making `git log`, `git diff`, and `git checkout` useful for reviewing progress.
 
-## Step 6: Completion Check
+After committing, mark the final todo:
+```
+TodoWrite([
+  { id: "iter-{N}-analyze", content: "iter-{N}: Analyze — plan the approach", status: "completed" },
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — implement changes",  status: "completed" },
+  { id: "iter-{N}-verify",  content: "iter-{N}: Verify — run verification",    status: "completed" },
+  { id: "iter-{N}-commit",  content: "iter-{N}: Commit — record iteration",    status: "completed" },
+])
+```
+
+## Step 7: Completion Check
 
 **If the verifier returned `PASS`:**
 

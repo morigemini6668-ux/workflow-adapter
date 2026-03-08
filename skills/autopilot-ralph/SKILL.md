@@ -88,12 +88,13 @@ mkdir -p ".workflow-adapter/{subject}"
 (empty — first iteration)
 ```
 
-**Get the current timestamp** via Bash:
+**Get the current timestamp and session_id** via Bash:
 ```bash
-date -u +"%Y-%m-%dT%H:%M:%SZ"
+bun "${CLAUDE_PLUGIN_ROOT}/scripts/ralph-session-info.ts"
 ```
+Extract the TIMESTAMP and SESSION_ID values from the output. If SESSION_ID is empty, omit the `session_id` field from the state file.
 
-**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting actual values (include `copilot_mode` and `worktree_mode` lines only when `true`):
+**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting actual values (include `session_id` always when available; include `copilot_mode` and `worktree_mode` lines only when `true`):
 ```markdown
 ---
 iteration: 0
@@ -102,6 +103,7 @@ completion_promise: "ALL JOB COMPLETE"
 subject: {subject}
 started_at: "{timestamp}"
 type: autopilot
+session_id: "{session_id}"
 copilot_mode: true          # only if --copilot flag was set
 worktree_mode: true         # only if worktree_mode = true
 ---

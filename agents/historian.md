@@ -20,7 +20,7 @@ description: |
   User needs historical context, historian gathers from project memory and version control.
   </commentary>
   </example>
-model: opus
+model: inherit
 color: cyan
 ---
 

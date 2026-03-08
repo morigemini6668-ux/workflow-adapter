@@ -29,7 +29,7 @@ description: |
   Execute workflow uses reviewer to continuously validate work quality during execution.
   </commentary>
   </example>
-model: opus
+model: inherit
 color: red
 ---
 

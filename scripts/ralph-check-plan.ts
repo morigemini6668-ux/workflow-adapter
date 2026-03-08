@@ -15,6 +15,7 @@ import { join } from "path";
 
 interface StopHookInput {
   session_id?: string;
+  transcript_path?: string;
   hook_event_name?: string;
   stop_hook_active?: boolean;
   last_assistant_message?: string;
@@ -116,7 +117,13 @@ try {
     process.exit(0);
   }
 
-  const currentSessionId: string | undefined = input.session_id;
+  // Resolve session_id: prefer explicit field, fallback to transcript filename
+  let currentSessionId: string | undefined = input.session_id;
+  if (!currentSessionId && input.transcript_path) {
+    // transcript_path is like "~/.claude/projects/.../SESSION_ID.jsonl"
+    const match = input.transcript_path.match(/([0-9a-f-]{36})\.jsonl$/);
+    if (match) currentSessionId = match[1];
+  }
 
   // Iterate all state files to find the one owned by (or claimable by) this session
   let matchedStatePath: string | null = null;
@@ -170,12 +177,13 @@ try {
       ? String(frontmatter.session_id)
       : null;
 
-    // Session isolation: skip files owned by a different session
+    // Session isolation: only match if this session owns the state file.
+    // If state has session_id: must match current session
+    // If state has no session_id (legacy/unbound): bind on first stop from ANY session
+    //   but only if we can identify the current session
     if (storedSessionId && currentSessionId && storedSessionId !== currentSessionId) {
       continue;
     }
-
-    // This file is either owned by this session or unbound — claim it
     matchedStatePath = stateFilePath;
     matchedContent = content;
     matchedFrontmatter = frontmatter;

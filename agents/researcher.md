@@ -20,7 +20,7 @@ description: |
   Technical research task matching researcher's capabilities for web search and documentation lookup.
   </commentary>
   </example>
-model: opus
+model: inherit
 color: green
 ---
 

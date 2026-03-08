@@ -17,8 +17,7 @@ import { existsSync } from "fs";
 import { findCopilot } from "./copilot-utils";
 
 const DEFAULT_MODEL = ""; // empty = use copilot CLI default
-const DEFAULT_ACP_TIMEOUT = 600;
-const DEFAULT_CLI_TIMEOUT = 1200;
+const DEFAULT_INACTIVITY_TIMEOUT = 3600; // seconds of silence before giving up
 
 interface Args {
   prompt: string;
@@ -77,7 +76,7 @@ function parseArgs(argv: string[]): Args {
   }
 
   if (args.timeout < 0) {
-    args.timeout = args.cli ? DEFAULT_CLI_TIMEOUT : DEFAULT_ACP_TIMEOUT;
+    args.timeout = DEFAULT_INACTIVITY_TIMEOUT;
   }
 
   return args;
@@ -230,9 +229,22 @@ async function runAcpMode(args: Args): Promise<void> {
 
   const client = new AcpClient(copilotBin, cmdArgs);
 
+  // Inactivity timer — reset on every notification from copilot
+  let inactivityTimer: ReturnType<typeof setTimeout>;
+  const resetTimer = () => {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(async () => {
+      process.stderr.write(`\n[copilot-client] ERROR: No activity for ${args.timeout}s, timed out\n`);
+      await client.kill();
+      process.exit(124);
+    }, args.timeout * 1000);
+  };
+  resetTimer();
+
   // Collect streaming text and print in real-time to stderr
   const chunks: string[] = [];
   client.onNotification((msg) => {
+    resetTimer(); // any activity resets the inactivity clock
     const params = msg.params as Record<string, unknown> | undefined;
     const update = params?.update as Record<string, unknown> | undefined;
     if (!update) return;
@@ -246,12 +258,6 @@ async function runAcpMode(args: Args): Promise<void> {
       }
     }
   });
-
-  const timer = setTimeout(async () => {
-    process.stderr.write(`[copilot-client] ERROR: Timed out after ${args.timeout}s\n`);
-    await client.kill();
-    process.exit(124);
-  }, args.timeout * 1000);
 
   try {
     // Step 1: Initialize
@@ -299,7 +305,7 @@ async function runAcpMode(args: Args): Promise<void> {
       process.stderr.write("[copilot-client] WARNING: No response text received\n");
     }
   } finally {
-    clearTimeout(timer);
+    clearTimeout(inactivityTimer!);
     await client.kill();
   }
 }
@@ -339,10 +345,16 @@ async function runCliMode(args: Args): Promise<void> {
     env: { ...process.env },
   });
 
-  const timer = setTimeout(() => {
-    timedOut = true;
-    proc.kill();
-  }, args.timeout * 1000);
+  // Inactivity timer — reset on every chunk of stdout output
+  let inactivityTimer: ReturnType<typeof setTimeout>;
+  const resetTimer = () => {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      timedOut = true;
+      proc.kill();
+    }, args.timeout * 1000);
+  };
+  resetTimer();
 
   if (!useInherit && proc.stdout) {
     const reader = proc.stdout.getReader();
@@ -351,16 +363,17 @@ async function runCliMode(args: Args): Promise<void> {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        resetTimer(); // any output resets the inactivity clock
         process.stdout.write(decoder.decode(value, { stream: true }));
       }
     } catch {}
   }
 
   const exitCode = await proc.exited;
-  clearTimeout(timer);
+  clearTimeout(inactivityTimer!);
 
   if (timedOut) {
-    process.stderr.write(`[copilot-client] ERROR: copilot CLI timed out after ${args.timeout}s\n`);
+    process.stderr.write(`[copilot-client] ERROR: No activity for ${args.timeout}s, timed out\n`);
     process.exit(124);
   }
 
@@ -384,7 +397,7 @@ async function main(): Promise<void> {
       "  --cli            Use one-shot CLI mode (default: ACP mode)\n" +
       "  --interactive    Inherit stdio (CLI mode only)\n" +
       "  --model MODEL    Model to use (default: copilot CLI default)\n" +
-      "  --timeout SECS   Timeout (default: 120 ACP, 600 CLI)\n"
+      "  --timeout SECS   Inactivity timeout — resets on each response chunk (default: 3600)\n"
     );
     process.exit(1);
   }

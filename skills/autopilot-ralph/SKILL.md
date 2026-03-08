@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Autopilot Ralph
 
-Autonomous problem-solving loop: clarify the problem interactively, then iterate **Analyze → Execute → Verify** until resolved or max iterations reached.
+Autonomous problem-solving loop: clarify the problem interactively, then iterate **Analyze → Execute → Verify → Commit** until resolved or max iterations reached.
 
 Unlike `ralph-execute` (requires plan.md) or `ralph-debug` (bug-specific), this skill handles **any type of task** — code changes, refactoring, configuration, infrastructure, etc. — without requiring a pre-built plan.
 
@@ -22,7 +22,7 @@ Extract from the skill arguments:
 - `subject` (required) — a short name for this session (e.g., `auth-refactor`, `ci-fix`)
 - `--max-iterations N` (optional) — maximum loop iterations; default is `10`
 - `--copilot` (optional) — delegate Analyzer, Executor, and Verifier roles to Copilot CLI instead of Claude subagents
-- `--worktree` (optional) — run executor subagents in isolated git worktrees
+- `--worktree` (optional) — run the entire session in an isolated git worktree
 - `--no-worktree` (optional) — explicitly disable worktree isolation
 
 If `--copilot` is present, set `copilot_mode = true` and remove it from the subject name.
@@ -37,11 +37,25 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
 
 **If it DOES exist:**
 - Read it. If it contains `type: autopilot`, this is a resume or leftover from a previous autopilot session.
-- If the frontmatter contains `copilot_mode: true`, set `copilot_mode = true` (preserves mode across re-injections).
-- If the frontmatter contains `worktree_mode: true`, set `worktree_mode = true` (preserves mode across re-injections).
+- If the frontmatter contains `copilot_mode: true`, set `copilot_mode = true`.
+- If the frontmatter contains `worktree_mode: true`, set `worktree_mode = true`.
+- If the frontmatter contains `worktree_path`, restore `worktree_path` and `worktree_branch`.
+  - Then verify the worktree still exists:
+    ```bash
+    [ -d "{worktree_path}" ] && echo "EXISTS" || echo "MISSING"
+    ```
+  - If MISSING: warn the user — "Worktree at `{worktree_path}` no longer exists." — then use AskUserQuestion: "Re-create the worktree and continue, or start fresh?"
+    - Re-create: run Step 2.5 again with the same `worktree_branch` name (use `-B` to reset the branch).
+    - Fresh: delete `ralph-state.md` and `autopilot-target.md`, proceed to Step 2.
 - Use AskUserQuestion: "A previous autopilot-ralph session exists for `{subject}`. Resume or start fresh?"
-- If resume: skip to Step 3. If fresh: delete `ralph-state.md` and `autopilot-target.md`, then proceed to Step 2.
-- If the state file does NOT contain `type: autopilot` (may be execute or debug): warn the user and stop.
+- If resume: skip to Step 3.
+- If fresh: delete `ralph-state.md` and `autopilot-target.md`. If a worktree exists at `worktree_path`, clean it up:
+  ```bash
+  git worktree remove --force "{worktree_path}"
+  git branch -D "{worktree_branch}"
+  ```
+  Then proceed to Step 2.
+- If the state file does NOT contain `type: autopilot`: warn the user and stop.
 
 **If it does NOT exist:** proceed to Step 2.
 
@@ -60,13 +74,12 @@ Use AskUserQuestion to collect the following, one question at a time:
 - Examples: `bun test`, `npm run build`, `curl -f localhost:3000/health`, or a description like "All TypeScript errors resolved and build passes"
 
 **Question 4 — Worktree isolation (only if `worktree_mode = null`):**
-"Executor 서브에이전트를 별도의 git worktree에서 실행할까요? worktree를 사용하면 메인 브랜치에 영향 없이 작업하고, 실패 시 쉽게 되돌릴 수 있습니다. (Run executor in an isolated git worktree? This protects the main branch and makes rollback easy.) [y/n]"
-- If user answers yes: set `worktree_mode = true`
-- If user answers no: set `worktree_mode = false`
+"전체 작업을 별도의 git worktree에서 진행할까요? worktree를 사용하면 메인 브랜치에 영향 없이 작업하고, 각 이터레이션이 커밋으로 기록되어 언제든 히스토리를 확인할 수 있습니다. (Run the entire session in an isolated git worktree? This protects the main branch and records each iteration as a commit.) [y/n]"
+- If yes: set `worktree_mode = true`
+- If no: set `worktree_mode = false`
 
-After collecting answers, create the session files:
+After collecting answers, create the session directory and target file:
 
-**Create the subject directory:**
 ```bash
 mkdir -p ".workflow-adapter/{subject}"
 ```
@@ -88,13 +101,28 @@ mkdir -p ".workflow-adapter/{subject}"
 (empty — first iteration)
 ```
 
-**Get the current timestamp and session_id** via Bash:
+**Get timestamp and session_id:**
 ```bash
 bun "${CLAUDE_PLUGIN_ROOT}/scripts/ralph-session-info.ts"
 ```
-Extract the TIMESTAMP and SESSION_ID values from the output. If SESSION_ID is empty, omit the `session_id` field from the state file.
 
-**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting actual values (include `session_id` always when available; include `copilot_mode` and `worktree_mode` lines only when `true`):
+## Step 2.5: Create Worktree (only if `worktree_mode = true`)
+
+```bash
+REPO_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${REPO_ROOT}/../autopilot-{subject}-worktree"
+git worktree add "$WORKTREE_PATH" -b "autopilot-{subject}"
+echo "WORKTREE_PATH=$WORKTREE_PATH"
+```
+
+Store the output path as `worktree_path` and `"autopilot-{subject}"` as `worktree_branch`.
+
+## Step 2.7: Write State File
+
+Compute `session_dir` = absolute path to `.workflow-adapter/{subject}` in the main repo (e.g., `$(git rev-parse --show-toplevel)/.workflow-adapter/{subject}`).
+
+**Write `.workflow-adapter/{subject}/ralph-state.md`** using the Write tool. Include `copilot_mode`, `worktree_mode`, `worktree_path`, `worktree_branch` only when applicable:
+
 ```markdown
 ---
 iteration: 0
@@ -104,30 +132,34 @@ subject: {subject}
 started_at: "{timestamp}"
 type: autopilot
 session_id: "{session_id}"
-copilot_mode: true          # only if --copilot flag was set
-worktree_mode: true         # only if worktree_mode = true
+copilot_mode: true           # include only if copilot_mode = true
+worktree_mode: true          # include only if worktree_mode = true (--worktree flag or user answered yes in Q4)
+worktree_path: "{path}"      # include only if worktree_mode = true
+worktree_branch: "{branch}"  # include only if worktree_mode = true
+session_dir: "{session_dir}" # always include — absolute path to .workflow-adapter/{subject}
 ---
 
 You are the Autopilot-Ralph orchestrator for subject '{subject}'. Continue the problem-solving loop.
 
-Read .workflow-adapter/{subject}/autopilot-target.md for: problem description, desired outcome, verification method, and the ## Iteration History of all previous attempts.
+Read {session_dir}/autopilot-target.md for: problem description, desired outcome, verification method, and the ## Iteration History of all previous attempts.
 
 Execute this iteration (N = current iteration number from frontmatter):
 1. ANALYZE: Spawn a foreground analyzer subagent.
    - Read autopilot-target.md's ## Iteration History — do NOT repeat previously failed approaches.
-   - Write analysis to .workflow-adapter/{subject}/iter-{N}-analysis.md
+   - Write analysis to {session_dir}/iter-{N}-analysis.md
    - Return only: "Analysis complete: iter-{N}-analysis.md"
 2. EXECUTE: Spawn a foreground executor subagent.
-   - Read .workflow-adapter/{subject}/iter-{N}-analysis.md for the plan.
+   - Read {session_dir}/iter-{N}-analysis.md for the plan.
    - Implement the changes. Be thorough but surgical.
-   - Write execution summary to .workflow-adapter/{subject}/iter-{N}-execution.md
+   - Write execution summary to {session_dir}/iter-{N}-execution.md
    - Return only: "Execution complete: {files changed} — {one-line description}"
 3. VERIFY: Spawn a foreground verifier subagent.
-   - Read .workflow-adapter/{subject}/iter-{N}-execution.md for what was changed.
+   - Read {session_dir}/iter-{N}-execution.md for what was changed.
    - Run the verification method from autopilot-target.md exactly.
    - Append results to ## Iteration History in autopilot-target.md directly.
    - Return only: "PASS" or "FAIL: {one-sentence reason}"
-4. COMPLETE:
+4. COMMIT: After verifier returns, commit the worktree (see Step 5.5). Skip if worktree_mode is not set.
+5. COMPLETE:
    - If verifier returns PASS: output <promise>ALL JOB COMPLETE</promise>
    - If verifier returns FAIL: output a status summary. Stop hook will re-inject this prompt for the next iteration.
 ```
@@ -136,49 +168,51 @@ Execute this iteration (N = current iteration number from frontmatter):
 
 **If `copilot_mode = false` (default):**
 
-Spawn a **foreground** analyzer subagent:
-
 ```
 Task({
   description: "Analyzer: plan the approach for this iteration",
   subagent_type: "general-purpose",
   run_in_background: false,
-  prompt: "You are an Analyzer subagent. Plan the approach to solve the problem.
+  prompt: "You are an Analyzer subagent. Your job is read-only — do NOT modify any source files.
+
+## Working Context
+{if worktree_mode:
+  Working directory: {worktree_path}
+  Use relative paths for all code files. Shell commands run from this directory.
+}
+Session files (read via absolute paths): {session_dir}/
+
+## Instructions
 
 Before starting:
-1. Check .workflow-adapter/principle.md if it exists — follow it.
-
-Context:
-- Target file: .workflow-adapter/{subject}/autopilot-target.md
-- Read it fully — problem, desired outcome, verification method, and all entries in ## Iteration History.
+1. Check {session_dir}/../principle.md if it exists — follow it.
 
 Analysis process:
-1. Read autopilot-target.md completely.
-2. Examine relevant code/config in the repository related to the problem area.
+1. Read {session_dir}/autopilot-target.md fully — problem, desired outcome, verification method, and all of ## Iteration History.
+2. Examine relevant code and config in the working directory related to the problem area.
 3. Consult ## Iteration History — identify which approaches were already tried and failed.
-4. Form a concrete, actionable plan with specific files and changes.
-5. If previous iterations exist, the plan MUST differ from what was already tried.
+4. Form a concrete, actionable plan. If previous iterations exist, the plan MUST differ from what was already tried.
 
-Write your analysis to .workflow-adapter/{subject}/iter-{N}-analysis.md in this format:
+Write your analysis to {session_dir}/iter-{N}-analysis.md:
 ## Analysis
 - Problem understanding: {concise summary}
-- Previous attempts: {what was tried and why it failed, or 'None' if first iteration}
+- Previous attempts: {what was tried and why it failed, or 'None'}
 
 ## Plan
-1. {specific action — file:function or file:line}
+1. {specific action — relative file path:function or :line}
 2. {specific action}
 3. ...
 
 ## Expected Outcome
 {what should change after execution}
 
-Then output ONLY this one line: Analysis complete: iter-{N}-analysis.md"
+Then output ONLY: Analysis complete: iter-{N}-analysis.md"
 })
 ```
 
 **If `copilot_mode = true`:**
 
-**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run these steps yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+**IMPORTANT: Spawn a subagent via Task. Do NOT run these steps yourself.**
 
 ```
 Task({
@@ -186,45 +220,37 @@ Task({
   subagent_type: "general-purpose",
   run_in_background: false,
   prompt: "<copilot-dispatcher-prompt>
-You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
+You are a Copilot dispatcher subagent. Your ONLY job: (1) write a prompt file, (2) run copilot-exec.ts, (3) report the result.
 
-Subject: {subject}
+1. Write {session_dir}/prompt-analyzer.md:
 
-Do these steps in order:
+You are an Analyzer. Your job is read-only — do NOT modify any source files.
 
-1. Use the Write tool to create .workflow-adapter/{subject}/prompt-analyzer.md with this exact content:
+{if worktree_mode: Working directory: {worktree_path} — use relative paths for all code files.}
+Session files: {session_dir}/
 
-You are an Analyzer. Plan the approach to solve the problem.
+Before starting, read {session_dir}/../principle.md if it exists and follow it.
 
-Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+1. Read {session_dir}/autopilot-target.md fully.
+2. Examine relevant code in the working directory.
+3. Consult ## Iteration History — do not repeat failed approaches.
+4. Form a concrete, actionable plan.
 
-Target file: .workflow-adapter/{subject}/autopilot-target.md
-Read it fully — problem, desired outcome, verification method, and all entries in ## Iteration History.
-
-Analysis process:
-1. Read autopilot-target.md completely.
-2. Examine relevant code/config in the repository related to the problem area.
-3. Consult ## Iteration History — identify which approaches were already tried and failed.
-4. Form a concrete, actionable plan with specific files and changes.
-5. If previous iterations exist, the plan MUST differ from what was already tried.
-
-Write your analysis to .workflow-adapter/{subject}/iter-{N}-analysis.md in this format:
+Write analysis to {session_dir}/iter-{N}-analysis.md:
 ## Analysis
-- Problem understanding: {concise summary}
-- Previous attempts: {what was tried and why it failed, or 'None' if first iteration}
+- Problem understanding: ...
+- Previous attempts: ...
 
 ## Plan
-1. {specific action — file:function or file:line}
-2. {specific action}
-3. ...
+1. {specific action — file:line}
+...
 
 ## Expected Outcome
-{what should change after execution}
+...
 
-2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-analyzer.md' --timeout 600
+2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-analyzer.md' --timeout 600
 
-3. Verify .workflow-adapter/{subject}/iter-{N}-analysis.md was created.
+3. Verify {session_dir}/iter-{N}-analysis.md was created.
 Output ONLY: Analysis complete: iter-{N}-analysis.md
 </copilot-dispatcher-prompt>"
 })
@@ -236,96 +262,87 @@ Wait for the analyzer to complete before proceeding.
 
 **If `copilot_mode = false` (default):**
 
-Spawn a **foreground** executor subagent. If `worktree_mode = true`, add `isolation: "worktree"` to the Task call:
-
 ```
 Task({
   description: "Executor: implement the planned changes",
   subagent_type: "general-purpose",
   run_in_background: false,
-  isolation: "worktree",  // ONLY if worktree_mode = true; omit this line otherwise
-  prompt: "You are an Executor subagent. Implement the planned changes.
+  prompt: "You are an Executor subagent. Implement the planned changes precisely.
+
+## Working Context
+{if worktree_mode:
+  Working directory: {worktree_path}
+  Use relative paths for all code files. Shell commands run from this directory.
+  This is an isolated git worktree — changes here do not affect the main branch.
+}
+Session files (read via absolute paths): {session_dir}/
+
+## Instructions
 
 Before starting:
-1. Check .workflow-adapter/principle.md if it exists — follow it.
-
-Context:
-- Target: .workflow-adapter/{subject}/autopilot-target.md — read for problem and desired outcome.
-- Plan: .workflow-adapter/{subject}/iter-{N}-analysis.md — read for the specific actions to take.
+1. Check {session_dir}/../principle.md if it exists — follow it.
 
 Execution process:
-1. Read iter-{N}-analysis.md to get the plan.
-2. Implement each action in the plan precisely.
-3. Do not refactor or improve unrelated code.
-4. After applying changes, verify they are syntactically correct.
+1. Read {session_dir}/iter-{N}-analysis.md for the plan.
+2. Implement each action precisely. Do not refactor or improve unrelated code.
+3. After applying changes, verify they are syntactically correct.
 
-Write an execution summary to .workflow-adapter/{subject}/iter-{N}-execution.md in this format:
+Write execution summary to {session_dir}/iter-{N}-execution.md:
 ## Changes Applied
-- File: {path} — {what was changed and why}
 - File: {path} — {what was changed and why}
 
 ## Plan Item Coverage
-- [x] {plan item 1}
-- [x] {plan item 2}
-- [ ] {plan item skipped — reason}
+- [x] {plan item}
+- [ ] {skipped item — reason}
 
 ## Notes
 {any caveats or observations}
 
-Then output ONLY this one line: Execution complete: {files changed} — {one-line description}"
+Then output ONLY: Execution complete: {files changed} — {one-line description}"
 })
 ```
 
 **If `copilot_mode = true`:**
 
-**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run these steps yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+**IMPORTANT: Spawn a subagent via Task. Do NOT run these steps yourself.**
 
 ```
 Task({
   description: "Copilot executor: implement planned changes",
   subagent_type: "general-purpose",
   run_in_background: false,
-  isolation: "worktree",  // ONLY if worktree_mode = true; omit this line otherwise
   prompt: "<copilot-dispatcher-prompt>
-You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
+You are a Copilot dispatcher subagent. Your ONLY job: (1) write a prompt file, (2) run copilot-exec.ts, (3) report the result.
 
-Subject: {subject}
+1. Write {session_dir}/prompt-executor.md:
 
-Do these steps in order:
+You are an Executor. Implement the planned changes precisely.
 
-1. Use the Write tool to create .workflow-adapter/{subject}/prompt-executor.md with this exact content:
+{if worktree_mode:
+  Working directory: {worktree_path} — use relative paths for all code files.
+  This is an isolated git worktree — changes here do not affect the main branch.
+}
+Session files: {session_dir}/
 
-You are an Executor. Implement the planned changes.
+Before starting, read {session_dir}/../principle.md if it exists and follow it.
 
-Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+1. Read {session_dir}/iter-{N}-analysis.md for the plan.
+2. Implement each action precisely. Do not refactor unrelated code.
+3. Verify changes are syntactically correct.
 
-Context:
-- Target: .workflow-adapter/{subject}/autopilot-target.md — read for problem and desired outcome.
-- Plan: .workflow-adapter/{subject}/iter-{N}-analysis.md — read for the specific actions to take.
-
-Execution process:
-1. Read iter-{N}-analysis.md to get the plan.
-2. Implement each action in the plan precisely.
-3. Do not refactor or improve unrelated code.
-4. After applying changes, verify they are syntactically correct.
-
-Write an execution summary to .workflow-adapter/{subject}/iter-{N}-execution.md in this format:
+Write execution summary to {session_dir}/iter-{N}-execution.md:
 ## Changes Applied
-- File: {path} — {what was changed and why}
-- File: {path} — {what was changed and why}
+- File: {path} — {what changed}
 
 ## Plan Item Coverage
-- [x] {plan item 1}
-- [x] {plan item 2}
-- [ ] {plan item skipped — reason}
+- [x] / [ ] {item}
 
 ## Notes
-{any caveats or observations}
+...
 
-2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-executor.md' --timeout 600
+2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-executor.md' --timeout 600
 
-3. Verify .workflow-adapter/{subject}/iter-{N}-execution.md was created.
+3. Verify {session_dir}/iter-{N}-execution.md was created.
 Output ONLY: Execution complete: {files changed} — {one-line description}
 </copilot-dispatcher-prompt>"
 })
@@ -337,8 +354,6 @@ Wait for the executor to complete before proceeding.
 
 **If `copilot_mode = false` (default):**
 
-Spawn a **foreground** verifier subagent:
-
 ```
 Task({
   description: "Verifier: confirm whether the changes resolve the problem",
@@ -346,36 +361,41 @@ Task({
   run_in_background: false,
   prompt: "You are a Verifier subagent. Confirm whether the applied changes resolve the problem.
 
-Before starting:
-1. Check .workflow-adapter/principle.md if it exists — follow it.
+## Working Context
+{if worktree_mode:
+  Working directory: {worktree_path}
+  Use relative paths for all code files. Run all shell verification commands from this directory.
+}
+Session files (read/write via absolute paths): {session_dir}/
 
-Context:
-- Target: .workflow-adapter/{subject}/autopilot-target.md — read for desired outcome and verification method.
-- Execution details: .workflow-adapter/{subject}/iter-{N}-execution.md — read for what was changed.
+## Instructions
+
+Before starting:
+1. Check {session_dir}/../principle.md if it exists — follow it.
 
 Verification process:
-1. Read autopilot-target.md for the desired outcome and verification method.
-2. Read iter-{N}-execution.md for what was changed this iteration.
+1. Read {session_dir}/autopilot-target.md for the desired outcome and verification method.
+2. Read {session_dir}/iter-{N}-execution.md for what was changed.
 3. Execute the verification method:
-   - If it is a shell command: run it with Bash, capture exit code and full stdout/stderr.
-   - If it is a behavioral description: test the described behavior using available tools.
-4. Compare the result against the desired outcome.
-5. Append this entry to the ## Iteration History section in autopilot-target.md:
+   - Shell command: run it {if worktree_mode: 'from the working directory'}, capture exit code and full stdout/stderr.
+   - Behavioral description: test the described behavior using available tools.
+4. Compare result against the desired outcome.
+5. Append to ## Iteration History in {session_dir}/autopilot-target.md:
 
 ### Iteration {N} — {PASS|FAIL}
-- **Approach**: {summary from iter-{N}-analysis.md}
-- **Changes**: {summary from iter-{N}-execution.md}
+- **Approach**: {summary from analysis}
+- **Changes**: {summary from execution}
 - **Verification**: {method used} → {PASS|FAIL}
 - **Evidence**: {key output line or observation}
 
-Then output ONLY this one line: PASS
+Then output ONLY: PASS
 or: FAIL: {one-sentence reason}"
 })
 ```
 
 **If `copilot_mode = true`:**
 
-**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run these steps yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+**IMPORTANT: Spawn a subagent via Task. Do NOT run these steps yourself.**
 
 ```
 Task({
@@ -383,41 +403,33 @@ Task({
   subagent_type: "general-purpose",
   run_in_background: false,
   prompt: "<copilot-dispatcher-prompt>
-You are a Copilot dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run copilot-exec.ts via Bash, (3) report the result.
+You are a Copilot dispatcher subagent. Your ONLY job: (1) write a prompt file, (2) run copilot-exec.ts, (3) report the result.
 
-Subject: {subject}
-
-Do these steps in order:
-
-1. Use the Write tool to create .workflow-adapter/{subject}/prompt-verifier.md with this exact content:
+1. Write {session_dir}/prompt-verifier.md:
 
 You are a Verifier. Confirm whether the applied changes resolve the problem.
 
-Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+{if worktree_mode:
+  Working directory: {worktree_path} — run all shell commands from here.
+}
+Session files: {session_dir}/
 
-Context:
-- Target: .workflow-adapter/{subject}/autopilot-target.md — read for desired outcome and verification method.
-- Execution details: .workflow-adapter/{subject}/iter-{N}-execution.md — read for what was changed.
+Before starting, read {session_dir}/../principle.md if it exists and follow it.
 
-Verification process:
-1. Read autopilot-target.md for the desired outcome and verification method.
-2. Read iter-{N}-execution.md for what was changed this iteration.
-3. Execute the verification method:
-   - If it is a shell command: run it, capture exit code and full stdout/stderr.
-   - If it is a behavioral description: test the described behavior.
-4. Compare the result against the desired outcome.
-5. Append this entry to the ## Iteration History section in autopilot-target.md:
+1. Read {session_dir}/autopilot-target.md for desired outcome and verification method.
+2. Read {session_dir}/iter-{N}-execution.md for what was changed.
+3. Execute the verification method and capture the result.
+4. Append to ## Iteration History in {session_dir}/autopilot-target.md:
 
 ### Iteration {N} — {PASS|FAIL}
-- **Approach**: {summary from iter-{N}-analysis.md}
-- **Changes**: {summary from iter-{N}-execution.md}
-- **Verification**: {method used} → {PASS|FAIL}
-- **Evidence**: {key output line or observation}
+- **Approach**: ...
+- **Changes**: ...
+- **Verification**: {method} → {PASS|FAIL}
+- **Evidence**: {key output}
 
-2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-verifier.md' --timeout 600
+2. Run: bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '{session_dir}/prompt-verifier.md' --timeout 600
 
-3. Read the updated ## Iteration History in autopilot-target.md to check the result.
+3. Read the updated ## Iteration History to check the result.
 Output ONLY: PASS or FAIL: {one-sentence reason}
 </copilot-dispatcher-prompt>"
 })
@@ -425,31 +437,62 @@ Output ONLY: PASS or FAIL: {one-sentence reason}
 
 Wait for the verifier to complete.
 
+## Step 5.5: Commit Iteration (only if `worktree_mode = true`)
+
+After the verifier returns, commit the worktree state:
+
+```bash
+cd "{worktree_path}"
+git add -A
+git commit --allow-empty -m "autopilot({subject}) iter-{N}: {PASS|FAIL} — {one-line summary}"
+```
+
+`--allow-empty` ensures the commit is always created, even if the executor failed to produce changes. Each commit maps to one iteration, making `git log`, `git diff`, and `git checkout` useful for reviewing progress.
+
 ## Step 6: Completion Check
 
 **If the verifier returned `PASS`:**
-- Output exactly:
-  ```
-  <promise>ALL JOB COMPLETE</promise>
-  ```
-  The Stop hook will detect this tag, remove `ralph-state.md`, and allow the session to end normally.
+
+If `worktree_mode = true`, remove the worktree (branch is preserved intentionally — no `--force` needed since all changes are committed):
+```bash
+git worktree remove "{worktree_path}"
+```
+
+Output exactly:
+```
+<promise>ALL JOB COMPLETE</promise>
+```
+
+Then inform the user (substitute `worktree_branch` from the in-memory value before the state file is deleted by the Stop hook):
+```
+Autopilot complete after {N} iteration(s).
+
+Changes are on branch: {worktree_branch}
+  → Review:  git log {worktree_branch}
+  → Merge:   git merge {worktree_branch}
+  → Discard: git branch -D {worktree_branch}
+```
 
 **If the verifier returned `FAIL`:**
-- Output a status summary:
-  ```
-  Autopilot iteration {N}/{max_iterations} complete. Problem not yet resolved.
-  Approach tried: {summary}
-  Changes: {what was changed}
-  Verification failure: {reason from verifier}
-  Next iteration will attempt a different approach based on Iteration History.
-  ```
-  The Stop hook will re-inject the prompt in `ralph-state.md` to continue the loop with a new iteration.
+
+Output a status summary:
+```
+Autopilot iteration {N}/{max_iterations} complete. Problem not yet resolved.
+Approach tried: {summary}
+Changes: {what was changed}
+Verification failure: {reason from verifier}
+{if worktree_mode: Branch so far: {worktree_branch} — use `git log {worktree_branch}` to review attempts.}
+Next iteration will attempt a different approach based on Iteration History.
+```
+
+The Stop hook will re-inject the prompt in `ralph-state.md` to continue the loop.
 
 **Edge Cases:**
-- **Max iterations reached**: The Stop hook handles termination automatically when `iteration >= max_iterations`. Output the status summary as above.
-- **Verifier cannot run the command**: The verifier should output `FAIL` with a clear error. The next iteration's analyzer should treat the environment issue as part of the context.
-- **All approaches exhausted**: The analyzer should indicate this explicitly. Report exhaustion in the status summary.
+- **Max iterations reached**: Stop hook handles termination. Output the FAIL summary above, including the branch hint if `worktree_mode = true`.
+- **Verifier cannot run the command**: Verifier outputs `FAIL` with the error. Next iteration's analyzer should treat the environment issue as context.
+- **All approaches exhausted**: Analyzer should indicate this explicitly in the analysis.
 
 ## Cancellation
 
 Cancel with `/workflow-adapter:ralph-cancel {subject}` to remove the state file and stop the loop.
+The cancel skill reads `worktree_path` and `worktree_branch` from the state file and cleans up the worktree automatically.

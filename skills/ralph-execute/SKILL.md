@@ -63,6 +63,20 @@ Read `.workflow-adapter/{subject}/plan.md`. Find all tasks with status:
 
 Read the `## Loop State` section of plan.md (if present). Extract failure context from previous iterations — this will be injected into executer prompts in Step 4.
 
+## Step 3.5: Create Iteration Todos
+
+Before spawning any subagent, create the 3 todos for this iteration using TodoWrite:
+
+```
+TodoWrite([
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — run executer subagents", status: "pending" },
+  { id: "iter-{N}-review",  content: "iter-{N}: Review — verify completed tasks",  status: "pending" },
+  { id: "iter-{N}-update",  content: "iter-{N}: Update — loop state and check",    status: "pending" },
+])
+```
+
+Then proceed to spawn the Executers.
+
 ## Step 4: Spawn One-Shot Executer Subagents
 
 Read `.workflow-adapter/{subject}/worker.md` to understand executer allocation (which tasks are assigned to which executer slot: alpha, beta, gamma, etc.).
@@ -155,7 +169,7 @@ Execution Process:
 Write only to your own assigned task rows — do not overwrite other tasks' status lines.
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md'
 
 3. Check the exit code. If non-zero, report the error.
 4. Read plan.md and verify the assigned tasks were updated.
@@ -169,6 +183,15 @@ Do **not** include SendMessage instructions — this is one-shot mode, not teamm
 Spawn all executer subagents simultaneously (all `run_in_background: true`).
 
 Wait for all subagents to complete using the TaskOutput tool — call it with `block: true` for each task_id returned by the Agent tool calls.
+
+After all executers finish, mark the todo:
+```
+TodoWrite([
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — run executer subagents", status: "completed" },
+  { id: "iter-{N}-review",  content: "iter-{N}: Review — verify completed tasks",  status: "in_progress" },
+  { id: "iter-{N}-update",  content: "iter-{N}: Update — loop state and check",    status: "pending" },
+])
+```
 
 ## Step 5: Spawn Reviewer Subagent
 
@@ -251,7 +274,7 @@ Recommendations:
 - {specific fix}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md'
 
 3. Read .workflow-adapter/{subject}/iter-{N}-review.md and extract the Status line.
 Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}
@@ -265,6 +288,15 @@ Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}
 3. After the fix subagent completes, re-run the reviewer subagent once more to confirm the fix.
 4. Repeat this retry cycle at most **2 times** total within this iteration.
 5. If still failing after 2 retry cycles, proceed to Step 6 with the unresolved issues noted.
+
+After review completes (including any retry cycles), mark the todo:
+```
+TodoWrite([
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — run executer subagents", status: "completed" },
+  { id: "iter-{N}-review",  content: "iter-{N}: Review — verify completed tasks",  status: "completed" },
+  { id: "iter-{N}-update",  content: "iter-{N}: Update — loop state and check",    status: "in_progress" },
+])
+```
 
 ## Step 6: Update Loop State
 
@@ -299,6 +331,15 @@ Count all tasks in plan.md. Check if every task is marked `[x]`.
   Issues: {issues from reviewer if any}.
   ```
   The Stop hook will re-inject this prompt to continue the loop in the next iteration.
+
+After outputting the completion result or status summary, mark the final todo:
+```
+TodoWrite([
+  { id: "iter-{N}-execute", content: "iter-{N}: Execute — run executer subagents", status: "completed" },
+  { id: "iter-{N}-review",  content: "iter-{N}: Review — verify completed tasks",  status: "completed" },
+  { id: "iter-{N}-update",  content: "iter-{N}: Update — loop state and check",    status: "completed" },
+])
+```
 
 **Edge Cases:**
 

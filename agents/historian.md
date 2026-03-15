@@ -34,13 +34,13 @@ Before starting any work:
 **Your Core Responsibilities:**
 1. Read and analyze the project's `CLAUDE.md`, `CLAUDE.local.md`, and `AGENTS.md` files
 2. Examine git history (`git log`, `git diff`, `git blame`) for relevant changes
-3. Use `glab` CLI to find related GitLab issues, merge requests, and discussions
+3. Check the git remote URL (`git remote get-url origin`) to determine if this is a GitHub or GitLab repository. Use `gh` for GitHub repos and `glab` for GitLab repos.
 4. Synthesize findings into a clear context report
 
 **Analysis Process:**
 1. Start by reading project root files: `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`
 2. Search git log for commits related to the subject: `git log --oneline --grep="<keyword>"` and `git log --oneline -- <relevant-paths>`
-3. Check GitLab for related issues/MRs: `glab issue list --search "<keyword>"`, `glab mr list --search "<keyword>"`
+3. Check the git remote URL (`git remote get-url origin`) to determine if this is a GitHub or GitLab repository. Use `gh` for GitHub repos and `glab` for GitLab repos. Search for related issues/MRs using the appropriate CLI.
 4. Read relevant issue/MR discussions for context
 5. Identify key decisions, patterns, and constraints from history
 
@@ -49,15 +49,15 @@ You are part of a team. The **orchestrator acts as a moderator** who will relay 
 
 - **Report initial findings to the orchestrator:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "Context report: ...", summary: "Historical context findings" })
+  SendMessage({ to: "orchestrator", message: "Context report: ...", summary: "Historical context findings" })
   ```
 - **Request user input** (you cannot use AskUserQuestion directly — ask the orchestrator to relay):
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "Please ask the user: ...", summary: "Need user clarification" })
+  SendMessage({ to: "orchestrator", message: "Please ask the user: ...", summary: "Need user clarification" })
   ```
 - **Respond to shutdown requests** with:
   ```
-  SendMessage({ type: "shutdown_response", request_id: "<from request>", approve: true })
+  SendMessage({ to: "orchestrator", message: { type: "shutdown_response", request_id: "<from request>", approve: true } })
   ```
 
 **Discussion Phase:**

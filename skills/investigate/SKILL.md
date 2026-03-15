@@ -78,7 +78,7 @@ Task({
   team_name: "wa-{subject}",
   name: "researcher",
   run_in_background: true,
-  prompt: "<system prompt from researcher.md>\n\nYour subject is: {subject}\nProblem: {user's problem description}\nTeam name: wa-{subject}\nYour teammate name: researcher\nOther teammates: historian, reviewer\nTeam leader: orchestrator\n\n## Investigation Mode\nYou are in INVESTIGATION mode — your goal is to analyze a problem and find root causes.\n\n**CRITICAL CONSTRAINT: You MUST NOT modify any code.** You are read-only. Use all available read-only tools for analysis — this includes but is not limited to: semantic code analysis tools, codebase exploration, library documentation lookup, web search, observability/telemetry tools (logs, metrics, traces, APM), and file-level search/read tools. Use whatever tools are available in your environment to gather evidence.\n\n**Telemetry Gap Escalation**: If you determine that the problem cannot be diagnosed due to insufficient telemetry (missing logs, metrics, traces, or instrumentation), you MUST immediately report this to the orchestrator:\n```\nSendMessage({ type: \"message\", recipient: \"orchestrator\", content: \"TELEMETRY GAP: Cannot diagnose because [specific gap]. Need instrumentation at [specific locations] to observe [specific behavior].\", summary: \"Telemetry gap blocks diagnosis\" })\n```\n\nAnalyze the problem systematically:\n1. Identify the affected code paths and components\n2. Trace data flow and control flow through the system\n3. Look for known anti-patterns, race conditions, or misconfigurations\n4. Check dependency versions and known issues\n5. Propose hypotheses ranked by likelihood\n6. For each hypothesis, describe what evidence supports/refutes it\n\nSave analysis to .workflow-adapter/{subject}/doc/"
+  prompt: "<system prompt from researcher.md>\n\nYour subject is: {subject}\nProblem: {user's problem description}\nTeam name: wa-{subject}\nYour teammate name: researcher\nOther teammates: historian, reviewer\nTeam leader: orchestrator\n\n## Investigation Mode\nYou are in INVESTIGATION mode — your goal is to analyze a problem and find root causes.\n\n**CRITICAL CONSTRAINT: You MUST NOT modify any code.** You are read-only. Use all available read-only tools for analysis — this includes but is not limited to: semantic code analysis tools, codebase exploration, library documentation lookup, web search, observability/telemetry tools (logs, metrics, traces, APM), and file-level search/read tools. Use whatever tools are available in your environment to gather evidence.\n\n**Telemetry Gap Escalation**: If you determine that the problem cannot be diagnosed due to insufficient telemetry (missing logs, metrics, traces, or instrumentation), you MUST immediately report this to the orchestrator:\n```\nSendMessage({ to: \"orchestrator\", message: \"TELEMETRY GAP: Cannot diagnose because [specific gap]. Need instrumentation at [specific locations] to observe [specific behavior].\", summary: \"Telemetry gap blocks diagnosis\" })\n```\n\nAnalyze the problem systematically:\n1. Identify the affected code paths and components\n2. Trace data flow and control flow through the system\n3. Look for known anti-patterns, race conditions, or misconfigurations\n4. Check dependency versions and known issues\n5. Propose hypotheses ranked by likelihood\n6. For each hypothesis, describe what evidence supports/refutes it\n\nSave analysis to .workflow-adapter/{subject}/doc/"
 })
 ```
 
@@ -104,17 +104,17 @@ While teammates are working:
 
 1. **Relay to user**: When a teammate requests user input, use AskUserQuestion to get the user's answer, then send it back:
    ```
-   SendMessage({ type: "message", recipient: "researcher", content: "User confirms: ...", summary: "Relaying user info" })
+   SendMessage({ to: "researcher", message: "User confirms: ...", summary: "Relaying user info" })
    ```
 
 2. **Coordinate**: Share findings between teammates:
    ```
-   SendMessage({ type: "broadcast", content: "Historian found: related incident in commit abc123...", summary: "Sharing historical finding" })
+   SendMessage({ to: "*", message: "Historian found: related incident in commit abc123...", summary: "Sharing historical finding" })
    ```
 
 3. **Direct additional analysis**: Based on findings, send new investigation tasks:
    ```
-   SendMessage({ type: "message", recipient: "researcher", content: "Please also investigate: ...", summary: "Additional investigation request" })
+   SendMessage({ to: "researcher", message: "Please also investigate: ...", summary: "Additional investigation request" })
    ```
 
 4. **Validate reviewer feedback**: When the reviewer sends issues or challenges, critically evaluate them before acting:
@@ -123,7 +123,7 @@ While teammates are working:
    - **Assess proportionality**: Is the severity appropriate?
    - **Accept or push back**: If valid, incorporate. If not, explain reasoning:
      ```
-     SendMessage({ type: "message", recipient: "reviewer", content: "Regarding your concern about X: I disagree because [reasoning].", summary: "Pushing back on reviewer concern" })
+     SendMessage({ to: "reviewer", message: "Regarding your concern about X: I disagree because [reasoning].", summary: "Pushing back on reviewer concern" })
      ```
    - **Do NOT blindly accept all reviewer feedback** — the orchestrator makes final judgments based on full context.
 
@@ -172,7 +172,7 @@ When the researcher sends a `TELEMETRY GAP` message:
 
 3. After the enricher completes, notify the researcher to re-analyze with the new telemetry:
    ```
-   SendMessage({ type: "message", recipient: "researcher", content: "Enricher has added instrumentation at [locations]. Please re-analyze with the new telemetry data once it becomes available, or re-examine the code paths with the new logging context.", summary: "Telemetry added, re-analyze" })
+   SendMessage({ to: "researcher", message: "Enricher has added instrumentation at [locations]. Please re-analyze with the new telemetry data once it becomes available, or re-examine the code paths with the new logging context.", summary: "Telemetry added, re-analyze" })
    ```
 
 4. Return to Step 4 to continue the investigation loop.
@@ -254,14 +254,16 @@ Compile all investigation results into `.workflow-adapter/{subject}/investigatio
 
 After saving results, shut down all teammates:
 ```
-SendMessage({ type: "shutdown_request", recipient: "historian", content: "Investigation complete" })
-SendMessage({ type: "shutdown_request", recipient: "researcher", content: "Investigation complete" })
-SendMessage({ type: "shutdown_request", recipient: "reviewer", content: "Investigation complete" })
+SendMessage({ to: "historian", message: { type: "shutdown_request", reason: "Investigation complete" } })
+SendMessage({ to: "researcher", message: { type: "shutdown_request", reason: "Investigation complete" } })
+SendMessage({ to: "reviewer", message: { type: "shutdown_request", reason: "Investigation complete" } })
 ```
 If enricher was spawned and is still active:
 ```
-SendMessage({ type: "shutdown_request", recipient: "enricher", content: "Investigation complete" })
+SendMessage({ to: "enricher", message: { type: "shutdown_request", reason: "Investigation complete" } })
 ```
+
+Wait for all teammates to confirm shutdown (shutdown_approved messages) before calling TeamDelete().
 
 Then clean up the team:
 ```

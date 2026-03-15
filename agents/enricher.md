@@ -61,19 +61,19 @@ You are part of a team. Use the SendMessage tool to communicate:
 
 - **Report completion to orchestrator:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "ENRICHMENT COMPLETE: Added [N] instrumentation points:\n- [file:line] Added structured log for [what]\n- [file:line] Added metric counter for [what]\nNo behavioral changes made.", summary: "Telemetry instrumentation added" })
+  SendMessage({ to: "orchestrator", message: "ENRICHMENT COMPLETE: Added [N] instrumentation points:\n- [file:line] Added structured log for [what]\n- [file:line] Added metric counter for [what]\nNo behavioral changes made.", summary: "Telemetry instrumentation added" })
   ```
 - **Ask orchestrator for clarification:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "NEED CLARIFICATION: The gap report mentions [X] but the code at [location] already has [existing instrumentation]. Should I add more granular logging here?", summary: "Clarification needed for instrumentation" })
+  SendMessage({ to: "orchestrator", message: "NEED CLARIFICATION: The gap report mentions [X] but the code at [location] already has [existing instrumentation]. Should I add more granular logging here?", summary: "Clarification needed for instrumentation" })
   ```
 - **Coordinate with researcher:**
   ```
-  SendMessage({ type: "message", recipient: "researcher", content: "I've added logging at [locations]. These will capture [specific data points] that should help diagnose the issue.", summary: "Instrumentation details for researcher" })
+  SendMessage({ to: "researcher", message: "I've added logging at [locations]. These will capture [specific data points] that should help diagnose the issue.", summary: "Instrumentation details for researcher" })
   ```
 - **Respond to shutdown requests** with:
   ```
-  SendMessage({ type: "shutdown_response", request_id: "<from request>", approve: true })
+  SendMessage({ to: "orchestrator", message: { type: "shutdown_response", request_id: "<from request>", approve: true } })
   ```
 
 **Output Format:**

@@ -75,12 +75,14 @@ mkdir -p ".workflow-adapter/{subject}"
 (empty — first iteration)
 ```
 
-**Get the current timestamp** via Bash first:
+**Get timestamp and session_id:**
 ```bash
-date -u +"%Y-%m-%dT%H:%M:%SZ"
+bun "${CLAUDE_PLUGIN_ROOT}/scripts/ralph-session-info.ts"
 ```
 
-**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting `{subject}`, `{N}`, and `{timestamp}` with actual values (include `copilot_mode` line only if `copilot_mode = true`):
+Compute `session_dir` = absolute path to `.workflow-adapter/{subject}` (e.g., `$(git rev-parse --show-toplevel)/.workflow-adapter/{subject}`).
+
+**Write `.workflow-adapter/{subject}/ralph-state.md`** using Write tool, substituting `{subject}`, `{N}`, `{timestamp}`, `{session_id}`, and `{session_dir}` with actual values (include `copilot_mode` line only if `copilot_mode = true`):
 ```markdown
 ---
 iteration: 0
@@ -89,6 +91,8 @@ completion_promise: "ALL JOB COMPLETE"
 subject: {subject}
 started_at: "{timestamp}"
 type: debug
+session_id: "{session_id}"
+session_dir: "{session_dir}"
 copilot_mode: true          # only if --copilot flag was set
 ---
 
@@ -196,7 +200,7 @@ Root Cause Analysis:
 Recommended Fix: {specific, actionable fix for Hypothesis 1}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-analyzer.md' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-analyzer.md'
 
 3. Verify .workflow-adapter/{subject}/iter-{N}-analysis.md was created.
 Output ONLY: Analysis complete: iter-{N}-analysis.md
@@ -283,7 +287,7 @@ Fix Applied:
 - Notes: {any caveats or follow-up needed}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-fixer.md' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-fixer.md'
 
 3. Verify .workflow-adapter/{subject}/iter-{N}-fix.md was created.
 Output ONLY: Fix applied: {file} — {one-line description}
@@ -375,7 +379,7 @@ Verification process:
 - **Evidence**: {key output line or observation}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-verifier.md' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-verifier.md'
 
 3. Read the updated ## Debug History in debug-target.md to check the result.
 Output ONLY: PASS or FAIL: {one-sentence reason}

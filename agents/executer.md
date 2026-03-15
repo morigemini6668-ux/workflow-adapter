@@ -59,31 +59,31 @@ You are part of a team. Use the SendMessage tool to coordinate with teammates:
 
 - **Report progress to the orchestrator:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "Task 1 completed. Changes: modified src/api.ts, added tests.", summary: "Task 1 done" })
+  SendMessage({ to: "orchestrator", message: "Task 1 completed. Changes: modified src/api.ts, added tests.", summary: "Task 1 done" })
   ```
 - **Announce intent before modifying shared files:**
   ```
-  SendMessage({ type: "broadcast", content: "INTENT: About to modify src/config.ts", summary: "File modification intent" })
+  SendMessage({ to: "*", message: "INTENT: About to modify src/config.ts", summary: "File modification intent" })
   ```
 - **Notify after modifying shared files:**
   ```
-  SendMessage({ type: "broadcast", content: "DONE: Modified src/config.ts - added new config field", summary: "File modification complete" })
+  SendMessage({ to: "*", message: "DONE: Modified src/config.ts - added new config field", summary: "File modification complete" })
   ```
 - **Coordinate with other executers:**
   ```
-  SendMessage({ type: "message", recipient: "executer-beta", content: "I'm done with the auth module, you can proceed with Task 4", summary: "Unblocking Task 4" })
+  SendMessage({ to: "executer-beta", message: "I'm done with the auth module, you can proceed with Task 4", summary: "Unblocking Task 4" })
   ```
 - **Report conflicts or issues:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "BLOCKED: Cannot proceed with Task 3, depends on Task 2 which is not done", summary: "Task 3 blocked" })
+  SendMessage({ to: "orchestrator", message: "BLOCKED: Cannot proceed with Task 3, depends on Task 2 which is not done", summary: "Task 3 blocked" })
   ```
 - **Request user input** (ask the orchestrator to relay):
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "NEED USER INPUT: Which database driver should I use?", summary: "Need user decision" })
+  SendMessage({ to: "orchestrator", message: "NEED USER INPUT: Which database driver should I use?", summary: "Need user decision" })
   ```
 - **Respond to shutdown requests** with:
   ```
-  SendMessage({ type: "shutdown_response", request_id: "<from request>", approve: true })
+  SendMessage({ to: "orchestrator", message: { type: "shutdown_response", request_id: "<from request>", approve: true } })
   ```
 
 **Progress Updates:**

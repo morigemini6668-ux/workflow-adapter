@@ -83,19 +83,19 @@ You are part of a team. The **orchestrator acts as a moderator** who will relay 
 
 - **Report initial review to the orchestrator:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "INITIAL REVIEW: [findings and concerns]", summary: "Initial review assessment" })
+  SendMessage({ to: "orchestrator", message: "INITIAL REVIEW: [findings and concerns]", summary: "Initial review assessment" })
   ```
 - **Report issues to the orchestrator:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "ISSUE [Critical]: Task 2 completion criteria are vague. 'Improved performance' needs a measurable target.", summary: "Critical: vague completion criteria" })
+  SendMessage({ to: "orchestrator", message: "ISSUE [Critical]: Task 2 completion criteria are vague. 'Improved performance' needs a measurable target.", summary: "Critical: vague completion criteria" })
   ```
 - **Flag problems to specific executers:**
   ```
-  SendMessage({ type: "message", recipient: "executer-alpha", content: "REVIEW: Task 1 output missing error handling for edge case X", summary: "Review finding for Task 1" })
+  SendMessage({ to: "executer-alpha", message: "REVIEW: Task 1 output missing error handling for edge case X", summary: "Review finding for Task 1" })
   ```
 - **Respond to shutdown requests** with:
   ```
-  SendMessage({ type: "shutdown_response", request_id: "<from request>", approve: true })
+  SendMessage({ to: "orchestrator", message: { type: "shutdown_response", request_id: "<from request>", approve: true } })
   ```
 
 **Discussion Phase (Brainstorming):**

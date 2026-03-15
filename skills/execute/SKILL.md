@@ -55,7 +55,7 @@ Task({
   team_name: "wa-{subject}",
   name: "executer-alpha",
   run_in_background: true,
-  prompt: "<system prompt from executer.md>\n\nYour subject is: {subject}\nTeam name: wa-{subject}\nYour teammate name: executer-alpha\nOther teammates: executer-beta, reviewer\nTeam leader: orchestrator\n\nYour assigned tasks from worker.md:\n- Task 1: ...\n- Task 3: ...\n\nWorktree: Yes/No (branch: {subject}-alpha if yes)\nPlan location: .workflow-adapter/{subject}/plan.md\n\nUse SendMessage to coordinate:\n- SendMessage({ type: 'message', recipient: 'orchestrator', content: '...', summary: '...' }) to report to leader\n- SendMessage({ type: 'message', recipient: 'executer-beta', content: '...', summary: '...' }) to coordinate with peers\n- SendMessage({ type: 'broadcast', content: '...', summary: '...' }) to notify all teammates"
+  prompt: "<system prompt from executer.md>\n\nYour subject is: {subject}\nTeam name: wa-{subject}\nYour teammate name: executer-alpha\nOther teammates: executer-beta, reviewer\nTeam leader: orchestrator\n\nYour assigned tasks from worker.md:\n- Task 1: ...\n- Task 3: ...\n\nWorktree: Yes/No (branch: {subject}-alpha if yes)\nPlan location: .workflow-adapter/{subject}/plan.md\n\nUse SendMessage to coordinate:\n- SendMessage({ to: 'orchestrator', message: '...', summary: '...' }) to report to leader\n- SendMessage({ to: 'executer-beta', message: '...', summary: '...' }) to coordinate with peers\n- SendMessage({ to: '*', message: '...', summary: '...' }) to notify all teammates"
 })
 ```
 
@@ -72,7 +72,7 @@ Task({
   team_name: "wa-{subject}",
   name: "reviewer",
   run_in_background: true,
-  prompt: "<system prompt from reviewer.md>\n\nYour subject is: {subject}\nTeam name: wa-{subject}\nYour teammate name: reviewer\nOther teammates: executer-alpha, executer-beta, ...\nTeam leader: orchestrator\n\nMonitor execution quality in real-time:\n- Review completed tasks against completion criteria in plan.md\n- Validate verification methods are being applied\n- Send issues to the orchestrator via SendMessage\n\nUse SendMessage to communicate:\n- SendMessage({ type: 'message', recipient: 'orchestrator', content: '...', summary: '...' }) to report issues\n- SendMessage({ type: 'message', recipient: 'executer-alpha', content: '...', summary: '...' }) to flag problems"
+  prompt: "<system prompt from reviewer.md>\n\nYour subject is: {subject}\nTeam name: wa-{subject}\nYour teammate name: reviewer\nOther teammates: executer-alpha, executer-beta, ...\nTeam leader: orchestrator\n\nMonitor execution quality in real-time:\n- Review completed tasks against completion criteria in plan.md\n- Validate verification methods are being applied\n- Send issues to the orchestrator via SendMessage\n\nUse SendMessage to communicate:\n- SendMessage({ to: 'orchestrator', message: '...', summary: '...' }) to report issues\n- SendMessage({ to: 'executer-alpha', message: '...', summary: '...' }) to flag problems"
 })
 ```
 
@@ -86,25 +86,25 @@ While teammates are working:
 
 1. **Resolve conflicts**: When executers report resource conflicts:
    ```
-   SendMessage({ type: "message", recipient: "executer-alpha", content: "Wait for beta to finish with file X", summary: "Resolving file conflict" })
-   SendMessage({ type: "message", recipient: "executer-beta", content: "Alpha is waiting, please finish file X first", summary: "Priority notification" })
+   SendMessage({ to: "executer-alpha", message: "Wait for beta to finish with file X", summary: "Resolving file conflict" })
+   SendMessage({ to: "executer-beta", message: "Alpha is waiting, please finish file X first", summary: "Priority notification" })
    ```
 
 2. **Relay user input**: When teammates need user decisions:
    - Use AskUserQuestion to get the answer
    - Send the answer back:
    ```
-   SendMessage({ type: "message", recipient: "executer-alpha", content: "User decided: ...", summary: "Relaying user decision" })
+   SendMessage({ to: "executer-alpha", message: "User decided: ...", summary: "Relaying user decision" })
    ```
 
 3. **Broadcast status**: Keep all teammates informed:
    ```
-   SendMessage({ type: "broadcast", content: "Task 1 completed by alpha, task 2 still in progress", summary: "Progress update" })
+   SendMessage({ to: "*", message: "Task 1 completed by alpha, task 2 still in progress", summary: "Progress update" })
    ```
 
 4. **Verify completion**: When an executer reports task completion, ask the reviewer to validate:
    ```
-   SendMessage({ type: "message", recipient: "reviewer", content: "Executer alpha completed Task 1. Please verify.", summary: "Requesting task verification" })
+   SendMessage({ to: "reviewer", message: "Executer alpha completed Task 1. Please verify.", summary: "Requesting task verification" })
    ```
 
 ## Step 7: Handle Failures
@@ -113,7 +113,7 @@ If an executer encounters an unrecoverable error:
 1. Mark affected tasks as `[!]` blocked in plan.md
 2. Try reassigning to another executer:
    ```
-   SendMessage({ type: "message", recipient: "executer-beta", content: "Please take over Task 3 from alpha", summary: "Task reassignment" })
+   SendMessage({ to: "executer-beta", message: "Please take over Task 3 from alpha", summary: "Task reassignment" })
    ```
 3. If not possible, use AskUserQuestion to inform the user and get direction
 4. Consider spawning a replacement teammate if needed
@@ -135,16 +135,19 @@ When ALL tasks in plan.md are marked `[x]` completed:
 1. Run the verification plan defined in plan.md
 2. Ask the reviewer for a final review:
    ```
-   SendMessage({ type: "message", recipient: "reviewer", content: "All tasks complete. Please do final review.", summary: "Requesting final review" })
+   SendMessage({ to: "reviewer", message: "All tasks complete. Please do final review.", summary: "Requesting final review" })
    ```
 3. If verification passes and reviewer approves:
    - Update plan.md with final status
    - Clean up worktrees if used: `git worktree remove <path>`
    - Shutdown all teammates:
      ```
-     SendMessage({ type: "shutdown_request", recipient: "executer-alpha", content: "All tasks complete" })
-     SendMessage({ type: "shutdown_request", recipient: "executer-beta", content: "All tasks complete" })
-     SendMessage({ type: "shutdown_request", recipient: "reviewer", content: "All tasks complete" })
+     SendMessage({ to: "executer-alpha", message: { type: "shutdown_request", reason: "All tasks complete" } })
+     SendMessage({ to: "executer-beta", message: { type: "shutdown_request", reason: "All tasks complete" } })
+     SendMessage({ to: "reviewer", message: { type: "shutdown_request", reason: "All tasks complete" } })
+     ```
+     Wait for all teammates to confirm shutdown (shutdown_approved messages) before calling TeamDelete().
+     ```
      TeamDelete()
      ```
    - Output: **ALL JOB COMPLETE**
@@ -286,7 +289,7 @@ Execution Process:
 Write only to your own assigned task rows — do not overwrite other tasks' status lines.
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md'
 
 3. Check the exit code. If non-zero, report the error.
 4. Read plan.md and verify the assigned tasks were updated.
@@ -339,7 +342,7 @@ Recommendations:
 - {specific fix}
 
 2. Use the Bash tool to run:
-bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md' --timeout 600
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/copilot-exec.ts' --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md'
 
 3. Read .workflow-adapter/{subject}/review-batch-{N}.md and extract the Status line.
 Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}

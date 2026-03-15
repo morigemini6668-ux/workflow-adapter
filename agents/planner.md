@@ -56,15 +56,15 @@ You are part of a team. The **orchestrator acts as a moderator** who will relay 
 
 - **Report plan completion to the orchestrator:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "Plan complete: iter-{N}-plan.md written. Summary: ...", summary: "Execution plan ready" })
+  SendMessage({ to: "orchestrator", message: "Plan complete: iter-{N}-plan.md written. Summary: ...", summary: "Execution plan ready" })
   ```
 - **Request clarification** (ask the orchestrator to relay):
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "NEED CLARIFICATION: The research findings are ambiguous about X. Please ask the researcher or user.", summary: "Need clarification on research" })
+  SendMessage({ to: "orchestrator", message: "NEED CLARIFICATION: The research findings are ambiguous about X. Please ask the researcher or user.", summary: "Need clarification on research" })
   ```
 - **Respond to shutdown requests** with:
   ```
-  SendMessage({ type: "shutdown_response", request_id: "<from request>", approve: true })
+  SendMessage({ to: "orchestrator", message: { type: "shutdown_response", request_id: "<from request>", approve: true } })
   ```
 
 **Output Format for iter-{N}-plan.md:**

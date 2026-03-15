@@ -84,7 +84,7 @@ While teammates are working on their initial research:
 
 1. **Relay to user**: When a teammate requests user input, use AskUserQuestion to get the user's answer, then send it back:
    ```
-   SendMessage({ type: "message", recipient: "researcher", content: "User decided: ...", summary: "Relaying user decision" })
+   SendMessage({ to: "researcher", message: "User decided: ...", summary: "Relaying user decision" })
    ```
 
 2. **Handle failures**: If a teammate fails to produce results, becomes unresponsive, or encounters errors:
@@ -103,15 +103,13 @@ You are now the **moderator/facilitator** of a group discussion. Your role is to
 1. **Share historian's context with everyone** and ask for reactions:
    ```
    SendMessage({
-     type: "message",
-     recipient: "researcher",
-     content: "[Moderator] The historian found the following context:\n\n{summarize historian's findings}\n\nDoes this align with or contradict your research? Are there gaps in the historical context that your research can fill? Please share your reaction.",
+     to: "researcher",
+     message: "[Moderator] The historian found the following context:\n\n{summarize historian's findings}\n\nDoes this align with or contradict your research? Are there gaps in the historical context that your research can fill? Please share your reaction.",
      summary: "Sharing historian findings for discussion"
    })
    SendMessage({
-     type: "message",
-     recipient: "reviewer",
-     content: "[Moderator] The historian found the following context:\n\n{summarize historian's findings}\n\nAre there any concerns about this historical context? Missing perspectives? Please share your critical assessment.",
+     to: "reviewer",
+     message: "[Moderator] The historian found the following context:\n\n{summarize historian's findings}\n\nAre there any concerns about this historical context? Missing perspectives? Please share your critical assessment.",
      summary: "Sharing historian findings for review"
    })
    ```
@@ -119,15 +117,13 @@ You are now the **moderator/facilitator** of a group discussion. Your role is to
 2. **Share researcher's findings with everyone** and ask for reactions:
    ```
    SendMessage({
-     type: "message",
-     recipient: "historian",
-     content: "[Moderator] The researcher found:\n\n{summarize researcher's findings}\n\nDoes this align with past project decisions and patterns? Any historical precedent that supports or contradicts these findings?",
+     to: "historian",
+     message: "[Moderator] The researcher found:\n\n{summarize researcher's findings}\n\nDoes this align with past project decisions and patterns? Any historical precedent that supports or contradicts these findings?",
      summary: "Sharing research for historian reaction"
    })
    SendMessage({
-     type: "message",
-     recipient: "reviewer",
-     content: "[Moderator] The researcher found:\n\n{summarize researcher's findings}\n\nChallenge these findings. What assumptions are being made? What alternatives were overlooked?",
+     to: "reviewer",
+     message: "[Moderator] The researcher found:\n\n{summarize researcher's findings}\n\nChallenge these findings. What assumptions are being made? What alternatives were overlooked?",
      summary: "Sharing research for reviewer challenge"
    })
    ```
@@ -136,18 +132,16 @@ You are now the **moderator/facilitator** of a group discussion. Your role is to
    - When the reviewer challenges a finding, relay it to the researcher:
      ```
      SendMessage({
-       type: "message",
-       recipient: "researcher",
-       content: "[Moderator] The reviewer challenges your finding on X:\n\n{reviewer's critique}\n\nHow do you respond? Can you address this concern or provide additional evidence?",
+       to: "researcher",
+       message: "[Moderator] The reviewer challenges your finding on X:\n\n{reviewer's critique}\n\nHow do you respond? Can you address this concern or provide additional evidence?",
        summary: "Relaying reviewer challenge"
      })
      ```
    - When the historian provides context that affects research, relay it:
      ```
      SendMessage({
-       type: "message",
-       recipient: "researcher",
-       content: "[Moderator] The historian points out:\n\n{historian's reaction}\n\nDoes this change your recommendation?",
+       to: "researcher",
+       message: "[Moderator] The historian points out:\n\n{historian's reaction}\n\nDoes this change your recommendation?",
        summary: "Relaying historian context"
      })
      ```
@@ -161,8 +155,8 @@ If there are unresolved disagreements or open questions after Round 1:
 3. Relay the user's decision back to all teammates:
    ```
    SendMessage({
-     type: "broadcast",
-     content: "[Moderator] The user has decided: {decision}. Please incorporate this into your final position.",
+     to: "*",
+     message: "[Moderator] The user has decided: {decision}. Please incorporate this into your final position.",
      summary: "Relaying user decision to all"
    })
    ```
@@ -175,7 +169,7 @@ If there are unresolved disagreements or open questions after Round 1:
 - **Surface disagreements**: When teammates disagree, make the disagreement explicit and ask each side to respond
 - **Validate reviewer feedback critically**: The reviewer's role is to challenge, but you assess whether concerns are proportionate. Push back on overly cautious concerns:
   ```
-  SendMessage({ type: "message", recipient: "reviewer", content: "[Moderator] Your concern about X seems disproportionate because [reasoning]. Can you clarify why this is critical?", summary: "Pushing back on reviewer concern" })
+  SendMessage({ to: "reviewer", message: "[Moderator] Your concern about X seems disproportionate because [reasoning]. Can you clarify why this is critical?", summary: "Pushing back on reviewer concern" })
   ```
 - **Keep discussion focused**: If discussion drifts, redirect teammates back to the subject
 - **Know when to stop**: End discussion when key positions have been aired and either consensus or clear disagreement is established
@@ -254,10 +248,12 @@ Compile all brainstorming results into `.workflow-adapter/{subject}/brainstormin
 
 After saving results, shut down all teammates:
 ```
-SendMessage({ type: "shutdown_request", recipient: "historian", content: "Brainstorming complete" })
-SendMessage({ type: "shutdown_request", recipient: "researcher", content: "Brainstorming complete" })
-SendMessage({ type: "shutdown_request", recipient: "reviewer", content: "Brainstorming complete" })
+SendMessage({ to: "historian", message: { type: "shutdown_request", reason: "Brainstorming complete" } })
+SendMessage({ to: "researcher", message: { type: "shutdown_request", reason: "Brainstorming complete" } })
+SendMessage({ to: "reviewer", message: { type: "shutdown_request", reason: "Brainstorming complete" } })
 ```
+
+Wait for all teammates to confirm shutdown (shutdown_approved messages) before calling TeamDelete().
 
 Then clean up the team:
 ```

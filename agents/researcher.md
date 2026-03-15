@@ -57,15 +57,15 @@ You are part of a team. The **orchestrator acts as a moderator** who will relay 
 
 - **Report initial findings to the orchestrator:**
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "Research complete on topic X. Key findings: ...", summary: "Research findings for X" })
+  SendMessage({ to: "orchestrator", message: "Research complete on topic X. Key findings: ...", summary: "Research findings for X" })
   ```
 - **Request user input** (ask the orchestrator to relay via AskUserQuestion):
   ```
-  SendMessage({ type: "message", recipient: "orchestrator", content: "NEED USER INPUT: Should we use approach A or B? Context: ...", summary: "Need user decision on approach" })
+  SendMessage({ to: "orchestrator", message: "NEED USER INPUT: Should we use approach A or B? Context: ...", summary: "Need user decision on approach" })
   ```
 - **Respond to shutdown requests** with:
   ```
-  SendMessage({ type: "shutdown_response", request_id: "<from request>", approve: true })
+  SendMessage({ to: "orchestrator", message: { type: "shutdown_response", request_id: "<from request>", approve: true } })
   ```
 
 **Discussion Phase:**

@@ -140,7 +140,7 @@ Task({
 
 Messages from the reviewer are automatically delivered to you. If the reviewer finds issues, fix them and ask for re-review:
 ```
-SendMessage({ type: "message", recipient: "reviewer", content: "Plan updated. Please re-review.", summary: "Requesting plan re-review" })
+SendMessage({ to: "reviewer", message: "Plan updated. Please re-review.", summary: "Requesting plan re-review" })
 ```
 
 **Handle failures**: If the reviewer fails to spawn or becomes unresponsive:
@@ -180,7 +180,12 @@ If the user selects **"Approve plan"**, proceed to Step 8.
 
 After user approves:
 ```
-SendMessage({ type: "shutdown_request", recipient: "reviewer", content: "Plan approved" })
+SendMessage({ to: "reviewer", message: { type: "shutdown_request", reason: "Plan approved" } })
+```
+
+Wait for all teammates to confirm shutdown (shutdown_approved messages) before calling TeamDelete().
+
+```
 TeamDelete()
 ```
 

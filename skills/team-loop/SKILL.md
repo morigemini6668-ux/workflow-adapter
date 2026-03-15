@@ -7,9 +7,9 @@ disable-model-invocation: true
 
 # Team Loop
 
-Phased development loop: clarify the problem interactively (P0), then iterate **Research (P1) -> Plan (P2) -> Execute (P3) -> Verify (P4)** using teammates until resolved or max iterations reached.
+Phased development loop: clarify the problem interactively (P0), then iterate **Research (P1) -> Plan + Review (P2) -> Execute (P3) -> Verify (P4)** using teammates until resolved or max iterations reached.
 
-Unlike `autopilot-ralph` (single-agent analyze-execute-verify), this skill spawns a **team of specialists** — historian, researcher, planner, executer, reviewer — coordinated by you (the orchestrator). Research runs every iteration; planning explicitly avoids repeating failed approaches.
+Unlike `autopilot-ralph` (single-agent analyze-execute-verify), this skill spawns a **team of specialists** — historian, researcher, planner, executer(s), reviewer — coordinated by you (the orchestrator). Teammates actively collaborate across phases: historian ↔ researcher share findings in P1, the reviewer gates the plan in P2, the planner assigns work to one or more executers, and executers can request research support in P3.
 
 **Principle Compliance:**
 Before starting any work:
@@ -279,10 +279,26 @@ TaskUpdate({ taskId: "{P4-id}", addBlockedBy: ["{P3-id}"] })
 
 ## Step 5: Create Team + Spawn Teammates
 
-Create the team:
+### Cleanup Previous Iteration (iteration > 1 only)
+
+If this is NOT the first iteration, shut down all teammates from the previous iteration before spawning new ones:
+```
+// Shutdown all previous teammates
+SendMessage({ to: "historian", message: "Iteration complete — shutting down for next iteration", summary: "Shutdown" })
+SendMessage({ to: "researcher", message: "Iteration complete — shutting down for next iteration", summary: "Shutdown" })
+SendMessage({ to: "planner", message: "Iteration complete — shutting down for next iteration", summary: "Shutdown" })
+SendMessage({ to: "reviewer", message: "Iteration complete — shutting down for next iteration", summary: "Shutdown" })
+// Also shutdown any executers from P3 (executer-1, executer-2, etc.)
+```
+Wait briefly for shutdowns to complete. If the team was already deleted, re-create it.
+
+### Create Team (first iteration only)
+
 ```
 TeamCreate({ team_name: "wa-team-loop-{subject}", description: "Team loop for {subject}" })
 ```
+
+### Spawn Teammates
 
 Read the agent definition files to get each teammate's system prompt:
 - `${CLAUDE_PLUGIN_ROOT}/agents/historian.md`
@@ -291,11 +307,11 @@ Read the agent definition files to get each teammate's system prompt:
 - `${CLAUDE_PLUGIN_ROOT}/agents/executer.md`
 - `${CLAUDE_PLUGIN_ROOT}/agents/reviewer.md`
 
-### Spawn Teammates
-
 Read `${CLAUDE_PLUGIN_ROOT}/skills/team-loop/references/spawn-templates.md` for each teammate's spawn prompt template. Substitute `{subject}`, `{session_dir}`, `{worktree_path}`, `{N}`, and other placeholders with actual values.
 
-**Always spawn:** Reviewer (persistent across iterations), Historian, and Researcher.
+**Spawn at iteration start:** Historian, Researcher, Planner, Reviewer (4 teammates). These persist across all phases within the iteration.
+
+**Executers are NOT spawned here** — they are spawned in Step 8 (P3) based on the planner's execution plan.
 
 Spawn each role using the template from the reference file. Set `run_in_background: true` for all teammates.
 
@@ -303,17 +319,14 @@ Spawn each role using the template from the reference file. Set `run_in_backgrou
 
 Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P1", status: "in_progress" })`
 
-1. Historian and researcher were spawned in Step 5. Wait for both to send their findings via SendMessage.
+1. Historian and researcher were spawned in Step 5. They work in parallel and **actively communicate with each other**:
+   - Historian sends findings to researcher: `SendMessage({ to: "researcher", message: "Found relevant context: {summary}", summary: "Sharing git/project context" })`
+   - Researcher can ask historian for clarification: `SendMessage({ to: "historian", message: "Can you check git history for {topic}?", summary: "Requesting additional context" })`
+   - Both report final findings to orchestrator when done.
 
-2. **Relay and synthesize**: As findings arrive from historian and researcher:
-   - If the researcher requests user input (e.g., needs clarification on the problem domain), use AskUserQuestion to get the answer, then relay it back:
-     ```
-     SendMessage({ type: "message", recipient: "researcher", content: "User says: {answer}", summary: "Relaying user input" })
-     ```
-   - If findings from one teammate are relevant to the other, relay them:
-     ```
-     SendMessage({ type: "message", recipient: "researcher", content: "[Orchestrator] Historian found: {summary}. Does this affect your research?", summary: "Sharing historian context" })
-     ```
+2. **Orchestrator role**: Monitor and relay as needed:
+   - If a teammate requests user input, use AskUserQuestion and relay the answer back.
+   - If a teammate's findings are stuck or blocked, nudge the other to help.
 
 3. **Synthesize research**: Once both historian and researcher have reported, create a brief research synthesis:
    - Read `{session_dir}/doc/historian-context.md`
@@ -326,31 +339,97 @@ Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P1", status: "in_p
 
 5. Proceed to Step 7 (Planning Phase).
 
-## Step 7: P2 — Planning Phase
+## Step 7: P2 — Planning + Plan Review
 
 Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P2", status: "in_progress" })`
 
-Spawn the planner using the **Planner** template from `references/spawn-templates.md`. Substitute placeholders including the CONSTRAINT section with the actual iteration history.
+### 7a. Planning
+
+Notify the planner (already spawned in Step 5) to begin planning:
+```
+SendMessage({
+  to: "planner",
+  message: "[Orchestrator] Research phase complete. Begin planning for iteration {N}.\n\nRead research findings in {session_dir}/doc/ and create iter-{N}-plan.md.\nYou may message historian or researcher for clarification.",
+  summary: "Start planning"
+})
+```
+
+The planner:
+- Reads research findings and iteration history
+- Can message historian/researcher for clarification on findings
+- **Estimates work size** and splits across multiple executers when a single executer's ~200k context window would be insufficient — even for dependent tasks, splitting with clear handoff points is preferred over context exhaustion
+- Writes `{session_dir}/iter-{N}-plan.md` with a `## Executer Assignments` section specifying how many executers are needed, what each one does, and their dependencies
 
 Wait for the planner to report completion via SendMessage.
 
-After the planner finishes:
-1. Read `{session_dir}/iter-{N}-plan.md` to verify it was written and contains a valid plan.
-2. If the plan is missing or empty, ask the planner to retry.
-3. **Update progress**:
+### 7b. Plan Review
+
+After the planner finishes, send the plan to the reviewer:
+```
+SendMessage({
+  to: "reviewer",
+  message: "[Orchestrator] Plan for iteration {N} is ready. Please review:\n\n1. Read {session_dir}/iter-{N}-plan.md\n2. Read {session_dir}/team-loop-target.md for acceptance criteria\n3. Validate:\n   - Is the plan feasible and well-scoped?\n   - Does it avoid previously failed approaches? (Check ## Iteration History)\n   - Are the executer assignments reasonable?\n   - Are there gaps or risks?\n\nReturn: APPROVE or REQUEST_CHANGES: {specific feedback}",
+  summary: "Requesting plan review"
+})
+```
+
+Wait for the reviewer's response.
+
+- **If APPROVE**: proceed.
+- **If REQUEST_CHANGES**: relay the reviewer's feedback to the planner:
+  ```
+  SendMessage({
+    to: "planner",
+    message: "[Orchestrator] Reviewer requested changes:\n{reviewer feedback}\n\nPlease revise iter-{N}-plan.md and report when done.",
+    summary: "Relaying plan review feedback"
+  })
+  ```
+  Wait for the planner to revise, then re-submit to the reviewer. Repeat up to 2 times. If still not approved after 2 revisions, proceed with the latest plan and note the risk.
+
+### 7c. Finalize
+
+1. Read `{session_dir}/iter-{N}-plan.md` to extract the `## Executer Assignments` section.
+2. **Update progress**:
    - `TaskUpdate({ taskId: "iter-{N}-P2", status: "completed" })`
    - Update `phase` in ralph-state.md frontmatter to `p3`.
-4. Proceed to Step 8 (Execution Phase).
+3. Proceed to Step 8 (Execution Phase).
 
 ## Step 8: P3 — Execution Phase
 
 Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P3", status: "in_progress" })`
 
-Spawn the executer using the **Executer** template from `references/spawn-templates.md`.
+### Spawn Executers from Plan
 
-Wait for the executer to report completion via SendMessage.
+Read the `## Executer Assignments` section from `{session_dir}/iter-{N}-plan.md`. Parse each executer's assignment and dependencies.
 
-After the executer completes:
+- **Single executer plan**: Spawn one `executer-1` with the full plan.
+- **Multiple executer plan**: Spawn executers respecting their dependency order:
+  - **Independent executers** (no dependencies): spawn all in parallel.
+  - **Dependent executers** (e.g., `executer-2` depends on `executer-1`): spawn `executer-1` first. When `executer-1` reports completion, read its execution summary (`iter-{N}-execution-1.md`) and spawn `executer-2` with the following additional context in its prompt:
+    ```
+    ## Handoff from executer-1
+    - Execution summary: {session_dir}/iter-{N}-execution-1.md
+    - Files created/modified: {list from execution summary}
+    - Key interfaces/contracts: {any new types, APIs, or data structures executer-2 needs to use}
+    ```
+
+Use the **Executer** template from `references/spawn-templates.md`, customizing each executer's prompt with their specific plan items.
+
+### Execution with Research Support
+
+During execution, executers can request external research from the researcher:
+```
+// Executer sends to researcher:
+SendMessage({ to: "researcher", message: "Need help: {question about API, library, pattern, etc.}", summary: "Research request from executer" })
+// Researcher responds directly:
+SendMessage({ to: "executer-1", message: "Here's what I found: {research results}", summary: "Research response" })
+```
+
+The orchestrator monitors progress. If an executer is blocked waiting for research, nudge the researcher.
+
+### After All Executers Complete
+
+Wait for all executers to report completion via SendMessage (respecting dependency order — dependent executers are spawned sequentially).
 
 1. **Commit iteration** (only if `worktree_mode = true`):
    ```bash
@@ -373,9 +452,8 @@ Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P4", status: "in_p
 Send the implementation to the reviewer for validation:
 ```
 SendMessage({
-  type: "message",
-  recipient: "reviewer",
-  content: "[Orchestrator] Iteration {N} execution is complete. Please review:\n\n1. Read {session_dir}/iter-{N}-plan.md for what was planned\n2. Read {session_dir}/iter-{N}-execution.md for what was implemented\n3. {if worktree_mode: Examine the changes in {worktree_path}}\n4. Read {session_dir}/team-loop-target.md for the acceptance criteria\n\nValidate:\n- Does the implementation match the plan?\n- Are there obvious bugs, security issues, or edge cases?\n- Does the code follow project conventions?\n\nReturn: PASS or FAIL: {specific reasons}",
+  to: "reviewer",
+  message: "[Orchestrator] Iteration {N} execution is complete. Please review:\n\n1. Read {session_dir}/iter-{N}-plan.md for what was planned\n2. Read all execution summaries in {session_dir}/iter-{N}-execution*.md\n3. {if worktree_mode: Examine the changes in {worktree_path}}\n4. Read {session_dir}/team-loop-target.md for the acceptance criteria\n\nValidate:\n- Does the implementation match the plan?\n- Are there obvious bugs, security issues, or edge cases?\n- Does the code follow project conventions?\n\nReturn: PASS or FAIL: {specific reasons}",
   summary: "Requesting iteration review"
 })
 ```
@@ -389,7 +467,7 @@ Then run the verification method from team-loop-target.md:
 
 ### Loop Decision
 
-Evaluate both the reviewer's verdict and the verification result. There are **4 possible branches**:
+Evaluate both the reviewer's verdict and the verification result. There are **3 possible branches**:
 
 **Branch 1 — PASS (both reviewer approves AND verification succeeds):**
 - `TaskUpdate({ taskId: "iter-{N}-P4", status: "completed" })`
@@ -435,13 +513,12 @@ Evaluate both the reviewer's verdict and the verification result. There are **4 
 
 2. **Shutdown all teammates**:
    ```
-   SendMessage({ type: "shutdown_request", recipient: "historian", content: "Loop complete — success" })
-   SendMessage({ type: "shutdown_request", recipient: "researcher", content: "Loop complete — success" })
-   SendMessage({ type: "shutdown_request", recipient: "planner", content: "Loop complete — success" })
-   SendMessage({ type: "shutdown_request", recipient: "executer", content: "Loop complete — success" })
-   SendMessage({ type: "shutdown_request", recipient: "reviewer", content: "Loop complete — success" })
+   SendMessage({ to: "historian", message: "Loop complete — shutting down", summary: "Shutdown" })
+   SendMessage({ to: "researcher", message: "Loop complete — shutting down", summary: "Shutdown" })
+   SendMessage({ to: "planner", message: "Loop complete — shutting down", summary: "Shutdown" })
+   SendMessage({ to: "reviewer", message: "Loop complete — shutting down", summary: "Shutdown" })
+   // Also shutdown all executers (executer-1, executer-2, etc.)
    ```
-   (Only send to teammates that were actually spawned. Skip historian/researcher if they were not spawned in this iteration.)
 
 3. **Delete team**:
    ```
@@ -530,7 +607,7 @@ If a teammate becomes unresponsive or fails mid-task:
      description: "Executer-1 (re-spawned): continue from checkpoint",
      subagent_type: "general-purpose",
      team_name: "wa-team-loop-{subject}",
-     name: "executer",
+     name: "executer-1",
      run_in_background: true,
      prompt: "<system prompt from executer.md>\n\n... (same as original prompt)\n\n## CHECKPOINT RECOVERY\nYou are being re-spawned after a failure. Read your checkpoint file first:\n{checkpoint content}\n\nContinue from where you left off. Do not redo completed work."
    })

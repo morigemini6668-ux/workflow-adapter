@@ -353,18 +353,11 @@ After the planner finishes:
 
 Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P3", status: "in_progress" })`
 
-Spawn the primary executer using the **Executer** template from `references/spawn-templates.md`.
+Spawn the executer using the **Executer** template from `references/spawn-templates.md`.
 
-**For parallel execution** (if the plan has independent tasks that can run concurrently): spawn additional executers using `executer-{n}` naming (e.g., `executer-2`, `executer-3`) with the same template but different assigned plan items.
+Wait for the executer to report completion via SendMessage.
 
-Wait for all executers to report completion via SendMessage.
-
-**Resolve conflicts**: If executers report resource conflicts (same file, conflicting changes):
-```
-SendMessage({ type: "message", recipient: "executer-1", content: "Wait for executer-2 to finish with file X", summary: "Resolving file conflict" })
-```
-
-After all executers complete:
+After the executer completes:
 
 1. **Commit iteration** (only if `worktree_mode = true`):
    ```bash
@@ -468,7 +461,7 @@ Evaluate both the reviewer's verdict and the verification result. There are **4 
    SendMessage({ type: "shutdown_request", recipient: "historian", content: "Loop complete — success" })
    SendMessage({ type: "shutdown_request", recipient: "researcher", content: "Loop complete — success" })
    SendMessage({ type: "shutdown_request", recipient: "planner", content: "Loop complete — success" })
-   SendMessage({ type: "shutdown_request", recipient: "executer-1", content: "Loop complete — success" })
+   SendMessage({ type: "shutdown_request", recipient: "executer", content: "Loop complete — success" })
    SendMessage({ type: "shutdown_request", recipient: "reviewer", content: "Loop complete — success" })
    ```
    (Only send to teammates that were actually spawned. Skip historian/researcher if they were not spawned in this iteration.)
@@ -560,7 +553,7 @@ If a teammate becomes unresponsive or fails mid-task:
      description: "Executer-1 (re-spawned): continue from checkpoint",
      subagent_type: "general-purpose",
      team_name: "wa-team-loop-{subject}",
-     name: "executer-1",
+     name: "executer",
      run_in_background: true,
      prompt: "<system prompt from executer.md>\n\n... (same as original prompt)\n\n## CHECKPOINT RECOVERY\nYou are being re-spawned after a failure. Read your checkpoint file first:\n{checkpoint content}\n\nContinue from where you left off. Do not redo completed work."
    })

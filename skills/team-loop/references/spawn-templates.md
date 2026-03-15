@@ -19,7 +19,7 @@ Task({
 
 ---
 
-## Historian (conditional — first iteration OR stuck)
+## Historian (every iteration)
 
 ```
 Task({
@@ -34,7 +34,7 @@ Task({
 
 ---
 
-## Researcher (conditional — first iteration OR stuck)
+## Researcher (every iteration)
 
 ```
 Task({

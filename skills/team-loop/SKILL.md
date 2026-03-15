@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Phased development loop: clarify the problem interactively (P0), then iterate **Research (P1) -> Plan (P2) -> Execute (P3) -> Verify (P4)** using teammates until resolved or max iterations reached.
 
-Unlike `autopilot-ralph` (single-agent analyze-execute-verify), this skill spawns a **team of specialists** — historian, researcher, planner, executer, reviewer — coordinated by you (the orchestrator). Research runs on the first iteration and when stuck; planning explicitly avoids repeating failed approaches.
+Unlike `autopilot-ralph` (single-agent analyze-execute-verify), this skill spawns a **team of specialists** — historian, researcher, planner, executer, reviewer — coordinated by you (the orchestrator). Research runs every iteration; planning explicitly avoids repeating failed approaches.
 
 **Principle Compliance:**
 Before starting any work:
@@ -295,18 +295,11 @@ Read the agent definition files to get each teammate's system prompt:
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/team-loop/references/spawn-templates.md` for each teammate's spawn prompt template. Substitute `{subject}`, `{session_dir}`, `{worktree_path}`, `{N}`, and other placeholders with actual values.
 
-**Always spawn:** Reviewer (persistent across iterations).
-
-**Conditionally spawn (iteration == 1 OR stuck_flag == true):** Historian + Researcher.
-On normal subsequent iterations (iteration > 1 AND not stuck), skip historian/researcher and go directly to Step 7 (Planning Phase).
+**Always spawn:** Reviewer (persistent across iterations), Historian, and Researcher.
 
 Spawn each role using the template from the reference file. Set `run_in_background: true` for all teammates.
 
-## Step 6: P1 — Research Phase (conditional: first iteration OR stuck)
-
-**Skip condition:** If `iteration > 1` AND `stuck_flag` is NOT set, skip this step entirely and go to Step 7 (Planning Phase).
-
-**If this is the first iteration OR stuck_flag is set:**
+## Step 6: P1 — Research Phase
 
 Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P1", status: "in_progress" })`
 
@@ -402,7 +395,7 @@ Evaluate both the reviewer's verdict and the verification result. There are **4 
 - `TaskUpdate({ taskId: "iter-{N}-P4", status: "completed" })`
 - Proceed to Step 10 (Completion — Success).
 
-**Branch 2 — FAIL + not stuck:**
+**Branch 2 — FAIL:**
 - Append to `## Iteration History` in `{session_dir}/team-loop-target.md`:
   ```markdown
   ### Iteration {N} — FAIL
@@ -413,7 +406,7 @@ Evaluate both the reviewer's verdict and the verification result. There are **4 
   - **Evidence**: {key output line or error message}
   ```
 - `TaskUpdate({ taskId: "iter-{N}-P4", status: "completed" })`
-- Update `phase` in ralph-state.md to `p2` (loop back to Planning, skip Research).
+- Update `phase` in ralph-state.md to `p1` (loop back to Research).
 - Output status summary:
   ```
   Team-loop iteration {N}/{max_iterations} complete. Problem not yet resolved.
@@ -424,23 +417,7 @@ Evaluate both the reviewer's verdict and the verification result. There are **4 
   ```
 - The Stop hook will re-inject the prompt to continue the loop.
 
-**Branch 3 — FAIL + stuck (same error 2x or same approach 2x):**
-
-**Stuck Detection:** Read `## Iteration History` in team-loop-target.md. If the last 2 iterations had the **same error** (substantially identical verification failure output) or **substantially the same approach** (the plan descriptions are very similar), set `stuck_flag = true`.
-
-- Append to `## Iteration History` (same format as Branch 2, but add `- **Stuck**: true — repeating pattern detected`).
-- `TaskUpdate({ taskId: "iter-{N}-P4", status: "completed" })`
-- Update `phase` in ralph-state.md to `p1` (loop back to Research for fresh context).
-- Output status summary:
-  ```
-  Team-loop iteration {N}/{max_iterations} — STUCK DETECTED.
-  The last 2 iterations used similar approaches or hit the same error.
-  Looping back to Research Phase (P1) for fresh context and alternative approaches.
-  {if worktree_mode: Branch so far: {worktree_branch}}
-  ```
-- The Stop hook will re-inject the prompt. The next iteration will start at P1 (Research) instead of P2 (Planning).
-
-**Branch 4 — Max iterations reached:**
+**Branch 3 — Max iterations reached:**
 - Proceed to Step 10 (Completion — Failure).
 
 ## Step 10: Completion
@@ -493,7 +470,7 @@ Evaluate both the reviewer's verdict and the verification result. There are **4 
    ```
    (If `worktree_mode = false`, omit the branch information and instead note: "Changes were applied directly to the current branch.")
 
-### Failure (Branch 4 — max iterations reached)
+### Failure (Branch 3 — max iterations reached)
 
 1. **Append final entry to Iteration History** in `{session_dir}/team-loop-target.md`:
    ```markdown

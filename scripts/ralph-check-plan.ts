@@ -211,6 +211,24 @@ try {
     process.exit(0);
   }
 
+  // Check if orchestrator is waiting for teammates — allow stop without blocking.
+  // The orchestrator sets status: waiting when it has spawned teammates and is
+  // awaiting their SendMessage responses. Re-activation happens naturally via
+  // SendMessage, not via the Stop hook.
+  const status = matchedFrontmatter.status ? String(matchedFrontmatter.status) : "active";
+  if (status === "waiting") {
+    // Bind session_id if needed, but do NOT block
+    if (!storedSessionId && currentSessionId) {
+      const updatedContent = updateFrontmatter(matchedContent, { session_id: currentSessionId });
+      try {
+        await Bun.write(matchedStatePath, updatedContent);
+      } catch {
+        // ignore write errors
+      }
+    }
+    process.exit(0);
+  }
+
   // Check if max iterations reached
   if (iteration >= maxIterations) {
     process.stderr.write(
@@ -220,28 +238,25 @@ try {
     process.exit(0);
   }
 
-  // Increment iteration and update state file, binding session_id on first stop
-  const newIteration = iteration + 1;
-  const updates: Record<string, string | number> = { iteration: newIteration };
+  // Bind session_id on first stop (do NOT increment iteration — that is managed
+  // by the orchestrator when it transitions from P4 back to P1)
   if (!storedSessionId && currentSessionId) {
-    updates.session_id = currentSessionId;
-  }
-  const updatedContent = updateFrontmatter(matchedContent, updates);
-
-  try {
-    await Bun.write(matchedStatePath, updatedContent);
-  } catch (err) {
-    process.stderr.write(
-      `[ralph] WARNING: Failed to update state file: ${matchedStatePath}. ${err}\n`
-    );
-    process.exit(0);
+    const updatedContent = updateFrontmatter(matchedContent, { session_id: currentSessionId });
+    try {
+      await Bun.write(matchedStatePath, updatedContent);
+    } catch (err) {
+      process.stderr.write(
+        `[ralph] WARNING: Failed to update state file: ${matchedStatePath}. ${err}\n`
+      );
+      process.exit(0);
+    }
   }
 
   // Build block decision to re-inject the orchestrator prompt
   const blockOutput: BlockDecision = {
     decision: "block",
     reason: matchedBody,
-    systemMessage: `🔄 Ralph iteration ${newIteration}/${maxIterations}`,
+    systemMessage: `🔄 Ralph iteration ${iteration}/${maxIterations} — phase: ${matchedFrontmatter.phase ?? "unknown"}`,
   };
 
   process.stdout.write(JSON.stringify(blockOutput));

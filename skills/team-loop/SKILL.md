@@ -40,7 +40,7 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
 
 **If it DOES exist:**
 - Read it. If it contains `type: phased-loop`, this is a resume or leftover from a previous team-loop session.
-- Restore state from frontmatter: `p0_mode`, `worktree_mode`, `worktree_path`, `worktree_branch`, `team_name`, `phase`.
+- Restore state from frontmatter: `p0_mode`, `worktree_mode`, `worktree_path`, `worktree_branch`, `team_name`, `phase`, `status`.
 - If the frontmatter contains `worktree_path`, verify the worktree still exists:
   ```bash
   [ -d "{worktree_path}" ] && echo "EXISTS" || echo "MISSING"
@@ -217,6 +217,7 @@ completion_promise: "ALL JOB COMPLETE"
 session_id: "{session_id}"
 type: phased-loop
 phase: p1
+status: active
 p0_mode: {p0_mode}
 subject: {subject}
 started_at: "{timestamp}"
@@ -252,8 +253,13 @@ Execute the phased loop for this iteration:
 3. After completing the current phase:
    - Mark the current phase's task as completed via TaskUpdate
    - Update the `phase` field in ralph-state.md frontmatter
+   - Set `status: active` in ralph-state.md frontmatter (so the Stop hook re-injects the prompt)
    - Output a status summary
    - The Stop hook will re-inject this prompt for the next phase/iteration
+
+   **IMPORTANT — Waiting for teammates:**
+   When you have spawned teammates and are waiting for their responses (via SendMessage), you MUST set `status: waiting` in ralph-state.md frontmatter BEFORE your turn ends. This prevents the Stop hook from creating a busy-wait loop. You will be re-activated naturally when a teammate sends you a message.
+   When a teammate message arrives and you are ready to proceed, set `status: active` in ralph-state.md frontmatter.
 
 4. COMPLETION:
    - If verification PASSES: output <promise>ALL JOB COMPLETE</promise>
@@ -328,16 +334,19 @@ Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P1", status: "in_p
    - If a teammate requests user input, use AskUserQuestion and relay the answer back.
    - If a teammate's findings are stuck or blocked, nudge the other to help.
 
-3. **Synthesize research**: Once both historian and researcher have reported, create a brief research synthesis:
+3. **Wait for results**: After spawning teammates, set `status: waiting` in ralph-state.md frontmatter. You will be re-activated when teammates send messages. When both report their findings, set `status: active`.
+
+4. **Synthesize research**: Once both historian and researcher have reported, create a brief research synthesis:
    - Read `{session_dir}/doc/historian-context.md`
    - Read all researcher documents in `{session_dir}/doc/`
    - Combine into key findings relevant to the current problem
 
-4. **Update progress**:
+5. **Update progress**:
    - `TaskUpdate({ taskId: "iter-{N}-P1", status: "completed" })`
    - Update `phase` in ralph-state.md frontmatter to `p2`.
+   - Set `status: active` in ralph-state.md.
 
-5. Proceed to Step 7 (Planning Phase).
+6. Proceed to Step 7 (Planning Phase).
 
 ## Step 7: P2 — Planning + Plan Review
 
@@ -354,13 +363,15 @@ SendMessage({
 })
 ```
 
+Set `status: waiting` in ralph-state.md frontmatter after sending the message to the planner.
+
 The planner:
 - Reads research findings and iteration history
 - Can message historian/researcher for clarification on findings
 - **Estimates work size** and splits across multiple executers when a single executer's ~200k context window would be insufficient — even for dependent tasks, splitting with clear handoff points is preferred over context exhaustion
 - Writes `{session_dir}/iter-{N}-plan.md` with a `## Executer Assignments` section specifying how many executers are needed, what each one does, and their dependencies
 
-Wait for the planner to report completion via SendMessage.
+Wait for the planner to report completion via SendMessage. When it arrives, set `status: active`.
 
 ### 7b. Plan Review
 
@@ -373,7 +384,7 @@ SendMessage({
 })
 ```
 
-Wait for the reviewer's response.
+Set `status: waiting` in ralph-state.md frontmatter after sending to the reviewer. Wait for the reviewer's response. When it arrives, set `status: active`.
 
 - **If APPROVE**: proceed.
 - **If REQUEST_CHANGES**: relay the reviewer's feedback to the planner:
@@ -429,7 +440,7 @@ The orchestrator monitors progress. If an executer is blocked waiting for resear
 
 ### After All Executers Complete
 
-Wait for all executers to report completion via SendMessage (respecting dependency order — dependent executers are spawned sequentially).
+Set `status: waiting` in ralph-state.md frontmatter after spawning executers. Wait for all executers to report completion via SendMessage (respecting dependency order — dependent executers are spawned sequentially). When all executers have reported, set `status: active`.
 
 1. **Commit iteration** (only if `worktree_mode = true`):
    ```bash
@@ -458,7 +469,7 @@ SendMessage({
 })
 ```
 
-Wait for the reviewer's response.
+Set `status: waiting` in ralph-state.md frontmatter after sending to the reviewer. Wait for the reviewer's response. When it arrives, set `status: active`.
 
 Then run the verification method from team-loop-target.md:
 ```bash
@@ -484,7 +495,9 @@ Evaluate both the reviewer's verdict and the verification result. There are **3 
   - **Evidence**: {key output line or error message}
   ```
 - `TaskUpdate({ taskId: "iter-{N}-P4", status: "completed" })`
+- Increment `iteration` in ralph-state.md frontmatter (N+1).
 - Update `phase` in ralph-state.md to `p1` (loop back to Research).
+- Set `status: active` in ralph-state.md (so the Stop hook re-injects the prompt for the next iteration).
 - Output status summary:
   ```
   Team-loop iteration {N}/{max_iterations} complete. Problem not yet resolved.

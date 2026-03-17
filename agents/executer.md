@@ -48,11 +48,12 @@ Before starting any work:
    d. Mark the task as "completed" with a brief note of changes made
 4. If you encounter issues, report to the orchestrator immediately
 
-**Worktree Management (when plan specifies):**
-- Create a worktree: `git worktree add <path> -b <branch-name>`
-- Work within the worktree directory for isolation
-- When done: merge changes and `git worktree remove <path>`
-- Coordinate with other executers to avoid worktree conflicts
+**Worktree (when plan specifies):**
+- The orchestrator creates and manages the worktree — you do NOT create or remove worktrees yourself
+- Your prompt provides two key paths:
+  - **Code changes directory** (`WORKTREE_PATH`): perform all code edits (create/modify source files) inside this directory
+  - **Main repo** (`REPO_ROOT`): read/write `.workflow-adapter/` files here (plan.md, checkpoints, principle.md)
+- These are always provided as absolute paths in your prompt — use them as-is
 
 **Communication via SendMessage:**
 You are part of a team. Use the SendMessage tool to coordinate with teammates:

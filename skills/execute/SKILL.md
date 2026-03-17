@@ -36,6 +36,34 @@ If a subject was provided as an argument, use it. Otherwise:
 1. Read `.workflow-adapter/{subject}/plan.md` — understand all tasks, dependencies, and completion criteria
 2. Read `.workflow-adapter/{subject}/worker.md` — understand executer allocation and worktree configuration
 
+## Step 2.5: Create Worktree (if configured)
+
+If `worker.md` specifies `Worktree: Yes`:
+
+```bash
+REPO_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${REPO_ROOT}/../{subject}-worktree"
+
+# Pre-check: handle stale worktree or existing branch
+if [ -d "$WORKTREE_PATH" ]; then
+  echo "WORKTREE_EXISTS_AT=$WORKTREE_PATH"
+  # Reuse existing worktree — verify it's valid
+  git worktree list | grep -q "$WORKTREE_PATH" && echo "VALID_WORKTREE" || echo "STALE_DIRECTORY"
+else
+  git worktree add "$WORKTREE_PATH" -b "{subject}" 2>/dev/null || \
+  git worktree add "$WORKTREE_PATH" -B "{subject}"
+fi
+echo "WORKTREE_PATH=$WORKTREE_PATH"
+echo "REPO_ROOT=$REPO_ROOT"
+```
+
+- If `STALE_DIRECTORY`: remove the directory (`rm -rf "$WORKTREE_PATH"`) and retry `git worktree add`.
+- If `VALID_WORKTREE` or `WORKTREE_EXISTS`: reuse as-is.
+
+Store both `WORKTREE_PATH` and `REPO_ROOT`. All executers work inside the shared worktree directory, but read/write `.workflow-adapter/` from `REPO_ROOT`.
+
+If worktree is No, store `REPO_ROOT` only (run `REPO_ROOT=$(git rev-parse --show-toplevel)`).
+
 ## Step 3: Create Team
 
 ```
@@ -55,7 +83,7 @@ Task({
   team_name: "wa-{subject}",
   name: "executer-alpha",
   run_in_background: true,
-  prompt: "<system prompt from executer.md>\n\nYour subject is: {subject}\nTeam name: wa-{subject}\nYour teammate name: executer-alpha\nOther teammates: executer-beta, reviewer\nTeam leader: orchestrator\n\nYour assigned tasks from worker.md:\n- Task 1: ...\n- Task 3: ...\n\nWorktree: Yes/No (branch: {subject}-alpha if yes)\nPlan location: .workflow-adapter/{subject}/plan.md\n\nUse SendMessage to coordinate:\n- SendMessage({ to: 'orchestrator', message: '...', summary: '...' }) to report to leader\n- SendMessage({ to: 'executer-beta', message: '...', summary: '...' }) to coordinate with peers\n- SendMessage({ to: '*', message: '...', summary: '...' }) to notify all teammates"
+  prompt: "<system prompt from executer.md>\n\nYour subject is: {subject}\nTeam name: wa-{subject}\nYour teammate name: executer-alpha\nOther teammates: executer-beta, reviewer\nTeam leader: orchestrator\n\nYour assigned tasks from worker.md:\n- Task 1: ...\n- Task 3: ...\n\nWorktree: Yes/No\n{If worktree: Code changes directory: {WORKTREE_PATH} — perform all code edits inside this directory. Do NOT create or remove worktrees yourself.}\nMain repo: {REPO_ROOT}\nPlan location: {REPO_ROOT}/.workflow-adapter/{subject}/plan.md\nCheckpoint location: {REPO_ROOT}/.workflow-adapter/{subject}/checkpoint-{name}.md\n\nUse SendMessage to coordinate:\n- SendMessage({ to: 'orchestrator', message: '...', summary: '...' }) to report to leader\n- SendMessage({ to: 'executer-beta', message: '...', summary: '...' }) to coordinate with peers\n- SendMessage({ to: '*', message: '...', summary: '...' }) to notify all teammates"
 })
 ```
 
@@ -139,7 +167,7 @@ When ALL tasks in plan.md are marked `[x]` completed:
    ```
 3. If verification passes and reviewer approves:
    - Update plan.md with final status
-   - Clean up worktrees if used: `git worktree remove <path>`
+   - Clean up worktree if used: `git worktree remove "{WORKTREE_PATH}"` (branch is preserved for user review)
    - Shutdown all teammates:
      ```
      SendMessage({ to: "executer-alpha", message: { type: "shutdown_request", reason: "All tasks complete" } })
@@ -150,7 +178,22 @@ When ALL tasks in plan.md are marked `[x]` completed:
      ```
      TeamDelete()
      ```
-   - Output: **ALL JOB COMPLETE**
+   - Report to user:
+     - If worktree was used:
+       ```
+       ALL JOB COMPLETE
+
+       Changes are on branch: {subject}
+         -> Review:  git log {subject}
+         -> Merge:   git merge {subject}
+         -> Discard: git branch -D {subject}
+       ```
+     - If no worktree:
+       ```
+       ALL JOB COMPLETE
+
+       Changes were applied directly to the current branch.
+       ```
 4. If verification fails:
    - Identify failing items
    - Direct relevant executers to fix
@@ -167,6 +210,10 @@ When ALL tasks in plan.md are marked `[x]` completed:
 ## Subagent Mode
 
 _This section is used when `--subagent` flag is set. Skip TeamCreate and SendMessage. Use direct Task calls with file-based coordination via plan.md._
+
+### SA-Step 2.5: Create Worktree (if configured)
+
+Same as Step 2.5 above — run the same worktree creation script with pre-check. Store `WORKTREE_PATH` and `REPO_ROOT` for passing to all executer subagents.
 
 ### SA-Step 3: Group Tasks Into Batches
 
@@ -186,7 +233,7 @@ Task({
   description: "Executer {slot}: implement tasks {task list}",
   subagent_type: "general-purpose",
   run_in_background: true,
-  prompt: "You are an Executer subagent responsible for implementation work.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.executer.md if it exists — it takes priority.\n\nSubject: {subject}\nPlan location: .workflow-adapter/{subject}/plan.md\nAssigned tasks: {task titles and numbers}\n\nExecution Process:\n1. Read plan.md to understand your assigned tasks and dependencies\n2. For each assigned task:\n   a. Mark task as [~] in progress in plan.md\n   b. Perform the implementation work using all available tools\n   c. Verify the work meets the completion criteria defined in plan.md\n   d. Mark task as [x] completed with a brief note of changes made\n   e. If blocked: mark as [!] and write BLOCKED: {reason} in plan.md\n3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md:\n   Format: ## Completed: {task}\n   ## Files Modified: {list}\n   ## Next: {next task or Done}\n\nNo messaging is available. Update plan.md directly for all status reporting. Write only to your own assigned task rows — do not overwrite other tasks' status lines."
+  prompt: "You are an Executer subagent responsible for implementation work.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.executer.md if it exists — it takes priority.\n\nSubject: {subject}\nMain repo: {REPO_ROOT}\nPlan location: {REPO_ROOT}/.workflow-adapter/{subject}/plan.md\nAssigned tasks: {task titles and numbers}\n{If worktree: Code changes directory: {WORKTREE_PATH} — perform all code edits inside this directory. Do NOT create or remove worktrees yourself.\nCheckpoint location: {REPO_ROOT}/.workflow-adapter/{subject}/checkpoint-{slot}.md}\n\nExecution Process:\n1. Read plan.md to understand your assigned tasks and dependencies\n2. For each assigned task:\n   a. Mark task as [~] in progress in plan.md\n   b. Perform the implementation work using all available tools\n   c. Verify the work meets the completion criteria defined in plan.md\n   d. Mark task as [x] completed with a brief note of changes made\n   e. If blocked: mark as [!] and write BLOCKED: {reason} in plan.md\n3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md:\n   Format: ## Completed: {task}\n   ## Files Modified: {list}\n   ## Next: {next task or Done}\n\nNo messaging is available. Update plan.md directly for all status reporting. Write only to your own assigned task rows — do not overwrite other tasks' status lines."
 })
 ```
 
@@ -227,7 +274,11 @@ When all tasks are `[x]`:
      prompt: "You are a Reviewer subagent performing a final verification.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nPlan location: .workflow-adapter/{subject}/plan.md\n\nVerify:\n1. All tasks in plan.md are marked [x] completed\n2. All verification steps in the Verification Plan section are checked off\n3. No tasks are marked [!] blocked or [~] in progress\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N)\nRecommendations:\n- {specific fix}"
    })
    ```
-3. If verification passes: update plan.md with final status, output **ALL JOB COMPLETE**
+3. If verification passes:
+   - Update plan.md with final status
+   - Clean up worktree if used: `git worktree remove "{WORKTREE_PATH}"` (branch is preserved)
+   - Report to user (same format as Step 8 — show branch name for merge/review/discard if worktree was used)
+   - Output **ALL JOB COMPLETE**
 4. If verification fails: identify failing items and spawn fix Tasks, repeat
 
 **No TeamDelete needed** — no team was created in subagent mode.
@@ -237,6 +288,10 @@ When all tasks are `[x]`:
 ## Copilot Mode
 
 _This section is used when `--copilot` flag is set. All Analyzer, Executor, and Reviewer roles are delegated to Copilot CLI via `copilot-exec.ts`. The orchestrator (Claude) manages batching, progress tracking, and completion decisions._
+
+### CP-Step 2.5: Create Worktree (if configured)
+
+Same as Step 2.5 above — run the same worktree creation script with pre-check. Store `WORKTREE_PATH` and `REPO_ROOT` for passing to all Copilot executer subagents.
 
 ### CP-Step 3: Group Tasks Into Batches
 
@@ -364,5 +419,5 @@ Repeat CP-Steps 4–5 for each subsequent batch until all tasks in plan.md are `
 When all tasks are `[x]`:
 1. Run the verification steps listed in plan.md's "Verification Plan" section directly (orchestrator executes)
 2. Spawn one final Copilot reviewer Task (same pattern as CP-Step 5) to confirm overall completion
-3. If verification passes: update plan.md with final status, clean up prompt-*.md files, output **ALL JOB COMPLETE**
+3. If verification passes: update plan.md with final status, clean up prompt-*.md files, clean up worktree if used (`git worktree remove "{WORKTREE_PATH}"` — branch is preserved), report branch info to user (same format as Step 8), output **ALL JOB COMPLETE**
 4. If verification fails: identify failing items and spawn fix Tasks, repeat

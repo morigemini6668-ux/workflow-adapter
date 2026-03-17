@@ -46,9 +46,9 @@ If neither `brainstorming.md` nor `investigation.md` exists, inform the user to 
 ## Step 3: Ask About Worktree
 
 Use AskUserQuestion to ask the user:
-- "Should executers use git worktree for isolated work?"
-- Explain: worktree provides isolation for parallel work but adds complexity
-- Options: Yes (recommended for parallel work), No (simpler, single branch)
+- "Should this plan use a git worktree for isolated work?"
+- Explain: worktree creates a single isolated copy of the repository for this subject — all executers work inside it, keeping the main branch untouched
+- Options: Yes (recommended — isolates all changes from main), No (simpler, work directly on current branch)
 
 ## Step 4: Create plan.md
 
@@ -62,7 +62,12 @@ Create `.workflow-adapter/{subject}/plan.md` with this structure:
 
 ## Configuration
 - **Worktree**: Yes/No
+- **Worktree Branch** (if Yes): {subject}
+- **Worktree Path** (if Yes): {repo_root}/../{subject}-worktree
+- **Main Repo**: {repo_root}
 - **Executers**: {number} (see worker.md)
+
+> **Note on worktree**: When worktree is enabled, all executers work inside a single shared worktree directory for code changes. The `.workflow-adapter/` directory (plan.md, checkpoints) stays in the main repo. The orchestrator creates and removes the worktree — individual executers do not manage worktrees themselves.
 
 ## Tasks
 
@@ -107,14 +112,14 @@ Create `.workflow-adapter/{subject}/worker.md`:
 ## Executers
 - **Total**: {number}
 - **Worktree**: Yes/No
+- **Worktree Branch** (if Yes): {subject}
+- **Worktree Path** (if Yes): {repo_root}/../{subject}-worktree
 
 ### executer-alpha
 - **Tasks**: Task 1, Task 3
-- **Worktree branch** (if applicable): {subject}-alpha
 
 ### executer-beta
 - **Tasks**: Task 2, Task 4
-- **Worktree branch** (if applicable): {subject}-beta
 
 (add more as needed: gamma, delta, epsilon...)
 ```

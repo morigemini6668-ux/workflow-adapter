@@ -1,7 +1,7 @@
 ---
 name: investigate
-description: Investigates a problem by spawning historian, researcher, reviewer, and on-demand enricher teammates to analyze root causes and propose risk-assessed solutions. Produces a structured investigation.md with hypotheses, evidence chains, and recommended actions.
-argument-hint: "<optional: problem description> [--yes] [--subagent]"
+description: Investigates a problem by spawning historian, researcher, reviewer, and on-demand enricher teammates to analyze root causes and propose risk-assessed solutions. Teammates engage in structured evidence-based discussion rounds (default 1, configurable via --rounds N) where hypotheses are challenged, defended, and refined. Produces a structured investigation.md with hypotheses, evidence chains, and recommended actions.
+argument-hint: "<optional: problem description> [--yes] [--subagent] [--rounds N]"
 disable-model-invocation: true
 ---
 
@@ -25,6 +25,10 @@ When `auto_confirm = false`, a final confirmation step will be performed before 
 Also check for `--subagent` flag:
 - If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the problem description
 - If `--subagent` is absent, set `subagent_mode = false`
+
+Also check for `--rounds N` flag:
+- If `--rounds N` is present, set `discussion_rounds = N` and remove `--rounds N` from the problem description
+- If `--rounds` is absent, set `discussion_rounds = 1` (default)
 
 When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–5 and 8 entirely and proceed to "## Subagent Mode"** below instead.
 
@@ -96,44 +100,117 @@ Task({
 
 **Critical**: Set `run_in_background: true` for all teammates so they run concurrently.
 
-## Step 4: Investigation Loop
+## Step 4: Collect Initial Findings
 
 Messages from teammates are **automatically delivered** to you — no need to poll.
 
-While teammates are working:
+While teammates are working on their initial analysis:
 
 1. **Relay to user**: When a teammate requests user input, use AskUserQuestion to get the user's answer, then send it back:
    ```
    SendMessage({ to: "researcher", message: "User confirms: ...", summary: "Relaying user info" })
    ```
 
-2. **Coordinate**: Share findings between teammates:
+2. **Handle telemetry gap escalation**: When the researcher reports a telemetry gap, proceed to Step 5 to spawn an enricher. Return here after the enricher completes.
+
+3. **Handle failures**: If a teammate fails or becomes unresponsive, continue with available findings from other teammates.
+
+Wait until all three teammates (historian, researcher, reviewer) have sent their initial findings.
+
+## Step 4.5: Moderated Discussion (`discussion_rounds` rounds)
+
+After collecting initial findings, you become the **moderator** of a structured discussion. The goal is analytical — converge on root causes through evidence-based debate between teammates.
+
+Repeat the following round structure for `discussion_rounds` rounds (default: 1).
+
+### Each Round (round K of discussion_rounds)
+
+**4.5a. Share & Challenge**
+
+1. **Share historian's context** and ask for analytical reactions:
    ```
-   SendMessage({ to: "*", message: "Historian found: related incident in commit abc123...", summary: "Sharing historical finding" })
+   SendMessage({
+     to: "researcher",
+     message: "[Moderator] Round {K}/{discussion_rounds} — The historian found:\n\n{summarize historian's findings}\n\nDoes this historical context support or refute any of your hypotheses? Any past incidents that match the current pattern?",
+     summary: "Round {K}: sharing historian context"
+   })
+   SendMessage({
+     to: "reviewer",
+     message: "[Moderator] Round {K}/{discussion_rounds} — The historian found:\n\n{summarize historian's findings}\n\nAre there gaps in this historical analysis? Past patterns that were overlooked?",
+     summary: "Round {K}: sharing historian context for review"
+   })
    ```
 
-3. **Direct additional analysis**: Based on findings, send new investigation tasks:
+2. **Share researcher's hypotheses** and ask for challenges:
    ```
-   SendMessage({ to: "researcher", message: "Please also investigate: ...", summary: "Additional investigation request" })
+   SendMessage({
+     to: "historian",
+     message: "[Moderator] Round {K}/{discussion_rounds} — The researcher proposes these hypotheses:\n\n{ranked hypotheses with evidence}\n\nDoes the project history support or contradict these? Any past root causes that match?",
+     summary: "Round {K}: sharing hypotheses for historian validation"
+   })
+   SendMessage({
+     to: "reviewer",
+     message: "[Moderator] Round {K}/{discussion_rounds} — The researcher proposes:\n\n{ranked hypotheses with evidence}\n\nChallenge these hypotheses. Is the evidence sufficient? Are there alternative explanations? What's the weakest link in each evidence chain?",
+     summary: "Round {K}: sharing hypotheses for reviewer challenge"
+   })
    ```
 
-4. **Validate reviewer feedback**: When the reviewer sends issues or challenges, critically evaluate them before acting:
-   - **Assess relevance**: Is the concern relevant to the current problem?
-   - **Assess feasibility**: Is the reviewer's suggested alternative investigation practically achievable?
-   - **Assess proportionality**: Is the severity appropriate?
-   - **Accept or push back**: If valid, incorporate. If not, explain reasoning:
+3. **Relay challenges back** for defense or revision:
+   - When the reviewer challenges a hypothesis:
      ```
-     SendMessage({ to: "reviewer", message: "Regarding your concern about X: I disagree because [reasoning].", summary: "Pushing back on reviewer concern" })
+     SendMessage({
+       to: "researcher",
+       message: "[Moderator] The reviewer challenges hypothesis X:\n\n{reviewer's critique}\n\nCan you strengthen the evidence, or should this hypothesis be deprioritized?",
+       summary: "Relaying reviewer challenge"
+     })
      ```
-   - **Do NOT blindly accept all reviewer feedback** — the orchestrator makes final judgments based on full context.
+   - When the historian provides contradicting context:
+     ```
+     SendMessage({
+       to: "researcher",
+       message: "[Moderator] The historian points out:\n\n{historian's context}\n\nDoes this change your root cause analysis?",
+       summary: "Relaying historian context"
+     })
+     ```
 
-5. **Handle telemetry gap escalation** (see Step 5):
-   When the researcher reports a telemetry gap, proceed to Step 5 to spawn an enricher.
+4. **Direct additional analysis** if discussion reveals new leads:
+   ```
+   SendMessage({ to: "researcher", message: "[Moderator] Based on the discussion, please also investigate: ...", summary: "Additional investigation request" })
+   ```
 
-Continue this cycle until:
-- Root cause(s) are identified with supporting evidence
-- Solutions are proposed and reviewed for risks
-- The reviewer confirms the analysis is sound
+**4.5b. Convergence Check**
+
+After collecting all reactions for this round:
+
+1. Assess: is there agreement on root cause(s) and proposed solutions?
+2. If unresolved and NOT the final round: summarize the contention briefly, continue to next round.
+3. If unresolved and this IS the final round: escalate to the user:
+   - Summarize competing hypotheses and evidence gaps
+   - Use AskUserQuestion to get the user's direction
+   - Relay the user's decision back to all teammates
+4. If consensus reached: early-exit the loop.
+
+**4.5c. Between-Round Summary (rounds 2+ only)**
+
+At the start of each new round (K > 1):
+```
+SendMessage({
+  to: "*",
+  message: "[Moderator] Round {K} starting. Previous round:\n- Hypotheses strengthened: {list}\n- Hypotheses weakened/dropped: {list}\n- New leads identified: {list}\n- Remaining disputes: {list}\n\nFocus this round on the remaining disputes and new leads.",
+  summary: "Round {K} kickoff"
+})
+```
+
+### Moderation Guidelines
+
+- **Evidence-first**: Unlike brainstorming (creative), investigation demands evidence. Push teammates to cite specific code paths, logs, or data.
+- **Validate reviewer feedback critically**: Assess relevance, feasibility, and proportionality before acting. Push back on concerns that don't apply:
+  ```
+  SendMessage({ to: "reviewer", message: "[Moderator] Your concern about X: I disagree because [reasoning]. Can you provide specific evidence?", summary: "Pushing back on reviewer concern" })
+  ```
+- **Do NOT blindly accept all reviewer feedback** — the orchestrator makes final judgments based on full context.
+- **Surface disagreements explicitly**: When teammates disagree on root cause, make the disagreement visible and ask each side to present their strongest evidence.
+- **Early-exit when solved**: If root cause is clearly identified and agreed upon before all rounds complete, stop the discussion loop and proceed.
 
 ## Step 5: Telemetry Enrichment (on-demand)
 
@@ -224,6 +301,9 @@ Compile all investigation results into `.workflow-adapter/{subject}/investigatio
 
 ### Hypotheses
 {ranked hypotheses with supporting/refuting evidence}
+
+### Discussion Summary
+{key points of debate between teammates — which hypotheses were challenged, what evidence was contested, where consensus was reached vs. where disagreement remained}
 
 ### Root Cause
 {identified root cause(s) with evidence chain}

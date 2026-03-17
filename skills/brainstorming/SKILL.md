@@ -1,7 +1,7 @@
 ---
 name: brainstorming
-description: Starts a brainstorming session for a given subject. Spawns historian, researcher, and reviewer teammates who work concurrently, then the orchestrator moderates a group discussion where teammates debate and react to each other's findings. Produces a structured brainstorming.md output.
-argument-hint: "<optional: subject description> [--yes] [--subagent]"
+description: Starts a brainstorming session for a given subject. Spawns historian, researcher, and reviewer teammates who work concurrently, then the orchestrator moderates a multi-round group discussion (default 2 rounds, configurable via --rounds N) where teammates debate and react to each other's findings. Produces a structured brainstorming.md output.
+argument-hint: "<optional: subject description> [--yes] [--subagent] [--rounds N]"
 disable-model-invocation: true
 ---
 
@@ -23,6 +23,10 @@ When `auto_confirm = false`, a final confirmation step will be performed before 
 Also check for `--subagent` flag:
 - If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the subject description
 - If `--subagent` is absent, set `subagent_mode = false`
+
+Also check for `--rounds N` flag:
+- If `--rounds N` is present, set `discussion_rounds = N` and remove `--rounds N` from the subject description
+- If `--rounds` is absent, set `discussion_rounds = 2` (default)
 
 When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–5 and 8 entirely and proceed to "## Subagent Mode"** below instead.
 
@@ -94,23 +98,27 @@ While teammates are working on their initial research:
 
 Wait until all three teammates (historian, researcher, reviewer) have sent their initial findings.
 
-## Step 5: Moderated Discussion
+## Step 5: Moderated Discussion (`discussion_rounds` rounds)
 
 You are now the **moderator/facilitator** of a group discussion. Your role is to relay messages between teammates so they can react to, challenge, and build upon each other's findings. **Do NOT just compile results — facilitate actual debate.**
 
-### Round 1: Share & React
+Repeat the following round structure for `discussion_rounds` rounds (default: 2).
+
+### Each Round (round K of discussion_rounds)
+
+**5a. Share & Cross-pollinate**
 
 1. **Share historian's context with everyone** and ask for reactions:
    ```
    SendMessage({
      to: "researcher",
-     message: "[Moderator] The historian found the following context:\n\n{summarize historian's findings}\n\nDoes this align with or contradict your research? Are there gaps in the historical context that your research can fill? Please share your reaction.",
-     summary: "Sharing historian findings for discussion"
+     message: "[Moderator] Round {K}/{discussion_rounds} — The historian found the following context:\n\n{summarize historian's findings}\n\nDoes this align with or contradict your research? Are there gaps in the historical context that your research can fill? Please share your reaction.",
+     summary: "Round {K}: sharing historian findings"
    })
    SendMessage({
      to: "reviewer",
-     message: "[Moderator] The historian found the following context:\n\n{summarize historian's findings}\n\nAre there any concerns about this historical context? Missing perspectives? Please share your critical assessment.",
-     summary: "Sharing historian findings for review"
+     message: "[Moderator] Round {K}/{discussion_rounds} — The historian found the following context:\n\n{summarize historian's findings}\n\nAre there any concerns about this historical context? Missing perspectives? Please share your critical assessment.",
+     summary: "Round {K}: sharing historian findings for review"
    })
    ```
 
@@ -118,13 +126,13 @@ You are now the **moderator/facilitator** of a group discussion. Your role is to
    ```
    SendMessage({
      to: "historian",
-     message: "[Moderator] The researcher found:\n\n{summarize researcher's findings}\n\nDoes this align with past project decisions and patterns? Any historical precedent that supports or contradicts these findings?",
-     summary: "Sharing research for historian reaction"
+     message: "[Moderator] Round {K}/{discussion_rounds} — The researcher found:\n\n{summarize researcher's findings}\n\nDoes this align with past project decisions and patterns? Any historical precedent that supports or contradicts these findings?",
+     summary: "Round {K}: sharing research for historian reaction"
    })
    SendMessage({
      to: "reviewer",
-     message: "[Moderator] The researcher found:\n\n{summarize researcher's findings}\n\nChallenge these findings. What assumptions are being made? What alternatives were overlooked?",
-     summary: "Sharing research for reviewer challenge"
+     message: "[Moderator] Round {K}/{discussion_rounds} — The researcher found:\n\n{summarize researcher's findings}\n\nChallenge these findings. What assumptions are being made? What alternatives were overlooked?",
+     summary: "Round {K}: sharing research for reviewer challenge"
    })
    ```
 
@@ -146,21 +154,36 @@ You are now the **moderator/facilitator** of a group discussion. Your role is to
      })
      ```
 
-### Round 2: Convergence (if needed)
+**5b. Convergence Check**
 
-If there are unresolved disagreements or open questions after Round 1:
+After collecting all reactions for this round:
 
-1. Summarize the points of contention for the user
-2. Use AskUserQuestion to get the user's direction on disputed points
-3. Relay the user's decision back to all teammates:
-   ```
-   SendMessage({
-     to: "*",
-     message: "[Moderator] The user has decided: {decision}. Please incorporate this into your final position.",
-     summary: "Relaying user decision to all"
-   })
-   ```
-4. Allow one more round of brief reactions if needed
+1. Assess: are there unresolved disagreements or open questions?
+2. If yes and this is NOT the final round: summarize the contention points briefly and continue to the next round — the ongoing discussion may resolve them.
+3. If yes and this IS the final round (round K = discussion_rounds): escalate to the user:
+   - Summarize the points of contention
+   - Use AskUserQuestion to get the user's direction on disputed points
+   - Relay the user's decision back to all teammates:
+     ```
+     SendMessage({
+       to: "*",
+       message: "[Moderator] The user has decided: {decision}. Please incorporate this into your final position.",
+       summary: "Relaying user decision to all"
+     })
+     ```
+   - Allow one final round of brief reactions
+4. If no unresolved disagreements: early-exit the loop — no need to force more rounds when consensus is reached.
+
+**5c. Between-Round Summary (rounds 2+ only)**
+
+At the start of each new round (K > 1), briefly summarize what changed in the previous round before sharing new findings:
+```
+SendMessage({
+  to: "*",
+  message: "[Moderator] Round {K} starting. Previous round summary:\n- {key shifts in position}\n- {resolved disagreements}\n- {remaining open questions}\n\nLet's dig deeper on the open items.",
+  summary: "Round {K} kickoff summary"
+})
+```
 
 ### Moderation Guidelines
 
@@ -172,12 +195,7 @@ If there are unresolved disagreements or open questions after Round 1:
   SendMessage({ to: "reviewer", message: "[Moderator] Your concern about X seems disproportionate because [reasoning]. Can you clarify why this is critical?", summary: "Pushing back on reviewer concern" })
   ```
 - **Keep discussion focused**: If discussion drifts, redirect teammates back to the subject
-- **Know when to stop**: End discussion when key positions have been aired and either consensus or clear disagreement is established
-
-Continue this cycle until:
-- The user is satisfied with the brainstorming depth
-- All key questions have been answered
-- Major disagreements are resolved or explicitly acknowledged
+- **Know when to stop**: End discussion when key positions have been aired and either consensus or clear disagreement is established — early-exit is encouraged if consensus is reached before all rounds are used
 
 ## Step 6: Final Confirmation (if auto_confirm = false)
 

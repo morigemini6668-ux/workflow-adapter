@@ -37,6 +37,7 @@ export class BrowserManager {
   private lastSnapshot: string | null = null;
   private dialogAutoAccept: boolean = true;
   private dialogPromptText: string | null = null;
+  private isHeaded: boolean = false;
   private consecutiveFailures: number = 0;
 
   async launch() {
@@ -340,6 +341,93 @@ export class BrowserManager {
     }
   }
 
+  // ─── Handoff: Headless → Headed ─────────────────────────────
+  /**
+   * Hand off browser control to the user by relaunching in headed mode.
+   * Useful for 2FA, CAPTCHA, or complex auth flows.
+   *
+   * Flow (launch-first-close-second for safe rollback):
+   *   1. Save state from current headless browser
+   *   2. Launch NEW headed browser
+   *   3. Restore state into new browser
+   *   4. Close OLD headless browser
+   *   If step 2 fails → return error, headless browser untouched
+   */
+  async handoff(message: string): Promise<string> {
+    if (this.isHeaded) {
+      return `HANDOFF: Already in headed mode at ${this.getCurrentUrl()}`;
+    }
+    if (!this.browser || !this.context) {
+      throw new Error('Browser not launched');
+    }
+
+    // 1. Save state
+    const state = await this.saveState();
+    const currentUrl = this.getCurrentUrl();
+
+    // 2. Launch new headed browser
+    let newBrowser: Browser;
+    try {
+      newBrowser = await chromium.launch({ headless: false, timeout: 15000 });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return `ERROR: Cannot open headed browser — ${msg}. Headless browser still running.`;
+    }
+
+    // 3. Create context and restore state
+    try {
+      const contextOptions: BrowserContextOptions = {
+        viewport: { width: 1280, height: 720 },
+      };
+      if (this.customUserAgent) contextOptions.userAgent = this.customUserAgent;
+      const newContext = await newBrowser.newContext(contextOptions);
+
+      if (Object.keys(this.extraHeaders).length > 0) {
+        await newContext.setExtraHTTPHeaders(this.extraHeaders);
+      }
+
+      const oldBrowser = this.browser;
+      this.browser = newBrowser;
+      this.context = newContext;
+      this.pages.clear();
+
+      this.browser.on('disconnected', () => {
+        console.error('[qa-browse] FATAL: Chromium crashed. Server exiting.');
+        process.exit(1);
+      });
+
+      await this.restoreState(state);
+      this.isHeaded = true;
+
+      // 4. Close old headless browser (fire-and-forget)
+      oldBrowser.removeAllListeners('disconnected');
+      oldBrowser.close().catch(() => {});
+
+      return [
+        `HANDOFF: Browser opened at ${currentUrl}`,
+        `MESSAGE: ${message}`,
+        `STATUS: Waiting for user. Run 'resume' when done.`,
+      ].join('\n');
+    } catch (err: unknown) {
+      await newBrowser.close().catch(() => {});
+      const msg = err instanceof Error ? err.message : String(err);
+      return `ERROR: Handoff failed — ${msg}. Headless browser still running.`;
+    }
+  }
+
+  /**
+   * Resume AI control after user handoff.
+   * Clears stale refs and resets failure counter.
+   */
+  resume(): void {
+    this.clearRefs();
+    this.resetFailures();
+  }
+
+  getIsHeaded(): boolean {
+    return this.isHeaded;
+  }
+
   // ─── Failure Tracking ──────────────────────────────────────
   incrementFailures(): void {
     this.consecutiveFailures++;
@@ -350,6 +438,9 @@ export class BrowserManager {
   }
 
   getFailureHint(): string | null {
+    if (this.consecutiveFailures >= 3 && !this.isHeaded) {
+      return `HINT: ${this.consecutiveFailures} consecutive failures. Consider using 'handoff' to let the user help.`;
+    }
     if (this.consecutiveFailures >= 3) {
       return `HINT: ${this.consecutiveFailures} consecutive failures. Try running 'snapshot' for fresh refs.`;
     }

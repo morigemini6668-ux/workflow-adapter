@@ -22,6 +22,7 @@ export const META_COMMANDS = new Set([
   'screenshot', 'pdf', 'responsive',
   'chain', 'diff',
   'url', 'snapshot',
+  'handoff', 'resume',
 ]);
 
 export const ALL_COMMANDS = new Set([...READ_COMMANDS, ...WRITE_COMMANDS, ...META_COMMANDS]);
@@ -77,4 +78,6 @@ export const COMMAND_DESCRIPTIONS: Record<string, { category: string; descriptio
   'restart': { category: 'Server', description: 'Restart server' },
   'snapshot':{ category: 'Snapshot', description: 'Accessibility tree with @e refs', usage: 'snapshot [flags]' },
   'chain':   { category: 'Meta', description: 'Run commands from JSON stdin' },
+  'handoff': { category: 'Server', description: 'Open visible Chrome for user takeover (2FA, CAPTCHA)', usage: 'handoff [message]' },
+  'resume':  { category: 'Server', description: 'Re-snapshot after user takeover, return control to AI' },
 };

@@ -265,16 +265,39 @@ Before saving results, present a summary of all findings to the user using AskUs
 ```
 AskUserQuestion({
   questions: [{
-    question: "Here is a summary of the investigation:\n\n**Root Cause(s):**\n{identified root causes with evidence}\n\n**Proposed Solutions:**\n{solutions with risk assessments}\n\n**Telemetry Added:**\n{any instrumentation changes, or 'None'}\n\nAre these findings and proposed solutions appropriate? Select 'Approve' to save results, or 'Revise' to discuss changes.",
+    question: "Here is a summary of the investigation:\n\n**Root Cause(s):**\n{identified root causes with evidence}\n\n**Proposed Solutions:**\n{solutions with risk assessments}\n\n**Telemetry Added:**\n{any instrumentation changes, or 'None'}\n\nAre these findings and proposed solutions appropriate?",
     header: "Confirm",
     options: [
       { label: "Approve all", description: "Findings look good. Save results and proceed." },
-      { label: "Revise", description: "I want to revisit some conclusions before finalizing." }
+      { label: "Discuss further", description: "I want to discuss specific aspects with the team before finalizing." },
+      { label: "Revise", description: "I want to directly revise some conclusions without team discussion." }
     ],
     multiSelect: false
   }]
 })
 ```
+
+If the user selects **"Discuss further"**:
+1. Ask the user what they want to discuss:
+   ```
+   AskUserQuestion({
+     questions: [{
+       question: "What would you like to discuss with the team? For example: a specific hypothesis you want challenged, a solution you want explored deeper, an alternative approach, or a risk you're concerned about.",
+       header: "Discussion Topic"
+     }]
+   })
+   ```
+2. Run additional discussion round(s) with the team on the user's topic. Share the user's question with all teammates and moderate a focused, evidence-based discussion:
+   ```
+   SendMessage({
+     to: "*",
+     message: "[Moderator] The user wants to discuss the following before finalizing:\n\n{user's topic/question}\n\nPlease share your perspective with supporting evidence. Historian: any relevant past context? Researcher: what does your analysis suggest? Reviewer: any risks or concerns?",
+     summary: "User-initiated discussion topic"
+   })
+   ```
+3. Moderate the responses — relay challenges and evidence between teammates as in Step 4.5. Push for evidence-based responses, not speculation. Continue for as many exchanges as needed until the topic is sufficiently explored.
+4. Summarize the discussion outcome for the user, including any new findings or shifted positions.
+5. Return to this Step 6 to ask for confirmation again — the user can approve, discuss another topic, or revise.
 
 If the user selects **"Revise"**:
 - Ask which specific findings they want to change
@@ -331,6 +354,8 @@ Compile all investigation results into `.workflow-adapter/{subject}/investigatio
 ```
 
 ## Step 8: Shutdown Team
+
+**Important**: Only execute this step after Step 7 (Save Results) is complete. Do NOT shut down teammates during Step 4.5 (Discussion), Step 5 (Telemetry Enrichment), or Step 6 (Final Confirmation) — teammates must remain active while the user may still choose "Discuss further" or "Revise" in Step 6.
 
 After saving results, shut down all teammates:
 ```

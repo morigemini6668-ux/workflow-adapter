@@ -1,6 +1,7 @@
 ---
 name: retrospective
-description: This skill should be used when the user asks to "retrospective", "retro", "회고", "세션 회고", "principle auto-detect", "원칙 자동 감지", "원칙 추출", "extract principles", "learn from session", "세션에서 배우기", or wants to analyze a completed workflow session to extract conventions, patterns, and lessons learned, then suggest updates to principle.md. Inspired by REAP's genome-sync concept.
+description: Analyze a completed workflow session to extract conventions, patterns, and lessons learned, then suggest updates to principle.md. Use this skill when the user mentions "retrospective", "retro", "회고", "세션 회고", "principle auto-detect", "원칙 자동 감지", "extract principles", "learn from session", or wants to codify lessons from a past workflow into reusable principles.
+argument-hint: "<optional: subject name> [--all]"
 ---
 
 # Retrospective — Principle Auto-Detection for Workflow Adapter
@@ -59,7 +60,7 @@ If the subject had code changes (check for a branch matching the subject name or
 git branch --list "*{subject}*"
 
 # If found, get the diff against the base branch
-git log --oneline {subject-branch}..HEAD 2>/dev/null || true
+git log --oneline main..{subject-branch} 2>/dev/null || true
 git diff main...{subject-branch} --stat 2>/dev/null || true
 ```
 

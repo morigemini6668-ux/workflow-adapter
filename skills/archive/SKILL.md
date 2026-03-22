@@ -1,6 +1,7 @@
 ---
 name: archive
-description: This skill should be used when the user asks to "archive", "아카이브", "정리", "cleanup", "subject 정리", "ADR", "archive subject", "create ADR", "아카이브 실행", "결정 기록", "정리해줘", "subject cleanup", "migrate subjects", or wants to archive completed workflow subjects by extracting architectural decision records (ADRs) and cleaning up subject directories.
+description: Archive completed workflow subjects by extracting architectural decision records (ADRs) and cleaning up subject directories. Use this skill when the user mentions "archive", "아카이브", "정리", "cleanup", "ADR", "결정 기록", or wants to preserve decisions from past sessions while keeping .workflow-adapter/ lean.
+argument-hint: "<subject name> | --all | --migrate"
 ---
 
 # Archive Skill for Workflow Adapter

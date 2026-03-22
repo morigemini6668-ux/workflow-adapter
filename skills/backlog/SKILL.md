@@ -1,6 +1,7 @@
 ---
 name: backlog
-description: This skill should be used when the user asks to "backlog add", "backlog list", "backlog consume", "backlog defer", "backlog remove", "백로그 추가", "백로그 보기", "백로그 목록", "백로그 소비", "백로그 처리", "백로그 미루기", "백로그 삭제", "deferred items", "보류 항목", or wants to manage deferred work items that persist across workflow sessions. Backlog items track tasks, principle changes, and environment changes that were identified but not addressed in the current session.
+description: Manage deferred work items (tasks, principle changes, environment changes) that persist across workflow sessions. Supports CRUD operations — add, list, consume, defer, remove. Use this skill when the user mentions "backlog", "백로그", "deferred items", "보류 항목", or wants to track work identified but not addressed in the current session, even if they don't use the word "backlog" explicitly.
+argument-hint: "<operation: add|list|consume|defer|remove> [item details]"
 ---
 
 # Backlog Management for Workflow Adapter

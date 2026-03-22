@@ -11,10 +11,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn as nodeSpawn } from 'child_process';
 import { resolveConfig, ensureStateDir } from './config';
 
 const config = resolveConfig();
 const MAX_START_WAIT = 8000;
+const IS_WINDOWS = process.platform === 'win32';
 
 function resolveServerScript(): string {
   if (process.env.QA_BROWSE_SERVER_SCRIPT) return process.env.QA_BROWSE_SERVER_SCRIPT;
@@ -67,11 +69,36 @@ async function startServer(): Promise<ServerState> {
   ensureStateDir(config);
   try { fs.unlinkSync(config.stateFile); } catch {}
 
-  const proc = Bun.spawn(['bun', 'run', SERVER_SCRIPT], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, QA_BROWSE_STATE_FILE: config.stateFile },
-  });
-  proc.unref();
+  // On Windows, Bun cannot launch Playwright browsers due to missing named
+  // pipe support (oven-sh/bun#13042). Fall back to Node + tsx as the server
+  // runtime so Playwright works correctly.
+  let serverCmd: string[];
+  if (IS_WINDOWS) {
+    // Resolve tsx from qa-browse's own node_modules so it works regardless of CWD.
+    // --import requires file:// URLs on Windows (bare paths have 'c:' scheme error).
+    const qaDir = path.dirname(path.dirname(SERVER_SCRIPT)); // qa-browse root
+    const tsxPath = path.join(qaDir, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs');
+    const tsxUrl = 'file:///' + tsxPath.replace(/\\/g, '/');
+    serverCmd = ['node', '--import', tsxUrl, SERVER_SCRIPT];
+  } else {
+    serverCmd = ['bun', 'run', SERVER_SCRIPT];
+  }
+  if (IS_WINDOWS) {
+    // Use Node child_process.spawn with detached:true so the server survives
+    // after the CLI process exits. Bun.spawn doesn't reliably detach on Windows.
+    const cp = nodeSpawn(serverCmd[0], serverCmd.slice(1), {
+      stdio: 'ignore',
+      detached: true,
+      env: { ...process.env, QA_BROWSE_STATE_FILE: config.stateFile },
+    });
+    cp.unref();
+  } else {
+    const proc = Bun.spawn(serverCmd, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, QA_BROWSE_STATE_FILE: config.stateFile },
+    });
+    proc.unref();
+  }
 
   const start = Date.now();
   while (Date.now() - start < MAX_START_WAIT) {

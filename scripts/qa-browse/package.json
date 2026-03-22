@@ -7,13 +7,11 @@
     "build": "bun build --compile src/cli.ts --outfile dist/qa-browse && echo 'Built: dist/qa-browse'",
     "dev": "bun run src/cli.ts",
     "server": "bun run src/server.ts",
-    "postinstall": "bunx playwright install chromium"
+    "postinstall": "npx playwright install chromium"
   },
   "dependencies": {
     "playwright": "^1.58.2",
-    "diff": "^7.0.0"
-  },
-  "engines": {
-    "bun": ">=1.0.0"
+    "diff": "^7.0.0",
+    "tsx": "^4.21.0"
   }
 }

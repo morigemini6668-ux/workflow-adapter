@@ -254,7 +254,11 @@ export async function handleSnapshot(
     const screenshotPath = opts.outputPath || '/tmp/qa-browse-annotated.png';
     const resolvedPath = require('path').resolve(screenshotPath);
     const safeDirs = ['/tmp', process.cwd()];
-    if (!safeDirs.some((dir: string) => resolvedPath === dir || resolvedPath.startsWith(dir + '/'))) {
+    const normPath = resolvedPath.replace(/\\/g, '/').toLowerCase();
+    if (!safeDirs.some((dir: string) => {
+      const nd = dir.replace(/\\/g, '/').toLowerCase();
+      return normPath === nd || normPath.startsWith(nd + '/');
+    })) {
       throw new Error(`Path must be within: ${safeDirs.join(', ')}`);
     }
     try {

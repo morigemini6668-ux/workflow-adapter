@@ -230,7 +230,11 @@ export async function handleWriteCommand(
       if (path.isAbsolute(filePath)) {
         const safeDirs = ['/tmp', process.cwd()];
         const resolved = path.resolve(filePath);
-        if (!safeDirs.some(dir => resolved === dir || resolved.startsWith(dir + '/'))) {
+        const normResolved = resolved.replace(/\\/g, '/').toLowerCase();
+        if (!safeDirs.some(dir => {
+          const nd = dir.replace(/\\/g, '/').toLowerCase();
+          return normResolved === nd || normResolved.startsWith(nd + '/');
+        })) {
           throw new Error(`Path must be within: ${safeDirs.join(', ')}`);
         }
       }

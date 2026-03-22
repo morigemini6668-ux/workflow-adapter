@@ -6,6 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 
 export interface BrowseConfig {
   projectDir: string;
@@ -18,13 +19,11 @@ export interface BrowseConfig {
 
 export function getGitRoot(): string | null {
   try {
-    const proc = Bun.spawnSync(['git', 'rev-parse', '--show-toplevel'], {
-      stdout: 'pipe',
-      stderr: 'pipe',
+    const out = execSync('git rev-parse --show-toplevel', {
       timeout: 2_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-    if (proc.exitCode !== 0) return null;
-    return proc.stdout.toString().trim() || null;
+    return out.toString().trim() || null;
   } catch {
     return null;
   }

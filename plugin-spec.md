@@ -65,7 +65,7 @@
 ## plan
 - `{basePath}/{subject}/brainstorming.md`를 기반으로 `{basePath}/{subject}/plan.md` 를 생성하는 스킬
 - plan.md에는 작업 목록이 나열되어야 한다
-- 유저가 worktree를 활용해달라고 하면, worktree를 사용하여 격리된 상태로 작업하는 것을 가정하고 계획을 세워야한다
+- 유저가 worktree를 활용해달라고 하면, subject 단위로 하나의 worktree를 생성하여 격리된 환경에서 작업하는 것을 가정하고 계획을 세워야한다
 - 작업을 수행하는 executer는 병렬적으로 실행이 되므로, 총 몇개의 executer가 필요한지 명시해야한다
   - `{basePath}/{subject}/worker.md`에 명시한다.
 - 작업 목록은 진행상태, 변경사항을 적을 수 있는 형태여야한다

@@ -31,10 +31,18 @@ function wrapForEvaluate(code: string): string {
 
 const SAFE_DIRECTORIES = ['/tmp', process.cwd()];
 
+function isWithinSafeDirs(resolved: string, safeDirs: string[]): boolean {
+  const norm = resolved.replace(/\\/g, '/').toLowerCase();
+  return safeDirs.some(dir => {
+    const nd = dir.replace(/\\/g, '/').toLowerCase();
+    return norm === nd || norm.startsWith(nd + '/');
+  });
+}
+
 export function validateReadPath(filePath: string): void {
   if (path.isAbsolute(filePath)) {
     const resolved = path.resolve(filePath);
-    const isSafe = SAFE_DIRECTORIES.some(dir => resolved === dir || resolved.startsWith(dir + '/'));
+    const isSafe = isWithinSafeDirs(resolved, SAFE_DIRECTORIES);
     if (!isSafe) throw new Error(`Absolute path must be within: ${SAFE_DIRECTORIES.join(', ')}`);
   }
   if (path.normalize(filePath).includes('..')) {

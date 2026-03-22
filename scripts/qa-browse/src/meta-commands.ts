@@ -14,7 +14,11 @@ const SAFE_DIRECTORIES = ['/tmp', process.cwd()];
 
 function validateOutputPath(filePath: string): void {
   const resolved = path.resolve(filePath);
-  const isSafe = SAFE_DIRECTORIES.some(dir => resolved === dir || resolved.startsWith(dir + '/'));
+  const normResolved = resolved.replace(/\\/g, '/').toLowerCase();
+  const isSafe = SAFE_DIRECTORIES.some(dir => {
+    const nd = dir.replace(/\\/g, '/').toLowerCase();
+    return normResolved === nd || normResolved.startsWith(nd + '/');
+  });
   if (!isSafe) throw new Error(`Path must be within: ${SAFE_DIRECTORIES.join(', ')}`);
 }
 

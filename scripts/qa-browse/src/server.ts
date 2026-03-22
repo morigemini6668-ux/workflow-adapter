@@ -17,6 +17,10 @@ import { consoleBuffer, networkBuffer, dialogBuffer } from './buffers';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import * as http from 'http';
+import * as net from 'net';
+
+const IS_BUN = typeof globalThis.Bun !== 'undefined';
 
 // ─── Config ─────────────────────────────────────────────────────
 const config = resolveConfig();
@@ -145,25 +149,62 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 // ─── Port Discovery ─────────────────────────────────────────────
+function probePortNode(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(false));
+    srv.listen(port, '127.0.0.1', () => { srv.close(() => resolve(true)); });
+  });
+}
+
 async function findPort(): Promise<number> {
   if (BROWSE_PORT) {
-    try {
-      const s = Bun.serve({ port: BROWSE_PORT, fetch: () => new Response('ok') });
-      s.stop();
-      return BROWSE_PORT;
-    } catch {
+    if (IS_BUN) {
+      try { const s = Bun.serve({ port: BROWSE_PORT, fetch: () => new Response('ok') }); s.stop(); return BROWSE_PORT; }
+      catch { throw new Error(`Port ${BROWSE_PORT} is in use`); }
+    } else {
+      if (await probePortNode(BROWSE_PORT)) return BROWSE_PORT;
       throw new Error(`Port ${BROWSE_PORT} is in use`);
     }
   }
   for (let attempt = 0; attempt < 5; attempt++) {
     const port = 10000 + Math.floor(Math.random() * 50000);
-    try {
-      const s = Bun.serve({ port, fetch: () => new Response('ok') });
-      s.stop();
-      return port;
-    } catch { continue; }
+    if (IS_BUN) {
+      try { const s = Bun.serve({ port, fetch: () => new Response('ok') }); s.stop(); return port; }
+      catch { continue; }
+    } else {
+      if (await probePortNode(port)) return port;
+    }
   }
   throw new Error('No available port found');
+}
+
+// ─── Node HTTP adapter ──────────────────────────────────────────
+function startNodeServer(port: number, handler: (req: Request) => Promise<Response>): void {
+  const server = http.createServer(async (req, res) => {
+    try {
+      const url = `http://127.0.0.1:${port}${req.url}`;
+      const body = await new Promise<string>((resolve) => {
+        let data = '';
+        req.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+        req.on('end', () => resolve(data));
+      });
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (v) headers.set(k, Array.isArray(v) ? v[0] : v);
+      }
+      const init: RequestInit = { method: req.method, headers };
+      if (req.method !== 'GET' && req.method !== 'HEAD' && body) init.body = body;
+      const request = new Request(url, init);
+      const response = await handler(request);
+      res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
+      res.end(await response.text());
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+  server.listen(port, '127.0.0.1');
 }
 
 // ─── Start ─────────────────────────────────────────────────────
@@ -176,34 +217,36 @@ async function start() {
   await browserManager.launch();
 
   const startTime = Date.now();
-  Bun.serve({
-    port,
-    hostname: '127.0.0.1',
-    fetch: async (req) => {
-      lastActivity = Date.now();
-      const url = new URL(req.url);
+  const handler = async (req: Request): Promise<Response> => {
+    lastActivity = Date.now();
+    const url = new URL(req.url);
 
-      if (url.pathname === '/health') {
-        const healthy = await browserManager.isHealthy();
-        return new Response(JSON.stringify({
-          status: healthy ? 'healthy' : 'unhealthy',
-          uptime: Math.floor((Date.now() - startTime) / 1000),
-          tabs: browserManager.getTabCount(),
-          currentUrl: browserManager.getCurrentUrl(),
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
+    if (url.pathname === '/health') {
+      const healthy = await browserManager.isHealthy();
+      return new Response(JSON.stringify({
+        status: healthy ? 'healthy' : 'unhealthy',
+        uptime: Math.floor((Date.now() - startTime) / 1000),
+        tabs: browserManager.getTabCount(),
+        currentUrl: browserManager.getCurrentUrl(),
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
 
-      if (!validateAuth(req)) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-      }
+    if (!validateAuth(req)) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
 
-      if (url.pathname === '/command' && req.method === 'POST') {
-        return handleCommand(await req.json());
-      }
+    if (url.pathname === '/command' && req.method === 'POST') {
+      return handleCommand(await req.json());
+    }
 
-      return new Response('Not found', { status: 404 });
-    },
-  });
+    return new Response('Not found', { status: 404 });
+  };
+
+  if (IS_BUN) {
+    Bun.serve({ port, hostname: '127.0.0.1', fetch: handler });
+  } else {
+    startNodeServer(port, handler);
+  }
 
   // Write state file atomically
   const state = {

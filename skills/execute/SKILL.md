@@ -12,6 +12,23 @@ Before starting any work:
 1. Check if `.workflow-adapter/principle.md` exists. If it does, read it and follow all its directives.
 2. Check if `.workflow-adapter/principle.orchestrator.md` exists. If it does, follow its directives (takes priority over `principle.md` on conflicts).
 
+**Backlog Check:**
+Check if `.workflow-adapter/backlog/` exists and contains `.md` files with `status: pending` in their frontmatter. If pending items exist, briefly list them to the user and ask:
+```
+AskUserQuestion({
+  questions: [{
+    question: "There are pending backlog items:\n\n{list of pending items with type and priority}\n\nWould you like to address any of these during execution?",
+    header: "Backlog",
+    options: [
+      { label: "Yes", description: "I'll incorporate some backlog items into this execution" },
+      { label: "No", description: "Proceed without addressing backlog items" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+If yes, ask which items to include and add them as additional tasks in plan.md. If no or if the backlog directory is empty/missing, proceed normally.
+
 ## Step 0: Parse Options
 
 Check if the user's argument contains these flags:
@@ -204,6 +221,23 @@ When ALL tasks in plan.md are marked `[x]` completed:
 - Always get reviewer approval before declaring completion
 - Keep plan.md updated throughout the entire process
 - Use AskUserQuestion for any decision that requires user input
+
+**Backlog Offer:**
+After execution completes, ask the user if any deferred items should be added to the backlog:
+```
+AskUserQuestion({
+  questions: [{
+    question: "Were there any follow-up tasks, improvements, or deferred work from this execution that should be added to the backlog for later?",
+    header: "Backlog",
+    options: [
+      { label: "Yes", description: "I have items to add to the backlog" },
+      { label: "No", description: "Nothing to defer" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+If yes, collect each item's type (task / principle-change / environment-change), priority, and description, then create backlog files in `.workflow-adapter/backlog/` with `source: {subject}` and `status: pending`.
 
 ---
 

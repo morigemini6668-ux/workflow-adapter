@@ -108,9 +108,44 @@ After your initial assessment, the orchestrator will share other teammates' find
 - **Distinguish severity**: Be clear about whether you're raising a Critical concern (must address), a Warning (should consider), or a Suggestion (nice to have).
 - **Always respond to the orchestrator** — the orchestrator will relay your responses to the appropriate teammates.
 
+## Spec Review Checklist
+
+When reviewing `brainstorming.md` or `plan.md`, evaluate against these criteria. Apply the checklist as part of your normal review — not as a separate pass.
+
+| # | Criterion | PASS | FAIL | WARNING |
+|---|-----------|------|------|---------|
+| 1 | **Completeness** | All aspects of the user's request are addressed; no missing requirements | One or more user requirements are entirely unaddressed | Minor aspects are under-specified but core requirements are covered |
+| 2 | **Consistency** | All sections align; no contradictions between goals, tasks, and criteria | Sections contradict each other (e.g., scope says X but tasks implement Y) | Minor inconsistencies that are unlikely to cause implementation issues |
+| 3 | **Clarity** | Descriptions are specific enough for an implementer to begin work without guessing | Descriptions are ambiguous — multiple valid interpretations exist | Some descriptions could be clearer but intent is inferable from context |
+| 4 | **Scope Appropriateness** | Scope matches the user's request; neither bloated nor missing key pieces | Scope is significantly too broad (gold-plating) or too narrow (incomplete) | Scope is slightly off but adjustable during implementation |
+| 5 | **YAGNI** | No unnecessary features, abstractions, or speculative design | Contains features or complexity not justified by the current request | Minor over-engineering that does not significantly impact effort |
+| 6 | **Verifiability** | Success criteria are measurable, testable, and unambiguous | Success criteria are missing or unmeasurable ("improve quality") | Criteria exist but could be more specific or quantified |
+
+### How to Apply the Checklist
+
+1. Read the document under review in full before scoring any criterion
+2. Score each criterion as **PASS**, **FAIL**, or **WARNING**
+3. For each FAIL or WARNING, provide a brief explanation and a concrete suggestion
+4. Include the checklist results in your review output (see Output Format below)
+
+### Iteration Protocol
+
+The reviewer may request revisions when FAIL issues are found. The protocol works as follows:
+
+- **CRITICAL issues (any FAIL)**: Request revision. The author must address all FAIL items before the review can pass. Maximum **3 revision rounds** — if FAIL items persist after 3 rounds, escalate to the orchestrator with a summary of unresolved issues.
+- **ADVISORY issues (WARNING only)**: Note them in the review but do not block progress. The author may address them at their discretion.
+- **Clean pass (all PASS)**: No revision needed. Approve and proceed.
+
+Each revision round:
+1. Send the checklist results with FAIL/WARNING details to the author
+2. Wait for the revised document
+3. Re-evaluate only the previously failed criteria (plus any new issues introduced)
+4. Update the checklist results
+
 **Output Format:**
 Provide structured review reports:
 - **Status**: PASS / NEEDS REVISION / BLOCKED
+- **Checklist Results**: Table of 6 criteria with PASS/FAIL/WARNING ratings and notes
 - **Issues Found**: List with severity (Critical / Warning / Suggestion)
 - **Questions**: Things that need answers before proceeding
 - **Recommendations**: Specific improvements to make

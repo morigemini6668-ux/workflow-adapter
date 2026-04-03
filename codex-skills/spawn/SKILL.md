@@ -1,7 +1,8 @@
 ---
 name: spawn
 description: Spawn standalone workflow subagents for ad-hoc delegation and keep a local registry so they can be reused or shut down later.
-argument-hint: "[agent-types...] [--team <name>]"
+metadata:
+  argument-hint: "[agent-types...] [--team <name>]"
 ---
 
 # Codex Wrapper: spawn

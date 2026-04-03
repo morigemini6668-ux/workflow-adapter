@@ -1,8 +1,9 @@
 ---
 name: autopilot-ralph
 description: Run the autonomous analyze-execute-verify loop for a task until it is resolved or the iteration budget is exhausted.
-argument-hint: "<subject> [--max-iterations N] [--copilot] [--worktree|--no-worktree]"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<subject> [--max-iterations N] [--copilot] [--worktree|--no-worktree]"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: autopilot-ralph

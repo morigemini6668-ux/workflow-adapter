@@ -1,8 +1,9 @@
 ---
 name: brainstorming
 description: Start a brainstorming workflow that gathers context and research, then synthesizes a structured `brainstorming.md`.
-argument-hint: "<optional: subject description> [--yes] [--subagent] [--rounds N]"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<optional: subject description> [--yes] [--subagent] [--rounds N]"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: brainstorming

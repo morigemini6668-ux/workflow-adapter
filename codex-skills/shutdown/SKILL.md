@@ -1,7 +1,8 @@
 ---
 name: shutdown
 description: Shut down Codex subagents that were started by the workflow-adapter spawn workflow.
-argument-hint: "[agent-name | --all] [--team <name>]"
+metadata:
+  argument-hint: "[agent-name | --all] [--team <name>]"
 ---
 
 # Codex Wrapper: shutdown

@@ -1,7 +1,8 @@
 ---
 name: backlog
 description: Manage deferred workflow items stored under `.workflow-adapter/backlog/`.
-argument-hint: "<operation: add|list|consume|defer|remove> [item details]"
+metadata:
+  argument-hint: "<operation: add|list|consume|defer|remove> [item details]"
 ---
 
 # Codex Wrapper: backlog

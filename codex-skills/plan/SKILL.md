@@ -1,8 +1,9 @@
 ---
 name: plan
 description: Create `plan.md` and `worker.md` from prior workflow artifacts, then validate them with a reviewer subagent.
-argument-hint: "<optional: subject name> [--yes] [--subagent]"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<optional: subject name> [--yes] [--subagent]"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: plan

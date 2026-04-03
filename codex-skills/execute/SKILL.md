@@ -1,8 +1,9 @@
 ---
 name: execute
 description: Execute a prepared `plan.md` by assigning work to Codex subagents and verifying completion.
-argument-hint: "<optional: subject name> [--subagent] [--copilot]"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<optional: subject name> [--subagent] [--copilot]"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: execute

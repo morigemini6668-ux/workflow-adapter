@@ -1,7 +1,8 @@
 ---
 name: copilot
 description: Convert workflow-adapter components into GitHub Copilot-compatible project files.
-disable-model-invocation: true
+metadata:
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: copilot

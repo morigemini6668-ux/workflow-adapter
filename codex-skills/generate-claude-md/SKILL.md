@@ -1,7 +1,8 @@
 ---
 name: generate-claude-md
 description: Generate or optimize `CLAUDE.md` and related context files with the repo's existing guidance.
-argument-hint: "<optional: generate | optimize> [--yes]"
+metadata:
+  argument-hint: "<optional: generate | optimize> [--yes]"
 ---
 
 # Codex Wrapper: generate-claude-md

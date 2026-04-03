@@ -1,8 +1,9 @@
 ---
 name: team-loop-cancel
 description: Cancel an active phased loop, clean up tracked Codex subagents, and summarize the current session state.
-argument-hint: "<subject>"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<subject>"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: team-loop-cancel

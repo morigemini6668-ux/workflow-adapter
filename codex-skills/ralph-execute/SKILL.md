@@ -1,8 +1,9 @@
 ---
 name: ralph-execute
 description: Run the Ralph execution loop over an existing plan using Codex subagents or Copilot when requested.
-argument-hint: "<subject> [--max-iterations N] [--copilot]"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<subject> [--max-iterations N] [--copilot]"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: ralph-execute

@@ -1,7 +1,8 @@
 ---
 name: archive
 description: Archive completed workflow subjects, preserve ADRs, and clean up `.workflow-adapter/` history.
-argument-hint: "<subject name> | --all | --migrate"
+metadata:
+  argument-hint: "<subject name> | --all | --migrate"
 ---
 
 # Codex Wrapper: archive

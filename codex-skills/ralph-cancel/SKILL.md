@@ -1,8 +1,9 @@
 ---
 name: ralph-cancel
 description: Cancel an active Ralph loop by removing its state file after summarizing the current progress.
-argument-hint: "<subject>"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<subject>"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: ralph-cancel

@@ -1,8 +1,9 @@
 ---
 name: investigate
 description: Investigate a problem with Codex subagents, produce `investigation.md`, and refine the diagnosis when evidence is incomplete.
-argument-hint: "<optional: problem description> [--yes] [--subagent] [--rounds N]"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<optional: problem description> [--yes] [--subagent] [--rounds N]"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: investigate

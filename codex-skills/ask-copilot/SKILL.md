@@ -1,7 +1,8 @@
 ---
 name: ask-copilot
 description: Send a prompt to the local GitHub Copilot CLI bridge and return the response.
-version: 0.5.0
+metadata:
+  version: "0.5.0"
 ---
 
 # Codex Wrapper: ask-copilot

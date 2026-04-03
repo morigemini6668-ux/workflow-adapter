@@ -1,8 +1,9 @@
 ---
 name: ralph-debug
 description: Run the Ralph debug loop to diagnose, fix, and verify a bug until it is resolved or the iteration budget is exhausted.
-argument-hint: "<subject> [--max-iterations N] [--copilot]"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<subject> [--max-iterations N] [--copilot]"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: ralph-debug

@@ -1,7 +1,8 @@
 ---
 name: retrospective
 description: Analyze completed sessions, extract reusable lessons, and suggest updates to workflow principles.
-argument-hint: "<optional: subject name> [--all]"
+metadata:
+  argument-hint: "<optional: subject name> [--all]"
 ---
 
 # Codex Wrapper: retrospective

@@ -1,8 +1,9 @@
 ---
 name: team-loop
 description: Run the phased research-plan-execute-verify loop in Codex using subagents instead of Claude teammate infrastructure.
-argument-hint: "<subject> [--max-iterations N] [--quick|--deep] [--worktree|--no-worktree]"
-disable-model-invocation: true
+metadata:
+  argument-hint: "<subject> [--max-iterations N] [--quick|--deep] [--worktree|--no-worktree]"
+  disable-model-invocation: true
 ---
 
 # Codex Wrapper: team-loop

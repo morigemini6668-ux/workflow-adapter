@@ -6,7 +6,7 @@ All teammates listed here (except executers) are spawned at the **start of each 
 
 **Lifecycle pattern**: Each teammate is spawned once per iteration. After completing their primary phase, they remain available for follow-up requests from other teammates or the orchestrator. They do NOT shut down on their own — they wait for a shutdown message from the orchestrator at the start of the next iteration or at loop completion.
 
-**Model selection**: Do NOT specify a `model` parameter when spawning teammates — use the inherited default. The default model supports 1M context, but explicitly specifying a model (even the same one) causes it to fall back to a smaller context window. Only specify `model: "haiku"` or `model: "sonnet"` when you intentionally need a lighter model for cost/speed reasons (e.g., a simple grep-and-report task).
+**Model selection**: NEVER specify a `model` parameter when spawning teammates. Always let them inherit the spawning agent's model. Explicitly specifying a model (even the same one) causes it to fall back to a smaller context window.
 
 ---
 

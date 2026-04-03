@@ -12,6 +12,8 @@ export interface BrowseConfig {
   projectDir: string;
   stateDir: string;
   stateFile: string;
+  lockFile: string;
+  commandLockFile: string;
   consoleLog: string;
   networkLog: string;
   dialogLog: string;
@@ -50,6 +52,8 @@ export function resolveConfig(
     projectDir,
     stateDir,
     stateFile,
+    lockFile: path.join(stateDir, 'server.lock'),
+    commandLockFile: path.join(stateDir, 'command.lock'),
     consoleLog: path.join(stateDir, 'console.log'),
     networkLog: path.join(stateDir, 'network.log'),
     dialogLog: path.join(stateDir, 'dialog.log'),

@@ -16,6 +16,11 @@ import { resolveConfig, ensureStateDir } from './config';
 
 const config = resolveConfig();
 const MAX_START_WAIT = 8000;
+const COMMAND_TIMEOUT_MS = 30000;
+const LOCK_POLL_INTERVAL_MS = 100;
+const START_LOCK_STALE_MS = MAX_START_WAIT * 2;
+const COMMAND_LOCK_WAIT_MS = COMMAND_TIMEOUT_MS + MAX_START_WAIT + 5000;
+const COMMAND_LOCK_STALE_MS = COMMAND_LOCK_WAIT_MS * 2;
 const IS_WINDOWS = process.platform === 'win32';
 
 function resolveServerScript(): string {
@@ -45,6 +50,8 @@ interface ServerState {
   startedAt: string;
 }
 
+class CommandFailure extends Error {}
+
 function readState(): ServerState | null {
   try {
     return JSON.parse(fs.readFileSync(config.stateFile, 'utf-8'));
@@ -57,12 +64,71 @@ function isProcessAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+function isLockStale(lockFile: string, staleMs: number): boolean {
+  try {
+    const stat = fs.statSync(lockFile);
+    return Date.now() - stat.mtimeMs > staleMs;
+  } catch {
+    return false;
+  }
+}
+
+function clearStaleLock(lockFile: string, staleMs: number): void {
+  if (!isLockStale(lockFile, staleMs)) return;
+  try { fs.unlinkSync(lockFile); } catch {}
+}
+
+async function acquireLock(
+  lockFile: string,
+  staleMs: number,
+  waitMs: number,
+  label: string,
+): Promise<() => void> {
+  ensureStateDir(config);
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < waitMs) {
+    clearStaleLock(lockFile, staleMs);
+
+    try {
+      const fd = fs.openSync(lockFile, 'wx', 0o600);
+      return () => {
+        try { fs.closeSync(fd); } catch {}
+        try { fs.unlinkSync(lockFile); } catch {}
+      };
+    } catch (err: any) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+
+    await Bun.sleep(LOCK_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(`Timed out waiting for ${label}`);
+}
+
 async function killServer(pid: number): Promise<void> {
   if (!isProcessAlive(pid)) return;
   try { process.kill(pid, 'SIGTERM'); } catch { return; }
   const deadline = Date.now() + 2000;
   while (Date.now() < deadline && isProcessAlive(pid)) await Bun.sleep(100);
   if (isProcessAlive(pid)) try { process.kill(pid, 'SIGKILL'); } catch {}
+}
+
+async function getHealthyServerState(timeoutMs = 2000): Promise<ServerState | null> {
+  const state = readState();
+  if (!state || !isProcessAlive(state.pid)) return null;
+
+  try {
+    const resp = await fetch(`http://127.0.0.1:${state.port}/health`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!resp.ok) return null;
+    const health = await resp.json() as any;
+    if (health.status !== 'healthy') return null;
+    return state;
+  } catch {
+    return null;
+  }
 }
 
 async function startServer(): Promise<ServerState> {
@@ -83,6 +149,8 @@ async function startServer(): Promise<ServerState> {
   } else {
     serverCmd = ['bun', 'run', SERVER_SCRIPT];
   }
+
+  let proc: ReturnType<typeof Bun.spawn> | null = null;
   if (IS_WINDOWS) {
     // Use Node child_process.spawn with detached:true so the server survives
     // after the CLI process exits. Bun.spawn doesn't reliably detach on Windows.
@@ -93,21 +161,21 @@ async function startServer(): Promise<ServerState> {
     });
     cp.unref();
   } else {
-    const proc = Bun.spawn(serverCmd, {
+    proc = Bun.spawn(serverCmd, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, QA_BROWSE_STATE_FILE: config.stateFile },
     });
     proc.unref();
   }
 
-  const start = Date.now();
-  while (Date.now() - start < MAX_START_WAIT) {
-    const state = readState();
-    if (state && isProcessAlive(state.pid)) return state;
-    await Bun.sleep(100);
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < MAX_START_WAIT) {
+    const healthy = await getHealthyServerState(1000);
+    if (healthy) return healthy;
+    await Bun.sleep(LOCK_POLL_INTERVAL_MS);
   }
 
-  const stderr = proc.stderr;
+  const stderr = proc?.stderr;
   if (stderr) {
     const reader = stderr.getReader();
     const { value } = await reader.read();
@@ -117,18 +185,50 @@ async function startServer(): Promise<ServerState> {
 }
 
 async function ensureServer(): Promise<ServerState> {
-  const state = readState();
-  if (state && isProcessAlive(state.pid)) {
-    try {
-      const resp = await fetch(`http://127.0.0.1:${state.port}/health`, { signal: AbortSignal.timeout(2000) });
-      if (resp.ok) {
-        const health = await resp.json() as any;
-        if (health.status === 'healthy') return state;
-      }
-    } catch {}
+  const healthy = await getHealthyServerState();
+  if (healthy) return healthy;
+
+  const release = await acquireLock(
+    config.lockFile,
+    START_LOCK_STALE_MS,
+    MAX_START_WAIT,
+    'qa-browse startup',
+  );
+  try {
+    const rechecked = await getHealthyServerState(1000);
+    if (rechecked) return rechecked;
+
+    console.error('[qa-browse] Starting server...');
+    return startServer();
+  } finally {
+    release();
   }
-  console.error('[qa-browse] Starting server...');
-  return startServer();
+}
+
+async function restartServerAfterConnectionLoss(): Promise<ServerState> {
+  const release = await acquireLock(
+    config.lockFile,
+    START_LOCK_STALE_MS,
+    MAX_START_WAIT,
+    'qa-browse restart',
+  );
+  try {
+    const healthy = await getHealthyServerState(1000);
+    if (healthy) return healthy;
+    return startServer();
+  } finally {
+    release();
+  }
+}
+
+function formatCommandError(text: string): string {
+  try {
+    const err = JSON.parse(text);
+    if (err.hint) return `${err.error || text}\n${err.hint}`;
+    return err.error || text;
+  } catch {
+    return text;
+  }
 }
 
 async function sendCommand(state: ServerState, command: string, args: string[], retries = 0): Promise<void> {
@@ -137,7 +237,7 @@ async function sendCommand(state: ServerState, command: string, args: string[], 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.token}` },
       body: JSON.stringify({ command, args }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
     });
 
     if (resp.status === 401) {
@@ -148,23 +248,25 @@ async function sendCommand(state: ServerState, command: string, args: string[], 
     }
 
     const text = await resp.text();
-    if (resp.ok) {
-      process.stdout.write(text);
-      if (!text.endsWith('\n')) process.stdout.write('\n');
-    } else {
-      try {
-        const err = JSON.parse(text);
-        console.error(err.error || text);
-        if (err.hint) console.error(err.hint);
-      } catch { console.error(text); }
-      process.exit(1);
-    }
+    if (!resp.ok) throw new CommandFailure(formatCommandError(text));
+
+    process.stdout.write(text);
+    if (!text.endsWith('\n')) process.stdout.write('\n');
   } catch (err: any) {
-    if (err.name === 'AbortError') { console.error('[qa-browse] Command timed out'); process.exit(1); }
+    if (err instanceof CommandFailure) throw err;
+    if (err.name === 'AbortError') throw new Error('Command timed out');
     if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.message?.includes('fetch failed')) {
-      if (retries >= 1) throw new Error('[qa-browse] Server crashed twice — aborting');
+      if (command === 'stop') {
+        process.stdout.write('Server stopped\n');
+        return;
+      }
+      if (retries >= 1) throw new Error('Server crashed twice — aborting');
       console.error('[qa-browse] Connection lost. Restarting...');
-      const newState = await startServer();
+      const newState = await restartServerAfterConnectionLoss();
+      if (command === 'restart') {
+        process.stdout.write(`Restarted server on port ${newState.port}\n`);
+        return;
+      }
       return sendCommand(newState, command, args, retries + 1);
     }
     throw err;
@@ -215,8 +317,18 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
     commandArgs.push(stdin.trim());
   }
 
-  const state = await ensureServer();
-  await sendCommand(state, command, commandArgs);
+  const release = await acquireLock(
+    config.commandLockFile,
+    COMMAND_LOCK_STALE_MS,
+    COMMAND_LOCK_WAIT_MS,
+    'active qa-browse command',
+  );
+  try {
+    const state = await ensureServer();
+    await sendCommand(state, command, commandArgs);
+  } finally {
+    release();
+  }
 }
 
 if (import.meta.main) {

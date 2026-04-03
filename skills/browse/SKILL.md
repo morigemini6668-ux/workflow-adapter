@@ -31,6 +31,8 @@ Control a headless Chromium browser. Open pages, click, fill forms, take screens
 
 Read `references/commands.md` for the full command reference, setup instructions, and the @ref system. Set up `$B` before doing anything else.
 
+`qa-browse` is stateful. Run `$B` commands strictly one at a time. Never issue `goto`, `snapshot`, `status`, `handoff`, `resume`, or any other `$B` command through parallel shell or parallel tool execution.
+
 ## Opening a page
 
 When the user gives a URL (or you detect one from context like `localhost:3000`):
@@ -53,3 +55,4 @@ After `snapshot`, use `Read` on the screenshot file so the user sees the page in
 5. **Ask if unsure.** If you don't know what the user wants to do on the page, ask — but ask AFTER launching the browser.
 6. **No QA framework.** This skill just controls the browser. If the user wants QA testing, suggest `/workflow-adapter:qa-report` or `/workflow-adapter:qa`.
 7. **Never refuse to open a page.** When this skill triggers, the user wants browser interaction — do it.
+8. **Do not parallelize qa-browse.** In Codex, do not use parallel tool execution for `$B` commands. Wait for each command to finish before issuing the next one.

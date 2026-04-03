@@ -25,6 +25,8 @@ cd ${CLAUDE_PLUGIN_ROOT}/scripts/qa-browse && bun install && bun run build
 
 Store the path in `$B` for all subsequent commands.
 
+Important: `qa-browse` keeps a single project-local browser session. Do not run two `$B` commands in parallel or inside a parallel tool wrapper. Always wait for one command to finish before starting the next.
+
 ## Navigation
 
 | Command | What it does |
@@ -112,6 +114,7 @@ Save screenshots to `/tmp/` with descriptive names:
 | Problem | Fix |
 |---------|-----|
 | Command hangs or times out | `$B restart` to restart the browser server |
+| `status`/`handoff`/`snapshot` lands on `about:blank` or stale page | Another `$B` command overlapped. Re-run the commands serially and avoid parallel tool execution. |
 | Stale @refs after AJAX/navigation | Re-run `$B snapshot -i` for fresh refs |
 | Server unresponsive | `$B stop`, then retry the command (auto-restarts) |
 | Chromium crash | Server exits automatically; next command auto-restarts it |

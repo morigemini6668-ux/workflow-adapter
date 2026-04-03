@@ -8,6 +8,6 @@ metadata:
 
 # Codex Wrapper: ralph-cancel
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/ralph-cancel/SKILL.md`](../../../claude/skills/ralph-cancel/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/ralph-cancel/ORIGINAL.md`](../../claude-compat/skills/ralph-cancel/ORIGINAL.md).
 
 Follow the original workflow with the shared Codex translation rules. Ask the user directly if the original workflow would have used `AskUserQuestion`.

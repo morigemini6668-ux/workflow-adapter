@@ -8,7 +8,7 @@ metadata:
 
 # Codex Wrapper: investigate
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/investigate/SKILL.md`](../../../claude/skills/investigate/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/investigate/ORIGINAL.md`](../../claude-compat/skills/investigate/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

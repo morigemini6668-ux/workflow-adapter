@@ -141,7 +141,7 @@ For each agent in `${CLAUDE_PLUGIN_ROOT}/agents/`, create a corresponding `.gith
 
 ## Step 4: Generate Skill Instruction Files
 
-For each skill in `skills/*/SKILL.md`, create `.github/instructions/{name}.instructions.md`.
+For each skill in `${CLAUDE_PLUGIN_ROOT}/skills/*/SKILL.md`, create `.github/instructions/{name}.instructions.md`.
 
 ### Conversion Rules
 

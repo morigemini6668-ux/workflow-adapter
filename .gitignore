@@ -2,4 +2,6 @@
 node_modules/
 claude/scripts/qa-browse/dist/
 claude/scripts/qa-browse/bun.lock
+codex/claude-compat/scripts/qa-browse/dist/
+codex/claude-compat/scripts/qa-browse/bun.lock
 .serena/

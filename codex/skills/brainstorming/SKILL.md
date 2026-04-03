@@ -8,10 +8,10 @@ metadata:
 
 # Codex Wrapper: brainstorming
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/brainstorming/SKILL.md`](../../../claude/skills/brainstorming/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/brainstorming/ORIGINAL.md`](../../claude-compat/skills/brainstorming/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 
 - Prefer the original `--subagent` path by default, even if the user does not spell it out.
 - Spawn historian, researcher, and reviewer with `spawn_agent`.
-- Read the matching role prompts under [`../../../claude/agents/`](../../../claude/agents/) before spawning and adapt teammate-only instructions to Codex subagent behavior.
+- Read the matching role prompts under [`../../claude-compat/agents/`](../../claude-compat/agents/) before spawning and adapt teammate-only instructions to Codex subagent behavior.

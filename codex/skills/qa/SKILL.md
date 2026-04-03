@@ -5,7 +5,7 @@ description: Run QA, reproduce issues, apply fixes, and verify the result using 
 
 # Codex Wrapper: qa
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/qa/SKILL.md`](../../../claude/skills/qa/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/qa/ORIGINAL.md`](../../claude-compat/skills/qa/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

@@ -5,7 +5,7 @@ description: Send or inspect workflow notifications through a Codex-compatible f
 
 # Codex Wrapper: broadcast
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/broadcast/SKILL.md`](../../../claude/skills/broadcast/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/broadcast/ORIGINAL.md`](../../claude-compat/skills/broadcast/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

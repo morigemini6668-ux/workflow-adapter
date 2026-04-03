@@ -8,7 +8,7 @@ metadata:
 
 # Codex Wrapper: autopilot-ralph
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/autopilot-ralph/SKILL.md`](../../../claude/skills/autopilot-ralph/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/autopilot-ralph/ORIGINAL.md`](../../claude-compat/skills/autopilot-ralph/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

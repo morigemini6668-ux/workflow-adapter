@@ -8,7 +8,7 @@ metadata:
 
 # Codex Wrapper: team-loop
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/team-loop/SKILL.md`](../../../claude/skills/team-loop/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/team-loop/ORIGINAL.md`](../../claude-compat/skills/team-loop/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

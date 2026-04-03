@@ -8,7 +8,7 @@ metadata:
 
 # Codex Wrapper: team-loop-cancel
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/team-loop-cancel/SKILL.md`](../../../claude/skills/team-loop-cancel/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/team-loop-cancel/ORIGINAL.md`](../../claude-compat/skills/team-loop-cancel/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

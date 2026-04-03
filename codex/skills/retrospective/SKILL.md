@@ -7,6 +7,6 @@ metadata:
 
 # Codex Wrapper: retrospective
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/retrospective/SKILL.md`](../../../claude/skills/retrospective/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/retrospective/ORIGINAL.md`](../../claude-compat/skills/retrospective/ORIGINAL.md).
 
 Follow the original workflow with the shared Codex translation rules. Replace every `AskUserQuestion` step with a direct question to the user.

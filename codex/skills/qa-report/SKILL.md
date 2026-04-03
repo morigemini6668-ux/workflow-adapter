@@ -5,7 +5,7 @@ description: Run report-only QA testing and produce structured findings without 
 
 # Codex Wrapper: qa-report
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/qa-report/SKILL.md`](../../../claude/skills/qa-report/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/qa-report/ORIGINAL.md`](../../claude-compat/skills/qa-report/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

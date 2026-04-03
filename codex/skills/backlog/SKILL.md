@@ -7,6 +7,6 @@ metadata:
 
 # Codex Wrapper: backlog
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/backlog/SKILL.md`](../../../claude/skills/backlog/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/backlog/ORIGINAL.md`](../../claude-compat/skills/backlog/ORIGINAL.md).
 
 Follow the original workflow with the shared Codex translation rules. Replace every `AskUserQuestion` step with a direct question to the user.

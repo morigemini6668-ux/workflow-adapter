@@ -8,7 +8,7 @@ metadata:
 
 # Codex Wrapper: ralph-execute
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/ralph-execute/SKILL.md`](../../../claude/skills/ralph-execute/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/ralph-execute/ORIGINAL.md`](../../claude-compat/skills/ralph-execute/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

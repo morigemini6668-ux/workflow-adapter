@@ -19,8 +19,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Workflow Adapter Codex",
-    "shortDescription": "Codex wrappers for the workflow-adapter Claude plugin",
-    "longDescription": "Use the workflow-adapter brainstorming, investigation, planning, execution, QA, and utility workflows from Codex through wrapper skills that adapt the sibling Claude plugin assets and prefer Codex subagents over teammates.",
+    "shortDescription": "Self-contained Codex workflow-adapter skills",
+    "longDescription": "Use the workflow-adapter brainstorming, investigation, planning, execution, QA, and utility workflows from Codex through self-contained wrapper skills that bundle Claude-compatible assets locally and prefer Codex subagents over teammates.",
     "developerName": "Dal Park",
     "category": "Coding",
     "capabilities": [

@@ -5,6 +5,6 @@ description: Manage shared workflow principles under `.workflow-adapter/principl
 
 # Codex Wrapper: principle
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/principle/SKILL.md`](../../../claude/skills/principle/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/principle/ORIGINAL.md`](../../claude-compat/skills/principle/ORIGINAL.md).
 
 Follow the original workflow with the shared Codex translation rules. This skill is direct file management, so no extra teammate adaptation is needed.

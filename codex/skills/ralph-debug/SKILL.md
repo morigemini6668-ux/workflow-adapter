@@ -8,7 +8,7 @@ metadata:
 
 # Codex Wrapper: ralph-debug
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/ralph-debug/SKILL.md`](../../../claude/skills/ralph-debug/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/ralph-debug/ORIGINAL.md`](../../claude-compat/skills/ralph-debug/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

@@ -7,10 +7,10 @@ metadata:
 
 # Codex Wrapper: ask-copilot
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/ask-copilot/SKILL.md`](../../../claude/skills/ask-copilot/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/ask-copilot/ORIGINAL.md`](../../claude-compat/skills/ask-copilot/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 
-- Resolve `${CLAUDE_PLUGIN_ROOT}` as the sibling `claude/` plugin root.
+- Resolve `${CLAUDE_PLUGIN_ROOT}` as the bundled Claude-compat root under `../../claude-compat/`.
 - Run the existing scripts through Codex shell execution.
 - If the Copilot CLI is missing, report that clearly instead of trying to emulate it.

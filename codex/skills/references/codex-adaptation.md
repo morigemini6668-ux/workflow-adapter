@@ -1,13 +1,13 @@
 # Codex Adaptation Guide
 
-These wrapper skills keep the existing Claude Code plugin intact and add a Codex-only compatibility layer.
+These wrapper skills use bundled Claude-compat assets inside the Codex plugin and add a Codex-only adaptation layer.
 
 ## Base rule
 
 For every wrapper skill:
 
 1. Read this file first.
-2. Read the original skill under `../../../claude/skills/<name>/SKILL.md`.
+2. Read the original skill under `../../claude-compat/skills/<name>/ORIGINAL.md`.
 3. Preserve the original workflow intent, artifacts, and file layout.
 4. Only translate Claude-specific tooling and teammate mechanics into Codex equivalents.
 
@@ -21,7 +21,7 @@ For every wrapper skill:
 | waiting for background teammates | `wait_agent` |
 | teammate shutdown | `close_agent` |
 | `TeamCreate` / `TeamDelete` | Skip the team bus. Track spawned agent ids locally when persistence is needed. |
-| `${CLAUDE_PLUGIN_ROOT}` | Resolve to the sibling `claude/` plugin root. |
+| `${CLAUDE_PLUGIN_ROOT}` | Resolve to the bundled Claude-compat root at `../../claude-compat/`. |
 | `Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep` | Use Codex local tools. Prefer `exec_command`, `rg`, and `apply_patch`. |
 | `EnterWorktree` / `ExitWorktree` | Prefer the current workspace. Only use `git worktree` when the user explicitly wants isolation or the workflow would be unsafe without it. |
 
@@ -41,7 +41,7 @@ For every wrapper skill:
 
 When the original skill says to spawn a role-specific teammate:
 
-1. Read the relevant file under `../../../claude/agents/`.
+1. Read the relevant file under `../../claude-compat/agents/`.
 2. Keep the role responsibilities and constraints.
 3. Remove teammate-only instructions that depend on `SendMessage`, team names, or Claude-specific hooks if they are not needed.
 4. Replace "report via SendMessage" with either:
@@ -83,11 +83,11 @@ Treat it as a manual queue, not a real-time event bus.
 ## Browser and QA fallback
 
 - Prefer built-in Codex browser or web tools when available.
-- Otherwise use the sibling Claude plugin's `scripts/qa-browse` CLI through `exec_command`.
+- Otherwise use the bundled `../../claude-compat/scripts/qa-browse/` CLI through `exec_command`.
 - When a local screenshot path is produced, use `view_image` so the user can inspect it.
 
 ## File safety
 
-- Do not modify the original Claude plugin assets unless the user explicitly asks.
+- Do not modify the bundled Claude-compat copies unless the user explicitly asks.
 - Put Codex-specific behavior in new files under `./skills/`, `./.codex-plugin/`, or new Codex-only state paths under `./.workflow-adapter/codex/`.
 - Preserve existing file names and workflow artifacts such as `brainstorming.md`, `investigation.md`, `plan.md`, `worker.md`, and `ralph-state.md`.

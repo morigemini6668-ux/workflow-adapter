@@ -7,7 +7,7 @@ metadata:
 
 # Codex Wrapper: shutdown
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/shutdown/SKILL.md`](../../../claude/skills/shutdown/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/shutdown/ORIGINAL.md`](../../claude-compat/skills/shutdown/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

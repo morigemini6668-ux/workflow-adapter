@@ -7,6 +7,6 @@ metadata:
 
 # Codex Wrapper: generate-claude-md
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/generate-claude-md/SKILL.md`](../../../claude/skills/generate-claude-md/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/generate-claude-md/ORIGINAL.md`](../../claude-compat/skills/generate-claude-md/ORIGINAL.md).
 
 Follow the original workflow with the shared Codex translation rules. This skill is primarily direct analysis and file editing.

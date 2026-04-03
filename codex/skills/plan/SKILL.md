@@ -8,7 +8,7 @@ metadata:
 
 # Codex Wrapper: plan
 
-Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../../claude/skills/plan/SKILL.md`](../../../claude/skills/plan/SKILL.md).
+Read [`../references/codex-adaptation.md`](../references/codex-adaptation.md), then read [`../../claude-compat/skills/plan/ORIGINAL.md`](../../claude-compat/skills/plan/ORIGINAL.md).
 
 Follow the original workflow with these overrides:
 

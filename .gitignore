@@ -1,5 +1,5 @@
 .workflow-adapter/
 node_modules/
-scripts/qa-browse/dist/
-scripts/qa-browse/bun.lock
+claude/scripts/qa-browse/dist/
+claude/scripts/qa-browse/bun.lock
 .serena/

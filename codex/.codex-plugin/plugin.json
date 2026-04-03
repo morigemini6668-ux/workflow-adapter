@@ -1,0 +1,40 @@
+{
+  "name": "workflow-adapter-codex",
+  "version": "0.3.0",
+  "description": "Agent workflow skills for brainstorming, investigation, planning, execution, QA, and long-running task management, adapted for Codex subagents.",
+  "author": {
+    "name": "Dal Park",
+    "email": "dal.park@pubg.com",
+    "url": "https://github.com/morigemini6668-ux"
+  },
+  "homepage": "https://github.com/morigemini6668-ux/workflow-adapter",
+  "repository": "https://github.com/morigemini6668-ux/workflow-adapter",
+  "keywords": [
+    "workflow",
+    "subagent",
+    "planning",
+    "qa",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Workflow Adapter Codex",
+    "shortDescription": "Codex wrappers for the workflow-adapter Claude plugin",
+    "longDescription": "Use the workflow-adapter brainstorming, investigation, planning, execution, QA, and utility workflows from Codex through wrapper skills that adapt the sibling Claude plugin assets and prefer Codex subagents over teammates.",
+    "developerName": "Dal Park",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/morigemini6668-ux/workflow-adapter",
+    "defaultPrompt": [
+      "Use workflow-adapter to investigate a bug and write an execution plan",
+      "Use workflow-adapter to run an execution workflow in Codex subagent mode",
+      "Use workflow-adapter to spawn a researcher and reviewer for a task"
+    ],
+    "brandColor": "#1D4ED8",
+    "screenshots": []
+  }
+}

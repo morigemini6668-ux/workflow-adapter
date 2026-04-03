@@ -87,6 +87,7 @@ Store the path in `$B` for all subsequent commands.
 |---------|-------------|
 | `$B cookie-import <file>` | Import cookies from JSON |
 | `$B viewport <WxH>` | Set viewport size (e.g., `375x812`) |
+| `$B maximize` | Maximize viewport to screen resolution |
 
 ## The @ref System
 

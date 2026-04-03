@@ -49,7 +49,7 @@ export class BrowserManager {
     });
 
     const contextOptions: BrowserContextOptions = {
-      viewport: { width: 1280, height: 720 },
+      viewport: { width: 1920, height: 1080 },
     };
     if (this.customUserAgent) {
       contextOptions.userAgent = this.customUserAgent;
@@ -319,7 +319,7 @@ export class BrowserManager {
       this.pages.clear();
       await this.context.close().catch(() => {});
 
-      const contextOptions: BrowserContextOptions = { viewport: { width: 1280, height: 720 } };
+      const contextOptions: BrowserContextOptions = { viewport: { width: 1920, height: 1080 } };
       if (this.customUserAgent) contextOptions.userAgent = this.customUserAgent;
       this.context = await this.browser.newContext(contextOptions);
       if (Object.keys(this.extraHeaders).length > 0) {
@@ -331,7 +331,7 @@ export class BrowserManager {
       try {
         this.pages.clear();
         if (this.context) await this.context.close().catch(() => {});
-        const contextOptions: BrowserContextOptions = { viewport: { width: 1280, height: 720 } };
+        const contextOptions: BrowserContextOptions = { viewport: { width: 1920, height: 1080 } };
         if (this.customUserAgent) contextOptions.userAgent = this.customUserAgent;
         this.context = await this.browser!.newContext(contextOptions);
         await this.newTab();
@@ -377,7 +377,7 @@ export class BrowserManager {
     // 3. Create context and restore state
     try {
       const contextOptions: BrowserContextOptions = {
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 1920, height: 1080 },
       };
       if (this.customUserAgent) contextOptions.userAgent = this.customUserAgent;
       const newContext = await newBrowser.newContext(contextOptions);

@@ -50,6 +50,7 @@ Before starting any work:
 
 **Worktree (when plan specifies):**
 - The orchestrator creates and manages the worktree — you do NOT create or remove worktrees yourself
+- **NEVER run `git worktree remove`.** Only the orchestrator/user may remove worktrees.
 - Your prompt provides two key paths:
   - **Code changes directory** (`WORKTREE_PATH`): perform all code edits (create/modify source files) inside this directory
   - **Main repo** (`REPO_ROOT`): read/write `.workflow-adapter/` files here (plan.md, checkpoints, principle.md)

@@ -7,6 +7,12 @@ disable-model-invocation: true
 
 You are the **Orchestrator** (team leader) for an execution workflow. You coordinate executer teammates to carry out the plan.
 
+**Worktree Safety — MANDATORY:**
+- Use `EnterWorktree`/`ExitWorktree` tools for all worktree operations. **NEVER use raw `git worktree add/remove` commands.**
+- `ExitWorktree({ action: "remove" })` will automatically refuse if there are uncommitted changes — this is the safety net.
+- **NEVER call `ExitWorktree({ action: "remove" })` automatically.** Only the user may decide to remove a worktree. After completion, call `ExitWorktree({ action: "keep" })` and report the branch name so the user can clean up later.
+- **NEVER pass `discard_changes: true`** unless the user explicitly asks to discard.
+
 **Principle Compliance:**
 Before starting any work:
 1. Check if `.workflow-adapter/principle.md` exists. If it does, read it and follow all its directives.
@@ -57,27 +63,12 @@ If a subject was provided as an argument, use it. Otherwise:
 
 If `worker.md` specifies `Worktree: Yes`:
 
-```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${REPO_ROOT}/../{subject}-worktree"
-
-# Pre-check: handle stale worktree or existing branch
-if [ -d "$WORKTREE_PATH" ]; then
-  echo "WORKTREE_EXISTS_AT=$WORKTREE_PATH"
-  # Reuse existing worktree — verify it's valid
-  git worktree list | grep -q "$WORKTREE_PATH" && echo "VALID_WORKTREE" || echo "STALE_DIRECTORY"
-else
-  git worktree add "$WORKTREE_PATH" -b "{subject}" 2>/dev/null || \
-  git worktree add "$WORKTREE_PATH" -B "{subject}"
-fi
-echo "WORKTREE_PATH=$WORKTREE_PATH"
-echo "REPO_ROOT=$REPO_ROOT"
+```
+REPO_ROOT=$(git rev-parse --show-toplevel)   # save before entering worktree
+EnterWorktree({ name: "{subject}" })
 ```
 
-- If `STALE_DIRECTORY`: remove the directory (`rm -rf "$WORKTREE_PATH"`) and retry `git worktree add`.
-- If `VALID_WORKTREE` or `WORKTREE_EXISTS`: reuse as-is.
-
-Store both `WORKTREE_PATH` and `REPO_ROOT`. All executers work inside the shared worktree directory, but read/write `.workflow-adapter/` from `REPO_ROOT`.
+The tool creates a worktree under `.claude/worktrees/{subject}` and switches the session directory into it automatically. Store `REPO_ROOT` (the original repo path) for accessing `.workflow-adapter/` files.
 
 If worktree is No, store `REPO_ROOT` only (run `REPO_ROOT=$(git rev-parse --show-toplevel)`).
 
@@ -184,7 +175,10 @@ When ALL tasks in plan.md are marked `[x]` completed:
    ```
 3. If verification passes and reviewer approves:
    - Update plan.md with final status
-   - Clean up worktree if used: `git worktree remove "{WORKTREE_PATH}"` (branch is preserved for user review)
+   - **Commit worktree changes** (if worktree was used):
+     ```bash
+     git add -A && git status && git commit -m "{subject}: execution complete"
+     ```
    - Shutdown all teammates:
      ```
      SendMessage({ to: "executer-alpha", message: { type: "shutdown_request", reason: "All tasks complete" } })
@@ -194,6 +188,10 @@ When ALL tasks in plan.md are marked `[x]` completed:
      Wait for all teammates to confirm shutdown (shutdown_approved messages) before calling TeamDelete().
      ```
      TeamDelete()
+     ```
+   - **Exit worktree with `keep`** (do NOT remove — let the user decide):
+     ```
+     ExitWorktree({ action: "keep" })
      ```
    - Report to user:
      - If worktree was used:
@@ -247,7 +245,7 @@ _This section is used when `--subagent` flag is set. Skip TeamCreate and SendMes
 
 ### SA-Step 2.5: Create Worktree (if configured)
 
-Same as Step 2.5 above — run the same worktree creation script with pre-check. Store `WORKTREE_PATH` and `REPO_ROOT` for passing to all executer subagents.
+Same as Step 2.5 above — use `EnterWorktree({ name: "{subject}" })`. Store `REPO_ROOT` for passing to all executer subagents.
 
 ### SA-Step 3: Group Tasks Into Batches
 
@@ -310,8 +308,12 @@ When all tasks are `[x]`:
    ```
 3. If verification passes:
    - Update plan.md with final status
-   - Clean up worktree if used: `git worktree remove "{WORKTREE_PATH}"` (branch is preserved)
-   - Report to user (same format as Step 8 — show branch name for merge/review/discard if worktree was used)
+   - **Commit worktree changes** (if worktree was used):
+     ```bash
+     git add -A && git status && git commit -m "{subject}: execution complete"
+     ```
+   - Exit worktree: `ExitWorktree({ action: "keep" })`
+   - Report to user (same format as Step 8 — show branch name)
    - Output **ALL JOB COMPLETE**
 4. If verification fails: identify failing items and spawn fix Tasks, repeat
 
@@ -325,7 +327,7 @@ _This section is used when `--copilot` flag is set. All Analyzer, Executor, and 
 
 ### CP-Step 2.5: Create Worktree (if configured)
 
-Same as Step 2.5 above — run the same worktree creation script with pre-check. Store `WORKTREE_PATH` and `REPO_ROOT` for passing to all Copilot executer subagents.
+Same as Step 2.5 above — use `EnterWorktree({ name: "{subject}" })`. Store `REPO_ROOT` for passing to all Copilot executer subagents.
 
 ### CP-Step 3: Group Tasks Into Batches
 
@@ -453,5 +455,5 @@ Repeat CP-Steps 4–5 for each subsequent batch until all tasks in plan.md are `
 When all tasks are `[x]`:
 1. Run the verification steps listed in plan.md's "Verification Plan" section directly (orchestrator executes)
 2. Spawn one final Copilot reviewer Task (same pattern as CP-Step 5) to confirm overall completion
-3. If verification passes: update plan.md with final status, clean up prompt-*.md files, clean up worktree if used (`git worktree remove "{WORKTREE_PATH}"` — branch is preserved), report branch info to user (same format as Step 8), output **ALL JOB COMPLETE**
+3. If verification passes: update plan.md with final status, clean up prompt-*.md files, **commit worktree changes** if worktree was used (`git add -A && git commit -m "{subject}: execution complete"`), exit worktree with `ExitWorktree({ action: "keep" })`, report branch info to user (same format as Step 8), output **ALL JOB COMPLETE**
 4. If verification fails: identify failing items and spawn fix Tasks, repeat

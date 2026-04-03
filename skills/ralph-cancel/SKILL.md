@@ -67,14 +67,23 @@ rm ".workflow-adapter/{subject}/ralph-state.md"
 
 Verify the file no longer exists. If deletion fails, output the error and ask the user to delete it manually.
 
-**If `worktree_path` was found in the state file:**
-```bash
-git worktree remove --force "{worktree_path}"
-git branch -D "{worktree_branch}"
-```
-(`--force` is used here because the worktree may have uncommitted changes at the time of cancellation.)
+**If in a worktree session (EnterWorktree was used):**
 
-If the worktree directory no longer exists, skip `git worktree remove` and only run `git branch -D`.
+First commit any uncommitted changes to preserve work:
+```bash
+git add -A && git status
+# If there are changes:
+git commit -m "{subject}: save work before cancel"
+```
+
+Then ask the user whether to keep or remove:
+```
+AskUserQuestion({ questions: [{ question: "Keep the worktree and branch '{worktree_branch}' for later review, or remove it?", options: [{ label: "Keep" }, { label: "Remove" }] }] })
+```
+- If Keep: `ExitWorktree({ action: "keep" })`
+- If Remove: `ExitWorktree({ action: "remove" })` — the tool will refuse if uncommitted changes remain. **NEVER pass `discard_changes: true` unless the user explicitly says to discard.**
+
+If not in a worktree session but `worktree_path` exists on disk, inform the user and let them clean up manually.
 
 ## Step 5: Confirm Cancellation
 

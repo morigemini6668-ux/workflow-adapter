@@ -4,6 +4,7 @@
 
 import type { BrowserManager } from './browser-manager';
 import { validateNavigationUrl } from './url-validation';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -166,6 +167,24 @@ export async function handleWriteCommand(
       const [w, h] = size.split('x').map(Number);
       await bm.setViewport(w, h);
       return `Viewport set to ${w}x${h}`;
+    }
+
+    case 'maximize': {
+      let width = 1920, height = 1080;
+      try {
+        const out = execFileSync(
+          'system_profiler', ['SPDisplaysDataType', '-json'],
+          { encoding: 'utf-8', timeout: 5000 },
+        );
+        const data = JSON.parse(out);
+        const displays = data?.SPDisplaysDataType?.[0]?.spdisplays_ndrvs ?? [];
+        const main = displays.find((d: Record<string, string>) => d.spdisplays_main === 'spdisplays_yes') ?? displays[0];
+        const res = main?.['_spdisplays_resolution'] ?? '';
+        const m = res.match(/(\d+)\s*x\s*(\d+)/);
+        if (m) { width = parseInt(m[1], 10); height = parseInt(m[2], 10); }
+      } catch { /* fallback to 1920x1080 */ }
+      await bm.setViewport(width, height);
+      return `Viewport maximized to ${width}x${height}`;
     }
 
     case 'cookie': {

@@ -11,6 +11,11 @@ Autonomous problem-solving loop: clarify the problem interactively, then iterate
 
 Unlike `ralph-execute` (requires plan.md) or `ralph-debug` (bug-specific), this skill handles **any type of task** — code changes, refactoring, configuration, infrastructure, etc. — without requiring a pre-built plan.
 
+**Worktree Safety — MANDATORY:**
+- Use `EnterWorktree`/`ExitWorktree` tools for all worktree operations. **NEVER use raw `git worktree add/remove` commands.**
+- **NEVER call `ExitWorktree({ action: "remove" })` automatically.** Only the user may decide to remove a worktree. After completion, call `ExitWorktree({ action: "keep" })`.
+- **NEVER pass `discard_changes: true`** unless the user explicitly asks to discard.
+
 **Principle Compliance:**
 Before starting any work:
 1. Check if `.workflow-adapter/principle.md` exists. If it does, read it and follow all its directives.
@@ -49,11 +54,12 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
     - Fresh: delete `ralph-state.md` and `autopilot-target.md`, proceed to Step 2.
 - Use AskUserQuestion: "A previous autopilot-ralph session exists for `{subject}`. Resume or start fresh?"
 - If resume: skip to Step 3.
-- If fresh: delete `ralph-state.md` and `autopilot-target.md`. If a worktree exists at `worktree_path`, clean it up:
-  ```bash
-  git worktree remove --force "{worktree_path}"
-  git branch -D "{worktree_branch}"
+- If fresh: delete `ralph-state.md` and `autopilot-target.md`. If in a worktree session, commit any changes first (`git add -A && git commit -m "{subject}: save work before reset"`), then ask the user:
   ```
+  AskUserQuestion({ questions: [{ question: "Remove existing worktree? (changes committed to branch {worktree_branch})", options: [{ label: "Yes" }, { label: "No, keep it" }] }] })
+  ```
+  - If Yes: `ExitWorktree({ action: "remove" })`
+  - If No: `ExitWorktree({ action: "keep" })`
   Then proceed to Step 2.
 - If the state file does NOT contain `type: autopilot`: warn the user and stop.
 
@@ -133,14 +139,12 @@ bun "${CLAUDE_PLUGIN_ROOT}/scripts/ralph-session-info.ts"
 
 ## Step 2.5: Create Worktree (only if `worktree_mode = true`)
 
-```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${REPO_ROOT}/../autopilot-{subject}-worktree"
-git worktree add "$WORKTREE_PATH" -b "autopilot-{subject}"
-echo "WORKTREE_PATH=$WORKTREE_PATH"
+```
+REPO_ROOT=$(git rev-parse --show-toplevel)   # save before entering worktree
+EnterWorktree({ name: "autopilot-{subject}" })
 ```
 
-Store the output path as `worktree_path` and `"autopilot-{subject}"` as `worktree_branch`.
+The tool creates a worktree under `.claude/worktrees/autopilot-{subject}` and switches the session directory into it automatically. Store the current working directory as `worktree_path` and `"autopilot-{subject}"` as `worktree_branch`. Store `REPO_ROOT` for accessing `.workflow-adapter/` files.
 
 ## Step 2.7: Write State File
 
@@ -533,9 +537,9 @@ TodoWrite([
 
 **If the verifier returned `PASS`:**
 
-If `worktree_mode = true`, remove the worktree (branch is preserved intentionally — no `--force` needed since all changes are committed):
-```bash
-git worktree remove "{worktree_path}"
+If `worktree_mode = true`, exit the worktree with `keep` (do NOT remove — let the user decide):
+```
+ExitWorktree({ action: "keep" })
 ```
 
 Output exactly:

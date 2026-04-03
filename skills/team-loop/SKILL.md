@@ -11,6 +11,12 @@ Phased development loop: clarify the problem interactively (P0), then iterate **
 
 Unlike `autopilot-ralph` (single-agent analyze-execute-verify), this skill spawns a **team of specialists** — historian, researcher, planner, executer(s), reviewer — coordinated by you (the orchestrator). Teammates actively collaborate across phases: historian ↔ researcher share findings in P1, the reviewer gates the plan in P2, the planner assigns work to one or more executers, and executers can request research support in P3.
 
+**Worktree Safety — MANDATORY:**
+- Use `EnterWorktree`/`ExitWorktree` tools for all worktree operations. **NEVER use raw `git worktree add/remove` commands.**
+- `ExitWorktree({ action: "remove" })` will automatically refuse if there are uncommitted changes — this is the safety net.
+- **NEVER call `ExitWorktree({ action: "remove" })` automatically.** Only the user may decide to remove a worktree. After completion, call `ExitWorktree({ action: "keep" })` and report the branch name so the user can clean up later.
+- **NEVER pass `discard_changes: true`** unless the user explicitly asks to discard.
+
 **Principle Compliance:**
 Before starting any work:
 1. Check if `.workflow-adapter/principle.md` exists. If it does, read it and follow all its directives.
@@ -69,11 +75,12 @@ Check whether `.workflow-adapter/{subject}/ralph-state.md` exists.
   - Try sending a broadcast to check if teammates are still alive. If no response, the team will need to be re-created in Step 5.
 - Use AskUserQuestion: "A previous team-loop session exists for `{subject}` (phase: {phase}, iteration: {iteration}/{max_iterations}). Resume or start fresh?"
 - If resume: skip to Step 5 (Create Team + Spawn Teammates), using the restored state.
-- If fresh: delete `ralph-state.md` and `team-loop-target.md`. If a worktree exists at `worktree_path`, clean it up:
-  ```bash
-  git worktree remove --force "{worktree_path}"
-  git branch -D "{worktree_branch}"
+- If fresh: delete `ralph-state.md` and `team-loop-target.md`. If the session is in a worktree, commit any changes first (`git add -A && git commit -m "{subject}: save work before reset"`), then ask the user:
   ```
+  AskUserQuestion({ questions: [{ question: "Remove existing worktree? (changes have been committed to branch {worktree_branch})", options: [{ label: "Yes" }, { label: "No, keep it" }] }] })
+  ```
+  - If Yes: `ExitWorktree({ action: "remove" })` — the tool will refuse if uncommitted changes remain.
+  - If No: `ExitWorktree({ action: "keep" })`
   Then proceed to Step 2.
 - If the state file does NOT contain `type: phased-loop`: warn the user — "State file exists but is not a team-loop session (type: {type}). Cannot resume." — and stop.
 
@@ -209,14 +216,12 @@ bun "${CLAUDE_PLUGIN_ROOT}/scripts/ralph-session-info.ts"
 
 ## Step 3: Create Worktree (only if `worktree_mode = true`)
 
-```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${REPO_ROOT}/../phased-{subject}-worktree"
-git worktree add "$WORKTREE_PATH" -b "phased-{subject}"
-echo "WORKTREE_PATH=$WORKTREE_PATH"
+```
+REPO_ROOT=$(git rev-parse --show-toplevel)   # save before entering worktree
+EnterWorktree({ name: "phased-{subject}" })
 ```
 
-Store the output path as `worktree_path` and `"phased-{subject}"` as `worktree_branch`.
+The tool creates a worktree under `.claude/worktrees/phased-{subject}` and switches the session directory into it automatically. Store the current working directory as `worktree_path` and `"phased-{subject}"` as `worktree_branch`. Store `REPO_ROOT` for accessing `.workflow-adapter/` files.
 
 ## Step 4: Write State File
 
@@ -555,11 +560,10 @@ Evaluate both the reviewer's verdict and the verification result. There are **3 
    TeamDelete()
    ```
 
-4. **Remove worktree** (only if `worktree_mode = true`):
-   ```bash
-   git worktree remove "{worktree_path}"
+4. **Exit worktree with `keep`** (do NOT remove — the user decides when to clean up):
    ```
-   The branch is preserved intentionally — no `--force` needed since all changes are committed.
+   ExitWorktree({ action: "keep" })
+   ```
 
 5. **Output completion promise** (store `worktree_branch` in a local variable before the state file is deleted by the Stop hook):
    ```

@@ -23,6 +23,10 @@ allowed-tools:
 
 Control a headless Chromium browser. Open pages, click, fill forms, take screenshots — whatever the user asks. There is no testing methodology or report structure here; this is a general-purpose browser tool.
 
+## CRITICAL: Launch the browser FIRST
+
+**Do NOT explain, plan, or ask questions before launching the browser.** The moment this skill triggers, your very first action MUST be to set up `$B` and open a page. The user triggered this skill because they want a browser — give them one immediately.
+
 ## Setup & Commands
 
 Read `references/commands.md` for the full command reference, setup instructions, and the @ref system. Set up `$B` before doing anything else.
@@ -36,15 +40,16 @@ $B goto <url>
 $B snapshot -i -a
 ```
 
-After `snapshot`, use `Read` on the screenshot file so the user sees the page inline. This is the most important feedback loop — the user wants to *see* the page.
+If no URL is given or detectable, navigate to `about:blank` first, then ask what to open — but **always launch the browser regardless**.
 
-If no URL is given, ask the user what to open.
+After `snapshot`, use `Read` on the screenshot file so the user sees the page inline. This is the most important feedback loop — the user wants to *see* the page.
 
 ## Guidelines
 
-1. **Always show screenshots.** After taking a snapshot or screenshot, use `Read` on the image file so the user sees it inline.
-2. **Re-snapshot after interactions.** Click or form submit changes the page — take a new snapshot so the user sees the result.
-3. **Use @refs over CSS selectors.** They're provided by `snapshot -i` and are simpler.
-4. **Ask if unsure.** If you don't know what the user wants to do on the page, ask.
-5. **No QA framework.** This skill just controls the browser. If the user wants QA testing, suggest `/workflow-adapter:qa-report` or `/workflow-adapter:qa`.
-6. **Never refuse to open a page.** When this skill triggers, the user wants browser interaction — do it.
+1. **Always launch the browser.** This is non-negotiable. Never skip browser setup, never just describe what you would do. Execute.
+2. **Always show screenshots.** After taking a snapshot or screenshot, use `Read` on the image file so the user sees it inline.
+3. **Re-snapshot after interactions.** Click or form submit changes the page — take a new snapshot so the user sees the result.
+4. **Use @refs over CSS selectors.** They're provided by `snapshot -i` and are simpler.
+5. **Ask if unsure.** If you don't know what the user wants to do on the page, ask — but ask AFTER launching the browser.
+6. **No QA framework.** This skill just controls the browser. If the user wants QA testing, suggest `/workflow-adapter:qa-report` or `/workflow-adapter:qa`.
+7. **Never refuse to open a page.** When this skill triggers, the user wants browser interaction — do it.

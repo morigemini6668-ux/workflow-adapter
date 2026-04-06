@@ -1,7 +1,7 @@
 ---
 name: execute
 description: Executes a previously created plan by spawning executer and reviewer teammates. Reads plan.md and worker.md, assigns tasks to parallel executers, monitors progress, handles failures and context exhaustion, and verifies completion. Requires plan.md to exist (run the plan skill first).
-argument-hint: "<optional: subject name> [--subagent] [--copilot]"
+argument-hint: "<optional: subject name> [--subagent] [--copilot] [--codex]"
 disable-model-invocation: true
 ---
 
@@ -40,12 +40,16 @@ If yes, ask which items to include and add them as additional tasks in plan.md. 
 Check if the user's argument contains these flags:
 - `--subagent`: set `subagent_mode = true`, remove from subject name
 - `--copilot`: set `copilot_mode = true`, remove from subject name
+- `--codex`: set `codex_mode = true`, remove from subject name
 - If `--copilot` is present, `copilot_mode = true`
-- If neither `--subagent` nor `--copilot` is present, both are `false`
+- If `--codex` is present, `codex_mode = true`
+- If none of `--subagent`, `--copilot`, `--codex` is present, all are `false`
 
 When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–8 entirely and proceed directly to SA-Step 3 in the "## Subagent Mode" section** below.
 
 When `copilot_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–8 and SA-Steps entirely and proceed directly to CP-Step 3 in the "## Copilot Mode" section** below.
+
+When `codex_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–8, SA-Steps, and CP-Steps entirely and proceed directly to CX-Step 3 in the "## Codex Mode" section** below.
 
 ## Step 1: Identify the Subject
 
@@ -455,5 +459,144 @@ Repeat CP-Steps 4–5 for each subsequent batch until all tasks in plan.md are `
 When all tasks are `[x]`:
 1. Run the verification steps listed in plan.md's "Verification Plan" section directly (orchestrator executes)
 2. Spawn one final Copilot reviewer Task (same pattern as CP-Step 5) to confirm overall completion
+3. If verification passes: update plan.md with final status, clean up prompt-*.md files, **commit worktree changes** if worktree was used (`git add -A && git commit -m "{subject}: execution complete"`), exit worktree with `ExitWorktree({ action: "keep" })`, report branch info to user (same format as Step 8), output **ALL JOB COMPLETE**
+4. If verification fails: identify failing items and spawn fix Tasks, repeat
+
+---
+
+## Codex Mode
+
+_This section is used when `--codex` flag is set. All Executer and Reviewer roles are delegated to Codex CLI via `codex-client.ts`. The orchestrator (Claude) manages batching, progress tracking, and completion decisions._
+
+### CX-Step 2.5: Create Worktree (if configured)
+
+Same as Step 2.5 above — use `EnterWorktree({ name: "{subject}" })`. Store `REPO_ROOT` for passing to all Codex executer subagents.
+
+### CX-Step 3: Group Tasks Into Batches
+
+Same as SA-Step 3 — analyze `plan.md` and `worker.md` to group tasks into dependency-ordered batches:
+- **Batch 1**: all tasks with no unfinished dependencies
+- **Batch 2**: tasks whose dependencies are in Batch 1
+- ...and so on
+
+Assign tasks to executer slots (alpha, beta, gamma...) based on `worker.md` allocation.
+
+### CX-Step 4: Spawn Codex Executer Subagents Per Batch
+
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn subagents for each executer slot. Do NOT run the steps inside the prompt yourself. The entire content below is each subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+
+For each batch, spawn all assigned executer slots as **background Task calls simultaneously**:
+
+```
+Task({
+  description: "Codex executer {slot}: implement tasks",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+Executer slot: {slot}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-{slot}.md with this exact content:
+
+You are an Executer responsible for implementation work.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+
+Subject: {subject}
+Plan location: .workflow-adapter/{subject}/plan.md
+Assigned tasks: {task numbers and titles — pending only}
+
+Execution Process:
+1. Read plan.md to understand your assigned tasks and dependencies
+2. For each assigned task:
+   a. Mark task as [~] in progress in plan.md
+   b. Perform the implementation work
+   c. Verify the work meets the completion criteria defined in plan.md
+   d. Mark task as [x] completed with a brief note of changes made
+   e. If blocked: mark as [!] and write BLOCKED: {reason} in plan.md
+3. After each task, save a checkpoint to .workflow-adapter/{subject}/checkpoint-{slot}.md
+
+Write only to your own assigned task rows — do not overwrite other tasks' status lines.
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-{slot}.md'
+
+3. Check the exit code. If non-zero, report the error.
+4. Read plan.md and verify the assigned tasks were updated.
+Output ONLY: Codex executer {slot}: {completed}/{total} tasks done.
+</codex-dispatcher-prompt>"
+})
+```
+
+Wait for all batch Tasks using the `TaskOutput` tool (set `block=true` for each task_id).
+
+### CX-Step 5: Spawn Codex Reviewer After Each Batch
+
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run the steps inside the prompt yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+
+After collecting all batch TaskOutputs, spawn a reviewer as a **foreground Task** (wait for result):
+
+```
+Task({
+  description: "Codex reviewer: verify completed tasks",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+Completed tasks in this batch: {task titles}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-reviewer.md with this exact content:
+
+You are a Reviewer. Review the just-completed tasks against completion criteria.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+Also read .workflow-adapter/principle.reviewer.md if it exists (takes priority).
+
+Plan location: .workflow-adapter/{subject}/plan.md
+Completed tasks in this batch: {task titles}
+
+For each completed task:
+1. Verify the completion criteria are actually met
+2. Check for correctness, security, consistency
+3. Verify verification methods were applied
+
+Write your review to .workflow-adapter/{subject}/review-batch-{N}.md in this format:
+Status: PASS or NEEDS REVISION
+Issues:
+- [CRITICAL|WARNING] {description} (Task N)
+Recommendations:
+- {specific fix}
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md'
+
+3. Read .workflow-adapter/{subject}/review-batch-{N}.md and extract the Status line.
+Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}
+</codex-dispatcher-prompt>"
+})
+```
+
+If reviewer returns `NEEDS REVISION`:
+1. For each CRITICAL issue: spawn a fix Task (same Codex dispatcher pattern), wait for result
+2. Re-run the reviewer Task once more to confirm fixes
+3. If still failing after 2 retry cycles: use AskUserQuestion to inform user and get direction
+
+### CX-Step 6: Continue to Next Batch
+
+Repeat CX-Steps 4–5 for each subsequent batch until all tasks in plan.md are `[x]`.
+
+### CX-Step 7: Final Verification
+
+When all tasks are `[x]`:
+1. Run the verification steps listed in plan.md's "Verification Plan" section directly (orchestrator executes)
+2. Spawn one final Codex reviewer Task (same pattern as CX-Step 5) to confirm overall completion
 3. If verification passes: update plan.md with final status, clean up prompt-*.md files, **commit worktree changes** if worktree was used (`git add -A && git commit -m "{subject}: execution complete"`), exit worktree with `ExitWorktree({ action: "keep" })`, report branch info to user (same format as Step 8), output **ALL JOB COMPLETE**
 4. If verification fails: identify failing items and spawn fix Tasks, repeat

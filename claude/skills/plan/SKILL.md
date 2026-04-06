@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Creates a detailed execution plan (plan.md and worker.md) from brainstorming or investigation results. Spawns a reviewer teammate to validate task definitions, completion criteria, and worker allocation. Requires a subject folder with brainstorming.md or investigation.md.
-argument-hint: "<optional: subject name> [--yes] [--subagent]"
+argument-hint: "<optional: subject name> [--yes] [--subagent] [--codex]"
 disable-model-invocation: true
 ---
 
@@ -41,7 +41,13 @@ Also check for `--subagent` flag:
 - If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the subject name
 - If `--subagent` is absent, set `subagent_mode = false`
 
+Also check for `--codex` flag:
+- If `--codex` is present, set `codex_mode = true` and remove `--codex` from the subject name
+- If `--codex` is absent, set `codex_mode = false`
+
 When `subagent_mode = true`, follow Steps 1–5 as normal, then **skip Steps 6 and 8 entirely and proceed to "## Subagent Mode"** below instead.
+
+When `codex_mode = true`, follow Steps 1–5 as normal, then **skip Steps 6 and 8 entirely and proceed to "## Codex Mode"** below instead.
 
 ## Step 1: Identify the Subject
 
@@ -258,3 +264,71 @@ Read the reviewer Task's returned text:
 - If `Status: NEEDS REVISION`: apply all CRITICAL changes to plan.md (orchestrator edits directly), then spawn the reviewer Task once more to confirm. If it still returns NEEDS REVISION, surface remaining issues to the user via AskUserQuestion. WARNING-level issues are applied at orchestrator discretion — apply them if they improve clarity, otherwise note them for the user during Step 7.
 
 **No TeamDelete needed** — no team was created in subagent mode.
+
+---
+
+## Codex Mode
+
+_Used when `--codex` flag is set. No TeamCreate. Reviewer is delegated to Codex CLI via `codex-client.ts`._
+
+Steps 1–5 (identify subject, read source, ask worktree, create plan.md, create worker.md) run unchanged.
+
+### CX-Step 6: Spawn Codex Reviewer
+
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn a subagent. Do NOT run the steps inside the prompt yourself. The entire content below is the subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+
+Spawn the reviewer as a **foreground Task** (wait for result):
+
+```
+Task({
+  description: "Codex reviewer: validate plan",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-reviewer.md with this exact content:
+
+You are a Reviewer. Review a draft execution plan.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+Also read .workflow-adapter/principle.reviewer.md if it exists (takes priority).
+
+Review these files:
+- .workflow-adapter/{subject}/plan.md
+- .workflow-adapter/{subject}/worker.md
+
+Verify:
+- Every task has clear, measurable completion criteria
+- Every task has a verification method
+- Task dependencies are correctly ordered
+- Executer count and task allocation is balanced
+- No tasks are missing from the original brainstorming/investigation scope
+
+Write your review to .workflow-adapter/{subject}/plan-review.md in this format:
+Status: PASS or NEEDS REVISION
+Issues:
+- [CRITICAL|WARNING] {description} (Task N or general)
+Recommendations:
+- {specific text to add or change in plan.md}
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md'
+
+3. Read .workflow-adapter/{subject}/plan-review.md and extract the Status line.
+Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}
+</codex-dispatcher-prompt>"
+})
+```
+
+### CX-Step 7: Revise If Needed
+
+Read the reviewer Task's returned text:
+- If `Status: PASS`: proceed directly to the **"## Step 7: Final Confirmation"** section above (if `auto_confirm = false`) or inform the user that the plan is ready (if `auto_confirm = true`).
+- If `Status: NEEDS REVISION`: apply all CRITICAL changes to plan.md (orchestrator edits directly), then spawn the Codex reviewer Task once more to confirm. If it still returns NEEDS REVISION, surface remaining issues to the user via AskUserQuestion.
+
+**No TeamDelete needed** — no team was created in Codex mode.

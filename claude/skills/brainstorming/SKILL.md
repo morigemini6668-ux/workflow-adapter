@@ -1,7 +1,7 @@
 ---
 name: brainstorming
 description: Starts a brainstorming session for a given subject. Spawns historian, researcher, and reviewer teammates who work concurrently, then the orchestrator moderates a multi-round group discussion (default 2 rounds, configurable via --rounds N) where teammates debate and react to each other's findings. Produces a structured brainstorming.md output.
-argument-hint: "<optional: subject description> [--yes] [--subagent] [--rounds N]"
+argument-hint: "<optional: subject description> [--yes] [--subagent] [--codex] [--rounds N]"
 disable-model-invocation: true
 ---
 
@@ -41,11 +41,17 @@ Also check for `--subagent` flag:
 - If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the subject description
 - If `--subagent` is absent, set `subagent_mode = false`
 
+Also check for `--codex` flag:
+- If `--codex` is present, set `codex_mode = true` and remove `--codex` from the subject description
+- If `--codex` is absent, set `codex_mode = false`
+
 Also check for `--rounds N` flag:
 - If `--rounds N` is present, set `discussion_rounds = N` and remove `--rounds N` from the subject description
 - If `--rounds` is absent, set `discussion_rounds = 2` (default)
 
 When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–5 and 8 entirely and proceed to "## Subagent Mode"** below instead.
+
+When `codex_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–5 and 8 entirely and proceed to "## Codex Mode"** below instead.
 
 ## Step 1: Determine the Subject
 
@@ -397,6 +403,153 @@ If reviewer returns `NEEDS REVISION` with CRITICAL issues:
 If reviewer returns `PASS` (or after the revision round): proceed to **"## SA-Step 6 onward"** below.
 
 ### SA-Step 6 onward
+
+Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
+
+**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls.
+
+---
+
+## Codex Mode
+
+_Used when `--codex` flag is set. No TeamCreate, no discussion phase. Historian and researcher roles are delegated to Codex CLI via `codex-client.ts`. Reviewer runs as a Codex dispatcher._
+
+Steps 1–2 (determine subject, create folder structure) run unchanged.
+
+### CX-Step 3: Spawn Codex Historian and Researcher in Parallel
+
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn subagents for each role. Do NOT run the steps inside the prompt yourself. The entire content below is each subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+
+Spawn both as **background Tasks simultaneously**:
+
+```
+Task({
+  description: "Codex historian: gather project context",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-historian.md with this exact content:
+
+You are a Historian. Gather past context relevant to this subject.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+
+Subject: {subject}
+Description: {user_request}
+
+Gather context from:
+- Project CLAUDE.md, CLAUDE.local.md, AGENTS.md (if they exist)
+- Recent git log entries related to the subject area
+- GitLab/GitHub issues and PRs if available via gh/glab CLI
+
+Write findings to: .workflow-adapter/{subject}/doc/historian-context.md
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-historian.md'
+
+3. Check the exit code. If non-zero, report the error.
+4. Read .workflow-adapter/{subject}/doc/historian-context.md if it exists.
+Output ONLY: a brief summary of the historian's key findings.
+</codex-dispatcher-prompt>"
+})
+
+Task({
+  description: "Codex researcher: research subject",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-researcher.md with this exact content:
+
+You are a Researcher. Research this subject thoroughly.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+
+Subject: {subject}
+Description: {user_request}
+
+Research using all available tools (web search, codebase exploration, etc.).
+Save research documents to: .workflow-adapter/{subject}/doc/
+
+Return a structured summary of your key findings and recommendations.
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-researcher.md'
+
+3. Check the exit code. If non-zero, report the error.
+4. Read any files created in .workflow-adapter/{subject}/doc/ by the researcher.
+Output ONLY: a structured summary of the researcher's key findings.
+</codex-dispatcher-prompt>"
+})
+```
+
+Wait for both Tasks using the `TaskOutput` tool (set `block=true` for each task_id).
+
+### CX-Step 4: Spawn Codex Reviewer
+
+Spawn the reviewer as a **foreground Task** (wait for result):
+
+```
+Task({
+  description: "Codex reviewer: review brainstorming materials",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-reviewer.md with this exact content:
+
+You are a Reviewer. Critically review the brainstorming materials.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+Also read .workflow-adapter/principle.reviewer.md if it exists (takes priority).
+
+Subject: {subject}
+
+Review these files:
+- .workflow-adapter/{subject}/doc/historian-context.md (if exists)
+- All files in .workflow-adapter/{subject}/doc/ (researcher documents)
+
+Act as Devil's Advocate: challenge assumptions, find gaps, propose alternatives.
+
+Write your review to .workflow-adapter/{subject}/review.md in this format:
+Status: PASS or NEEDS REVISION
+Issues:
+- [CRITICAL|WARNING] {description}
+Recommendations:
+- {specific improvement}
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md'
+
+3. Read .workflow-adapter/{subject}/review.md and extract the Status line.
+Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}
+</codex-dispatcher-prompt>"
+})
+```
+
+If reviewer returns `NEEDS REVISION` with CRITICAL issues:
+- Spawn a new Codex researcher Task targeted at the specific gaps
+- One revision round maximum; then continue
+
+If reviewer returns `PASS` (or after the revision round): proceed to CX-Step 5.
+
+### CX-Step 5 onward
 
 Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
 

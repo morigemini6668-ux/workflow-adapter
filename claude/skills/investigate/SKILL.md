@@ -1,7 +1,7 @@
 ---
 name: investigate
 description: Investigates a problem by spawning historian, researcher, reviewer, and on-demand enricher teammates to analyze root causes and propose risk-assessed solutions. Teammates engage in structured evidence-based discussion rounds (default 1, configurable via --rounds N) where hypotheses are challenged, defended, and refined. Produces a structured investigation.md with hypotheses, evidence chains, and recommended actions.
-argument-hint: "<optional: problem description> [--yes] [--subagent] [--rounds N]"
+argument-hint: "<optional: problem description> [--yes] [--subagent] [--codex] [--rounds N]"
 disable-model-invocation: true
 ---
 
@@ -43,11 +43,17 @@ Also check for `--subagent` flag:
 - If `--subagent` is present, set `subagent_mode = true` and remove `--subagent` from the problem description
 - If `--subagent` is absent, set `subagent_mode = false`
 
+Also check for `--codex` flag:
+- If `--codex` is present, set `codex_mode = true` and remove `--codex` from the problem description
+- If `--codex` is absent, set `codex_mode = false`
+
 Also check for `--rounds N` flag:
 - If `--rounds N` is present, set `discussion_rounds = N` and remove `--rounds N` from the problem description
 - If `--rounds` is absent, set `discussion_rounds = 1` (default)
 
 When `subagent_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–5 and 8 entirely and proceed to "## Subagent Mode"** below instead.
+
+When `codex_mode = true`, follow Steps 1–2 as normal, then **skip Steps 3–5 and 8 entirely and proceed to "## Codex Mode"** below instead.
 
 ## Step 1: Understand the Problem
 
@@ -521,6 +527,205 @@ If reviewer returns `NEEDS REVISION` with CRITICAL issues:
 If reviewer returns `PASS` (or after the revision round): proceed to **"## SA-Step 6 onward"** below.
 
 ### SA-Step 6 onward
+
+Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
+
+**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls.
+
+---
+
+## Codex Mode
+
+_Used when `--codex` flag is set. No TeamCreate, no discussion phase. Historian, researcher, and reviewer roles are delegated to Codex CLI via `codex-client.ts`. Enricher spawned on-demand as a Codex dispatcher._
+
+Steps 1–2 (understand problem, create folder structure) run unchanged.
+
+### CX-Step 3: Spawn Codex Historian and Researcher in Parallel
+
+**IMPORTANT: You (the orchestrator) MUST use the Agent/Task tool to spawn subagents for each role. Do NOT run the steps inside the prompt yourself. The entire content below is each subagent's prompt — pass it verbatim to the Task tool's `prompt` field.**
+
+Spawn both as **background Tasks simultaneously**:
+
+```
+Task({
+  description: "Codex historian: gather project context for investigation",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-historian.md with this exact content:
+
+You are a Historian. Gather past context relevant to this problem.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+
+Subject: {subject}
+Problem: {problem_description}
+
+Focus on: git blame for affected areas, related past incidents, previous fix attempts, known constraints.
+Gather from: CLAUDE.md, git log, GitLab/GitHub issues and PRs (via gh/glab CLI if available).
+
+Write findings to: .workflow-adapter/{subject}/doc/historian-context.md
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-historian.md'
+
+3. Check the exit code. If non-zero, report the error.
+4. Read .workflow-adapter/{subject}/doc/historian-context.md if it exists.
+Output ONLY: a brief summary of the historian's key findings.
+</codex-dispatcher-prompt>"
+})
+
+Task({
+  description: "Codex researcher: analyze problem",
+  subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-researcher.md with this exact content:
+
+You are a Researcher in INVESTIGATION mode.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+
+Subject: {subject}
+Problem: {problem_description}
+
+CRITICAL CONSTRAINT: You MUST NOT modify any source code. Read-only analysis only.
+
+Analyze systematically:
+1. Identify affected code paths and components
+2. Trace data flow and control flow
+3. Look for anti-patterns, race conditions, misconfigurations
+4. Check dependency versions and known issues
+5. Propose hypotheses ranked by likelihood
+6. For each hypothesis: describe supporting/refuting evidence
+
+If telemetry is insufficient to diagnose, write as the FIRST LINE:
+TELEMETRY GAP: {specific gap} — Need instrumentation at {specific locations}
+
+Save analysis to .workflow-adapter/{subject}/doc/researcher-analysis.md
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-researcher.md'
+
+3. Check the exit code. If non-zero, report the error.
+4. Read .workflow-adapter/{subject}/doc/researcher-analysis.md if it exists.
+Output ONLY: a structured summary with hypotheses and evidence. If the first line of the analysis is TELEMETRY GAP, include it as the first line of your output.
+</codex-dispatcher-prompt>"
+})
+```
+
+Wait for both Tasks using the `TaskOutput` tool (set `block=true` for each task_id).
+
+### CX-Step 4: Handle Telemetry Gap (on-demand)
+
+If the researcher's output starts with `TELEMETRY GAP:`:
+
+1. Ask user whether to add instrumentation (same as SA-Step 4)
+2. If user approves, spawn a Codex enricher dispatcher:
+
+```
+Task({
+  description: "Codex enricher: add telemetry instrumentation",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-enricher.md with this exact content:
+
+You are an Enricher. Add the minimum necessary telemetry instrumentation.
+
+Subject: {subject}
+Problem: {problem_description}
+
+Telemetry gap: {exact gap details from researcher}
+
+Add the minimum necessary logging, metrics, or tracing to observe the behavior described above.
+Write a summary of what was added to .workflow-adapter/{subject}/doc/enricher-summary.md
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-enricher.md'
+
+3. Read .workflow-adapter/{subject}/doc/enricher-summary.md if it exists.
+Output ONLY: a summary of what instrumentation was added.
+</codex-dispatcher-prompt>"
+})
+```
+
+3. After enricher completes, spawn a new Codex researcher Task to re-analyze (same pattern, updated prompt mentioning the added telemetry).
+4. If still insufficient, surface to user (same as SA-Step 4).
+
+### CX-Step 5: Spawn Codex Reviewer
+
+Spawn the reviewer as a **foreground Task** (wait for result):
+
+```
+Task({
+  description: "Codex reviewer: validate investigation findings",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "<codex-dispatcher-prompt>
+You are a Codex dispatcher subagent. Your ONLY job is to: (1) write a prompt file, (2) run codex-client.ts via Bash, (3) report the result.
+
+Subject: {subject}
+
+Do these steps in order:
+
+1. Use the Write tool to create .workflow-adapter/{subject}/prompt-reviewer.md with this exact content:
+
+You are a Reviewer in INVESTIGATION REVIEW mode.
+
+Before starting, read .workflow-adapter/principle.md if it exists and follow it.
+Also read .workflow-adapter/principle.reviewer.md if it exists (takes priority).
+
+Subject: {subject}
+
+Review files in .workflow-adapter/{subject}/doc/
+
+Focus on:
+1. Are proposed root causes supported by evidence?
+2. Are there alternative explanations the researcher missed?
+3. For each proposed solution: What are the risks? Side effects?
+4. Is the solution proportional — not over-engineered?
+5. Quick wins vs. long-term fixes — are they distinguished?
+
+Write your review to .workflow-adapter/{subject}/review.md in this format:
+Status: PASS or NEEDS REVISION
+Issues:
+- [CRITICAL|WARNING] {description}
+Recommendations:
+- {specific improvement}
+
+2. Use the Bash tool to run:
+bun '${CLAUDE_PLUGIN_ROOT}/scripts/codex-client.ts' --writable --prompt-file '.workflow-adapter/{subject}/prompt-reviewer.md'
+
+3. Read .workflow-adapter/{subject}/review.md and extract the Status line.
+Output ONLY: Status: PASS or Status: NEEDS REVISION — {summary}
+</codex-dispatcher-prompt>"
+})
+```
+
+If reviewer returns `NEEDS REVISION` with CRITICAL issues:
+- Spawn a new Codex researcher Task targeted at the specific gaps
+- One revision round maximum; then continue
+
+### CX-Step 6 onward
 
 Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
 

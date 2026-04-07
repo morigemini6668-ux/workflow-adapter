@@ -206,12 +206,22 @@ When ALL tasks in plan.md are marked `[x]` completed:
          -> Review:  git log {subject}
          -> Merge:   git merge {subject}
          -> Discard: git branch -D {subject}
+
+       Suggested follow-ups:
+         -> /retrospective to extract principles and lessons learned
+         -> /archive to preserve decisions as ADRs
+         -> /session-insights to analyze usage patterns
        ```
      - If no worktree:
        ```
        ALL JOB COMPLETE
 
        Changes were applied directly to the current branch.
+
+       Suggested follow-ups:
+         -> /retrospective to extract principles and lessons learned
+         -> /archive to preserve decisions as ADRs
+         -> /session-insights to analyze usage patterns
        ```
 4. If verification fails:
    - Identify failing items

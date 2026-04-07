@@ -1,6 +1,8 @@
 ---
 name: investigate
-description: Investigates a problem by spawning historian, researcher, reviewer, and on-demand enricher teammates to analyze root causes and propose risk-assessed solutions. Teammates engage in structured evidence-based discussion rounds (default 1, configurable via --rounds N) where hypotheses are challenged, defended, and refined. Produces a structured investigation.md with hypotheses, evidence chains, and recommended actions.
+description: |
+  Investigates a problem by spawning historian, researcher, reviewer, and on-demand enricher teammates to analyze root causes and propose risk-assessed solutions. Teammates engage in structured evidence-based discussion rounds (default 1, configurable via --rounds N) where hypotheses are challenged, defended, and refined. Produces a structured investigation.md with hypotheses, evidence chains, and recommended actions.
+  Use this skill when the user mentions "investigate", "조사", "원인 파악", "이슈 분석", "문제 추적", "root cause", "debug this", "왜 이런 거야", "분석해줘", "장애 분석", "원인 분석", "문제 분석", "why is this happening", "diagnose", "troubleshoot".
 argument-hint: "<optional: problem description> [--yes] [--subagent] [--codex] [--rounds N]"
 disable-model-invocation: true
 ---

@@ -344,7 +344,10 @@ Then clean up the team:
 TeamDelete()
 ```
 
-Inform the user that brainstorming is complete and suggest running `/workflow-adapter:plan` to create an execution plan.
+Inform the user that brainstorming is complete and suggest:
+- `/workflow-adapter:plan` to create an execution plan
+- `/workflow-adapter:retrospective` to extract principles and lessons from this session
+- `/workflow-adapter:archive` to preserve decisions as ADRs when the work is done
 
 **Backlog Offer:**
 Before ending, ask the user if any deferred items from this session should be added to the backlog:

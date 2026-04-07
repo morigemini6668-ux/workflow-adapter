@@ -6,7 +6,7 @@ description: |
   "사용 패턴", "usage patterns", "friction analysis", "개선점 분석", "plugin diagnostics",
   "session analysis", "사용 분석", "tool usage", "세션 데이터 분석", "플러그인 진단",
   or asks about improving the plugin based on usage data.
-argument-hint: "[--project <path>] [--yes]"
+argument-hint: "[--project <path>] [--plugin-only] [--yes]"
 allowed-tools:
   - Bash
   - Read
@@ -27,10 +27,12 @@ Analyze pre-computed Claude Code session data (facets, session-meta, history.jso
 Check the user's arguments for these flags:
 
 - `--project <path>`: If present, filter analysis to sessions from this project path only. Remove from remaining arguments.
+- `--plugin-only`: If present, filter results to show only workflow-adapter plugin-related data (friction details mentioning plugin components, workflow-adapter slash commands, team/workflow tools). Remove from remaining arguments.
 - `--yes`: If present, set `auto_confirm = true` (skip user confirmation of results). Remove from remaining arguments.
 
 Defaults:
 - `project_filter = null` (analyze all projects)
+- `plugin_only = false`
 - `auto_confirm = false`
 
 ## Step 1: Principle Compliance
@@ -53,7 +55,8 @@ Run the data aggregation script to collect and summarize session data:
 ```bash
 bun ${CLAUDE_PLUGIN_ROOT}/scripts/lib/aggregate-session-data.ts \
   --output .workflow-adapter/session-insights/analysis-summary.json \
-  ${project_filter:+--project "$project_filter"}
+  ${project_filter:+--project "$project_filter"} \
+  ${plugin_only:+--plugin-only}
 ```
 
 - If the script exits with a non-zero code or produces no output, inform the user:

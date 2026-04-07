@@ -360,17 +360,76 @@ async function aggregate(projectFilter?: string) {
   };
 }
 
+// --- plugin-only filter ---
+const PLUGIN_KEYWORDS = [
+  "workflow-adapter", "brainstorming", "investigate", "team-loop",
+  "retrospective", "principle", "backlog", "archive", "qa-report",
+  "session-insights", "spawn", "shutdown", "browse", "broadcast",
+  "executer", "reviewer", "historian", "researcher", "enricher",
+  "orchestrator", "SendMessage", "TeamCreate", "TeamDelete",
+  ".workflow-adapter/", "plan.md", "brainstorming.md", "investigation.md",
+  "워크플로우", "브레인스토밍", "팀 루프",
+];
+
+function filterPluginOnly(data: Awaited<ReturnType<typeof aggregate>>) {
+  // Filter friction details to only plugin-related ones
+  const filteredDetails = data.friction.top_details.filter((d) =>
+    PLUGIN_KEYWORDS.some((kw) => d.detail.toLowerCase().includes(kw.toLowerCase()))
+  );
+
+  // Filter skills to only workflow-adapter commands
+  const filteredSkills = data.skills.filter(
+    (s) =>
+      s.command.includes("workflow-adapter") ||
+      s.command === "/brainstorming" ||
+      s.command === "/plan" ||
+      s.command === "/execute" ||
+      s.command === "/investigate" ||
+      s.command === "/qa" ||
+      s.command === "/qa-report" ||
+      s.command === "/spawn" ||
+      s.command === "/browse" ||
+      s.command === "/team-loop" ||
+      s.command === "/archive" ||
+      s.command === "/retrospective" ||
+      s.command === "/principle"
+  );
+
+  // Filter tools to team/workflow-related ones
+  const teamTools = new Set([
+    "SendMessage", "TeamCreate", "TeamDelete", "Agent", "Task",
+    "TaskCreate", "TaskUpdate", "TaskOutput", "TaskList", "TaskStop",
+    "EnterWorktree", "ExitWorktree", "Skill",
+  ]);
+  const filteredTools = data.tools.filter((t) => teamTools.has(t.tool));
+
+  return {
+    ...data,
+    metadata: { ...data.metadata, plugin_only: true },
+    friction: {
+      ...data.friction,
+      top_details: filteredDetails,
+    },
+    skills: filteredSkills,
+    tools: filteredTools,
+  };
+}
+
 // --- CLI ---
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
     project: { type: "string" },
     output: { type: "string" },
+    "plugin-only": { type: "boolean", default: false },
   },
   strict: false,
 });
 
-const result = await aggregate(values.project as string | undefined);
+let result = await aggregate(values.project as string | undefined);
+if (values["plugin-only"]) {
+  result = filterPluginOnly(result);
+}
 const json = JSON.stringify(result, null, 2);
 
 if (values.output) {

@@ -123,6 +123,20 @@ Task({
 
 **Critical**: Set `run_in_background: true` for all teammates so they run concurrently.
 
+### Teammate Response Waiting Protocol
+
+**This protocol applies everywhere you send messages to teammates and need their responses.**
+
+When you send messages to teammates and need their reactions before proceeding:
+
+1. **Track expected responses**: After sending messages, note exactly which teammates you expect responses from (e.g., "Expecting: researcher, reviewer").
+2. **End your turn immediately**: After sending the batch of messages, **STOP generating**. Do not proceed to the next step. Your turn MUST end here.
+3. **Resume and check**: When you are re-activated by an incoming teammate message, check: have ALL expected teammates responded?
+   - **Not all responded yet** → Acknowledge what you received, but **STOP again**. Do not proceed.
+   - **All responded** → Proceed to the next step.
+
+**Why this matters**: Teammates run in background processes. Their responses arrive asynchronously via SendMessage. If you proceed before all responses arrive, you will advance rounds without complete data.
+
 ## Step 4: Collect Initial Findings
 
 Messages from teammates are **automatically delivered** to you — no need to poll.
@@ -138,7 +152,7 @@ While teammates are working on their initial analysis:
 
 3. **Handle failures**: If a teammate fails or becomes unresponsive, continue with available findings from other teammates.
 
-Wait until all three teammates (historian, researcher, reviewer) have sent their initial findings.
+Wait until all three teammates (historian, researcher, reviewer) have sent their initial findings. **Apply the Waiting Protocol**: expect 3 responses (historian, researcher, reviewer). End your turn and do not proceed to Step 4.5 until all 3 have reported.
 
 ## Step 4.5: Moderated Discussion (`discussion_rounds` rounds)
 
@@ -178,6 +192,8 @@ Repeat the following round structure for `discussion_rounds` rounds (default: 1)
    })
    ```
 
+   **⏸️ YIELD (Waiting Protocol)**: You just sent messages to historian, researcher, and reviewer. **Expect 4 reactions** (researcher reacts to historian, reviewer reacts to historian, historian reacts to researcher, reviewer reacts to researcher). **End your turn now.** Resume only after all 4 reactions have arrived. If only some have arrived when you resume, acknowledge them and STOP again.
+
 3. **Relay challenges back** for defense or revision:
    - When the reviewer challenges a hypothesis:
      ```
@@ -195,6 +211,8 @@ Repeat the following round structure for `discussion_rounds` rounds (default: 1)
        summary: "Relaying historian context"
      })
      ```
+
+   **⏸️ YIELD (Waiting Protocol)**: After relaying reactions, note how many teammates you expect responses from and **end your turn**. Wait for all expected responses before proceeding to 4.5b.
 
 4. **Direct additional analysis** if discussion reveals new leads:
    ```

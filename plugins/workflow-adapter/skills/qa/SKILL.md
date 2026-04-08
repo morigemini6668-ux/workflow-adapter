@@ -1,10 +1,13 @@
 ---
 name: qa
 description: |
-  Systematically QA test a web application and fix bugs found. Runs QA testing,
-  then iteratively fixes bugs in source code, committing each fix atomically and
-  re-verifying. Use when asked to "qa", "QA", "test this site", "find bugs",
-  "test and fix", "테스트해줘", "버그 찾아줘", or "fix what's broken".
+  Systematically QA test a web application OR interactive CLI/TUI application
+  and fix bugs found. Runs QA testing, then iteratively fixes bugs in source
+  code, committing each fix atomically and re-verifying.
+  Use when asked to "qa", "QA", "test this site", "find bugs", "test and fix",
+  "테스트해줘", "버그 찾아줘", "fix what's broken", "TUI QA", "CLI 앱 테스트하고 고쳐",
+  "tmux 앱 QA", or "터미널 앱 테스트해줘".
+  Supports both browser (web) and TUI (tmux) targets — auto-detects based on input.
   Three tiers: Quick (critical/high only), Standard (+ medium), Exhaustive (+ cosmetic).
   Produces before/after health scores, fix evidence, and ship-readiness summary.
   For report-only mode, use /workflow-adapter:qa-report.
@@ -21,7 +24,7 @@ allowed-tools:
 
 # /qa: Test → Fix → Verify
 
-You are a QA engineer AND a bug-fix engineer. Test web applications like a real user — click everything, fill every form, check every state. When you find bugs, fix them in source code with atomic commits, then re-verify.
+You are a QA engineer AND a bug-fix engineer. Test web applications or TUI applications like a real user — click/press everything, fill every form/input, check every state. When you find bugs, fix them in source code with atomic commits, then re-verify.
 
 **Principle Compliance:**
 Before starting, check if `.workflow-adapter/principle.md` exists. If it does, read and follow it.
@@ -32,9 +35,9 @@ Before starting, check if `.workflow-adapter/principle.md` exists. If it does, r
 
 | Parameter | Default | Override example |
 |-----------|---------|-----------------:|
-| Target URL | (auto-detect or required) | `https://myapp.com`, `http://localhost:3000` |
+| Target | (auto-detect or required) | URL, tmux pane ID, or TUI app name |
 | Tier | Standard | `--quick`, `--exhaustive` |
-| Mode | full | `--regression <baseline>` |
+| Mode | full | `--regression <baseline>`, `--tui` |
 | Output dir | `.workflow-adapter/qa-reports/` | `Output to /tmp/qa` |
 | Scope | Full app (or diff-scoped) | `Focus on the billing page` |
 | Auth | None | `Sign in to user@example.com` |
@@ -44,7 +47,21 @@ Before starting, check if `.workflow-adapter/principle.md` exists. If it does, r
 - **Standard:** + medium (default)
 - **Exhaustive:** + low/cosmetic
 
-**If no URL is given and you're on a feature branch:** Auto-enter diff-aware mode.
+### Target Type Detection
+
+Determine the target type from the user's input (same as qa-report):
+
+| Input Pattern | Target Type | Tool |
+|---------------|-------------|------|
+| URL (`http://`, `https://`, `localhost:...`) | **Browser** | `$B` (qa-browse) |
+| tmux pane ID (`%0`, `session:window.pane`) | **TUI** | `$T` (qa-tui) |
+| TUI app name (`htop`, `lazygit`, `k9s`, etc.) | **TUI** | `$T` (qa-tui) |
+| `--tui` flag | **TUI** | `$T` (qa-tui) |
+| No target + feature branch | **Browser** (diff-aware) | `$B` (qa-browse) |
+
+Set `TARGET_TYPE=browser` or `TARGET_TYPE=tui` accordingly.
+
+**If no URL is given and you're on a feature branch:** Auto-enter diff-aware mode (browser).
 
 **Check for clean working tree:**
 
@@ -56,6 +73,8 @@ If dirty, use AskUserQuestion:
 - A) Commit my changes — commit all current changes, then start QA
 - B) Stash my changes — stash, run QA, pop after
 - C) Abort — I'll clean up manually
+
+### Browser Setup (TARGET_TYPE=browser)
 
 **Find the qa-browse binary:**
 
@@ -73,7 +92,28 @@ fi
 
 If `NEEDS_SETUP`: Build with `cd ${CLAUDE_PLUGIN_ROOT}/scripts/qa-browse && bun install && bun run build`
 
-**Create output directories:**
+### TUI Setup (TARGET_TYPE=tui)
+
+**Find the qa-tui script:**
+
+```bash
+T=""
+_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -n "$_ROOT" ] && [ -x "$_ROOT/scripts/qa-tui/qa-tui" ] && T="$_ROOT/scripts/qa-tui/qa-tui"
+[ -z "$T" ] && [ -x "${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui/qa-tui" ] && T="${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui/qa-tui"
+if [ -x "$T" ]; then
+  echo "READY: $T"
+else
+  echo "NOT_FOUND"
+fi
+```
+
+**Connect to TUI:**
+- If pane ID given: `$T attach <pane-id>`
+- If app name given: `$T launch <app-name> --size 120x40`
+- Start logging: `$T log --start`
+
+### Create output directories
 
 ```bash
 mkdir -p .workflow-adapter/qa-reports/screenshots
@@ -84,13 +124,20 @@ mkdir -p .workflow-adapter/qa-reports/screenshots
 ## Phases 1-6: QA Baseline
 
 Follow the same methodology as `/workflow-adapter:qa-report`:
+
+**Browser mode (TARGET_TYPE=browser):**
 - **Modes:** Diff-aware, Full, Quick, Regression
 - **Phases:** Initialize → Authenticate → Orient → Explore → Document → Wrap Up
 - Reference `references/issue-taxonomy.md` for severity levels and per-page checklist
-- Reference `references/report-template.md` for report format
+
+**TUI mode (TARGET_TYPE=tui):**
+- **Phases:** Initialize → Connect → Orient → Explore → Document → Wrap Up
+- Reference `references/tui-checklist.md` for TUI-specific per-screen checklist and severity levels
+- Use `$T` commands instead of `$B` commands throughout
 
 The skill references are located at:
-- `${CLAUDE_PLUGIN_ROOT}/skills/qa-report/references/issue-taxonomy.md`
+- `${CLAUDE_PLUGIN_ROOT}/skills/qa-report/references/issue-taxonomy.md` (browser)
+- `${CLAUDE_PLUGIN_ROOT}/skills/qa-report/references/tui-checklist.md` (TUI)
 - `${CLAUDE_PLUGIN_ROOT}/skills/qa-report/references/report-template.md`
 
 Record baseline health score at end of Phase 6.
@@ -132,11 +179,26 @@ git commit -m "fix(qa): ISSUE-NNN — short description"
 One commit per fix. Never bundle.
 
 ### 8d. Re-test
+
+**Browser mode:**
 ```bash
 $B goto <affected-url>
 $B screenshot "$REPORT_DIR/screenshots/issue-NNN-after.png"
 $B console --errors
 $B snapshot -D
+```
+
+**TUI mode:**
+```bash
+# Restart the TUI app to pick up code changes
+$T stop
+$T launch <app-command> --size 120x40
+$T wait "ready indicator" --timeout 10
+# Navigate to the affected screen
+$T press <navigation-keys>
+$T screenshot "$REPORT_DIR/screenshots/issue-NNN-after.png"
+$T log --read --errors
+$T diff
 ```
 
 ### 8e. Classify
@@ -201,7 +263,7 @@ Summary: total issues, fixes applied, deferred, health score delta.
 
 ## Health Score Rubric
 
-Same as `/workflow-adapter:qa-report`:
+### Browser mode (same as `/workflow-adapter:qa-report`):
 
 | Category | Weight |
 |----------|--------|
@@ -213,6 +275,18 @@ Same as `/workflow-adapter:qa-report`:
 | Performance | 10% |
 | Content | 5% |
 | Accessibility | 15% |
+
+### TUI mode:
+
+| Category | Weight |
+|----------|--------|
+| Rendering | 20% |
+| Responsiveness | 15% |
+| Navigation | 20% |
+| Input | 15% |
+| Error Handling | 10% |
+| Layout | 10% |
+| Accessibility | 10% |
 
 Each category starts at 100. Deduct: Critical -25, High -15, Medium -8, Low -3. Minimum 0.
 

@@ -1,0 +1,461 @@
+#!/usr/bin/env bash
+# qa-tui — tmux-based TUI interaction CLI
+# Analogous to qa-browse but for terminal UI applications.
+#
+# Usage: qa-tui <command> [args...]
+#
+# Commands:
+#   attach <pane-id>                Connect to an existing tmux pane
+#   launch <cmd> [--session S] [--size WxH]  Launch app in new tmux session
+#   capture [--ansi] [--history [-n N]]      Capture pane content
+#   screenshot <path>               Capture pane as image (PNG/HTML/TXT)
+#   send <keys...>                  Send named keys (Enter, Tab, Up, C-c, etc.)
+#   type <text>                     Send literal text
+#   press <key>                     Alias for send (single key)
+#   search <pattern>                Search screen for text (returns matching lines)
+#   wait <pattern> [--timeout N]    Wait for text to appear (default 10s)
+#   diff                            Diff current capture against previous
+#   size                            Print pane dimensions (WxH)
+#   resize <WxH>                    Resize pane
+#   status                          Check pane health (alive/dead, dimensions, command)
+#   stop                            Kill the managed session
+#   log --start|--stop|--read [--errors]  Manage continuous logging
+#   help                            Show this help
+
+set -euo pipefail
+
+# --- Config ---
+STATE_DIR=".workflow-adapter/qa-tui"
+STATE_FILE="$STATE_DIR/state.json"
+PREV_CAPTURE="$STATE_DIR/previous.txt"
+LOG_FILE="$STATE_DIR/session.log"
+SCREENSHOT_DIR="$STATE_DIR/screenshots"
+DEFAULT_SESSION="qa-tui-$$"
+DEFAULT_WIDTH=120
+DEFAULT_HEIGHT=40
+DEFAULT_WAIT_TIMEOUT=10
+POLL_INTERVAL=0.3
+
+# --- Helpers ---
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+ensure_tmux() {
+  command -v tmux >/dev/null 2>&1 || die "tmux is not installed"
+}
+
+ensure_state_dir() {
+  mkdir -p "$STATE_DIR" "$SCREENSHOT_DIR"
+}
+
+read_state() {
+  if [[ -f "$STATE_FILE" ]]; then
+    cat "$STATE_FILE"
+  else
+    echo "{}"
+  fi
+}
+
+get_pane() {
+  local state
+  state=$(read_state)
+  echo "$state" | grep -oE '"pane_id"\s*:\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true
+}
+
+get_session() {
+  local state
+  state=$(read_state)
+  echo "$state" | grep -oE '"session"\s*:\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true
+}
+
+save_state() {
+  local session="$1" pane_id="$2" app_command="${3:-}" started_at
+  started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  cat > "$STATE_FILE" <<EOF
+{
+  "session": "$session",
+  "pane_id": "$pane_id",
+  "app_command": "$app_command",
+  "started_at": "$started_at"
+}
+EOF
+}
+
+pane_alive() {
+  local pane="$1"
+  tmux list-panes -t "$pane" -F '#{pane_dead}' 2>/dev/null | head -1 | grep -q '^0$'
+}
+
+find_screenshot_tool() {
+  if command -v freeze >/dev/null 2>&1; then
+    echo "freeze"
+  elif command -v aha >/dev/null 2>&1; then
+    echo "aha"
+  else
+    echo "none"
+  fi
+}
+
+# --- Commands ---
+
+cmd_attach() {
+  local pane_id="${1:?Usage: qa-tui attach <pane-id>}"
+  ensure_tmux
+  ensure_state_dir
+
+  # Validate pane exists
+  if ! tmux list-panes -t "$pane_id" >/dev/null 2>&1; then
+    die "Pane '$pane_id' not found. List panes with: tmux list-panes -a -F '#{pane_id} #{session_name}:#{window_index}.#{pane_index} #{pane_current_command}'"
+  fi
+
+  local session
+  session=$(tmux display-message -p -t "$pane_id" '#{session_name}')
+  local cmd
+  cmd=$(tmux display-message -p -t "$pane_id" '#{pane_current_command}')
+  save_state "$session" "$pane_id" "$cmd"
+  echo "Attached to pane $pane_id (session: $session, running: $cmd)"
+}
+
+cmd_launch() {
+  ensure_tmux
+  ensure_state_dir
+
+  local app_cmd="" session_name="$DEFAULT_SESSION" width=$DEFAULT_WIDTH height=$DEFAULT_HEIGHT
+
+  # Parse args
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --session) session_name="$2"; shift 2 ;;
+      --size)
+        width="${2%%x*}"; height="${2##*x}"; shift 2 ;;
+      *)
+        if [[ -z "$app_cmd" ]]; then
+          app_cmd="$1"
+        else
+          app_cmd="$app_cmd $1"
+        fi
+        shift ;;
+    esac
+  done
+
+  [[ -n "$app_cmd" ]] || die "Usage: qa-tui launch <command> [--session name] [--size WxH]"
+
+  # Kill existing session with same name (if managed by us)
+  local existing_session
+  existing_session=$(get_session)
+  if [[ "$existing_session" == "$session_name" ]]; then
+    tmux kill-session -t "$session_name" 2>/dev/null || true
+  fi
+
+  # Create new detached session
+  local pane_id
+  pane_id=$(tmux new-session -d -s "$session_name" -x "$width" -y "$height" -PF '#{pane_id}' "$app_cmd")
+
+  save_state "$session_name" "$pane_id" "$app_cmd"
+
+  # Brief wait for app to initialize
+  sleep 0.5
+
+  echo "Launched '$app_cmd' in session '$session_name' (pane: $pane_id, size: ${width}x${height})"
+}
+
+cmd_capture() {
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+
+  local ansi=false history=false history_lines=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --ansi) ansi=true; shift ;;
+      --history) history=true; shift ;;
+      -n) history_lines="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  local -a flags=(-p -J)
+  [[ "$ansi" == true ]] && flags+=(-e)
+
+  if [[ "$history" == true ]]; then
+    if [[ -n "$history_lines" ]]; then
+      flags+=(-S "-$history_lines")
+    else
+      flags+=(-S -)
+    fi
+  fi
+
+  local output
+  output=$(tmux capture-pane "${flags[@]}" -t "$pane" 2>&1) || die "capture-pane failed: $output"
+
+  # Save for diff (only plain text captures)
+  if [[ "$ansi" == false ]]; then
+    [[ -f "$PREV_CAPTURE" ]] && cp "$PREV_CAPTURE" "$PREV_CAPTURE.old" 2>/dev/null || true
+    echo "$output" > "$PREV_CAPTURE"
+  fi
+
+  echo "$output"
+}
+
+cmd_screenshot() {
+  local output_path="${1:?Usage: qa-tui screenshot <path>}"
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+
+  local tool
+  tool=$(find_screenshot_tool)
+  local ext="${output_path##*.}"
+
+  case "$tool" in
+    freeze)
+      tmux capture-pane -p -e -t "$pane" | freeze --language bash -o "$output_path"
+      echo "Screenshot saved (PNG via freeze): $output_path"
+      ;;
+    aha)
+      local html_path="${output_path%.*}.html"
+      tmux capture-pane -p -e -t "$pane" | aha --no-header > "$html_path"
+      echo "Screenshot saved (HTML via aha): $html_path"
+      ;;
+    none)
+      local txt_path="${output_path%.*}.txt"
+      tmux capture-pane -p -t "$pane" > "$txt_path"
+      echo "Screenshot saved (plain text fallback): $txt_path"
+      echo "TIP: Install freeze for PNG screenshots: brew install charmbracelet/tap/freeze"
+      ;;
+  esac
+}
+
+cmd_send() {
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+  [[ $# -gt 0 ]] || die "Usage: qa-tui send <keys...>"
+
+  tmux send-keys -t "$pane" "$@"
+  # Brief delay to let TUI process input
+  sleep 0.1
+  echo "Sent keys: $*"
+}
+
+cmd_type() {
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+  [[ $# -gt 0 ]] || die "Usage: qa-tui type <text>"
+
+  local text="$*"
+  tmux send-keys -l -t "$pane" -- "$text"
+  sleep 0.1
+  echo "Typed: $text"
+}
+
+cmd_press() {
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+  [[ $# -gt 0 ]] || die "Usage: qa-tui press <key>"
+
+  tmux send-keys -t "$pane" "$1"
+  sleep 0.1
+  echo "Pressed: $1"
+}
+
+cmd_search() {
+  local pattern="${1:?Usage: qa-tui search <pattern>}"
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+
+  local content
+  content=$(tmux capture-pane -p -J -t "$pane")
+
+  local matches
+  matches=$(echo "$content" | grep -n "$pattern" 2>/dev/null || true)
+
+  if [[ -n "$matches" ]]; then
+    echo "Found matches:"
+    echo "$matches"
+  else
+    echo "No matches for pattern: $pattern"
+  fi
+}
+
+cmd_wait() {
+  local pattern="" timeout=$DEFAULT_WAIT_TIMEOUT
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --timeout) timeout="$2"; shift 2 ;;
+      *) pattern="$1"; shift ;;
+    esac
+  done
+
+  [[ -n "$pattern" ]] || die "Usage: qa-tui wait <pattern> [--timeout N]"
+
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+
+  local elapsed=0
+  while (( $(echo "$elapsed < $timeout" | bc -l) )); do
+    local content
+    content=$(tmux capture-pane -p -J -t "$pane" 2>/dev/null || echo "")
+    if echo "$content" | grep -q "$pattern" 2>/dev/null; then
+      echo "Found '$pattern' after ${elapsed}s"
+      return 0
+    fi
+    sleep "$POLL_INTERVAL"
+    elapsed=$(echo "$elapsed + $POLL_INTERVAL" | bc -l)
+  done
+
+  echo "Timeout: '$pattern' not found after ${timeout}s"
+  return 1
+}
+
+cmd_diff() {
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+
+  if [[ ! -f "$PREV_CAPTURE" ]]; then
+    die "No previous capture to diff against. Run 'capture' first."
+  fi
+
+  local current
+  current=$(tmux capture-pane -p -J -t "$pane")
+
+  # Save current as new previous
+  local prev_content
+  prev_content=$(cat "$PREV_CAPTURE")
+  echo "$current" > "$PREV_CAPTURE"
+
+  diff --unified <(echo "$prev_content") <(echo "$current") || true
+}
+
+cmd_size() {
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+
+  local width height
+  width=$(tmux display-message -p -t "$pane" '#{pane_width}')
+  height=$(tmux display-message -p -t "$pane" '#{pane_height}')
+  echo "${width}x${height}"
+}
+
+cmd_resize() {
+  local spec="${1:?Usage: qa-tui resize <WxH>}"
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+
+  local width="${spec%%x*}" height="${spec##*x}"
+  tmux resize-pane -t "$pane" -x "$width" -y "$height"
+  echo "Resized to ${width}x${height}"
+}
+
+cmd_status() {
+  local pane
+  pane=$(get_pane)
+  local session
+  session=$(get_session)
+
+  if [[ -z "$pane" ]]; then
+    echo '{"attached": false, "message": "No active pane. Use attach or launch first."}'
+    return 1
+  fi
+
+  if pane_alive "$pane"; then
+    local width height cmd pid
+    width=$(tmux display-message -p -t "$pane" '#{pane_width}' 2>/dev/null || echo "?")
+    height=$(tmux display-message -p -t "$pane" '#{pane_height}' 2>/dev/null || echo "?")
+    cmd=$(tmux display-message -p -t "$pane" '#{pane_current_command}' 2>/dev/null || echo "?")
+    pid=$(tmux display-message -p -t "$pane" '#{pane_pid}' 2>/dev/null || echo "?")
+    echo "Pane: $pane (session: $session)"
+    echo "Status: alive"
+    echo "Size: ${width}x${height}"
+    echo "Command: $cmd (PID: $pid)"
+  else
+    echo "Pane: $pane (session: $session)"
+    echo "Status: dead"
+    return 1
+  fi
+}
+
+cmd_stop() {
+  local session
+  session=$(get_session)
+
+  if [[ -z "$session" ]]; then
+    die "No active session to stop."
+  fi
+
+  tmux kill-session -t "$session" 2>/dev/null || true
+  rm -f "$STATE_FILE"
+  echo "Session '$session' stopped and state cleared."
+}
+
+cmd_log() {
+  local pane
+  pane=$(get_pane)
+  [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
+
+  local subcmd="${1:?Usage: qa-tui log --start|--stop|--read [--errors]}"
+  shift
+
+  case "$subcmd" in
+    --start)
+      tmux pipe-pane -o -t "$pane" "cat >> '$LOG_FILE'"
+      echo "Logging started → $LOG_FILE"
+      ;;
+    --stop)
+      tmux pipe-pane -t "$pane"
+      echo "Logging stopped."
+      ;;
+    --read)
+      if [[ ! -f "$LOG_FILE" ]]; then
+        echo "No log file. Start logging with: qa-tui log --start"
+        return 1
+      fi
+      if [[ "${1:-}" == "--errors" ]]; then
+        grep -iE '(error|err|fail|fatal|panic|exception|traceback|segfault)' "$LOG_FILE" || echo "No errors found in log."
+      else
+        cat "$LOG_FILE"
+      fi
+      ;;
+    *)
+      die "Usage: qa-tui log --start|--stop|--read [--errors]"
+      ;;
+  esac
+}
+
+cmd_help() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \?//'
+}
+
+# --- Main ---
+ensure_tmux
+
+command="${1:-help}"
+shift || true
+
+case "$command" in
+  attach)     cmd_attach "$@" ;;
+  launch)     cmd_launch "$@" ;;
+  capture)    cmd_capture "$@" ;;
+  screenshot) cmd_screenshot "$@" ;;
+  send)       cmd_send "$@" ;;
+  type)       cmd_type "$@" ;;
+  press)      cmd_press "$@" ;;
+  search)     cmd_search "$@" ;;
+  wait)       cmd_wait "$@" ;;
+  diff)       cmd_diff "$@" ;;
+  size)       cmd_size "$@" ;;
+  resize)     cmd_resize "$@" ;;
+  status)     cmd_status "$@" ;;
+  stop)       cmd_stop "$@" ;;
+  log)        cmd_log "$@" ;;
+  help|--help|-h) cmd_help ;;
+  *)          die "Unknown command: $command. Run 'qa-tui help' for usage." ;;
+esac

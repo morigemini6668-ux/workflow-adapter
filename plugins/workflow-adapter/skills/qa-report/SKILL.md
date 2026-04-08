@@ -1,10 +1,13 @@
 ---
 name: qa-report
 description: |
-  Report-only QA testing. Systematically tests a web application and produces a
-  structured report with health score, screenshots, and repro steps — but never
-  fixes anything. Use when asked to "just report bugs", "qa report only", "QA 리포트만",
-  "test but don't fix", or "버그 리포트만 줘". For the full test-fix-verify loop,
+  Report-only QA testing. Systematically tests a web application OR interactive
+  CLI/TUI application and produces a structured report with health score,
+  screenshots, and repro steps — but never fixes anything.
+  Use when asked to "just report bugs", "qa report only", "QA 리포트만",
+  "test but don't fix", "버그 리포트만 줘", "TUI QA 리포트", "CLI 앱 테스트해줘",
+  "tmux 앱 테스트", or "터미널 앱 QA". Supports both browser (web) and TUI (tmux)
+  targets — auto-detects based on input. For the full test-fix-verify loop,
   use /workflow-adapter:qa instead.
 allowed-tools:
   - Bash
@@ -15,7 +18,7 @@ allowed-tools:
 
 # /qa-report: Report-Only QA Testing
 
-You are a QA engineer. Test web applications like a real user — click everything, fill every form, check every state. Produce a structured report with evidence. **NEVER fix anything.**
+You are a QA engineer. Test web applications or TUI applications like a real user — click/press everything, fill every form/input, check every state. Produce a structured report with evidence. **NEVER fix anything.**
 
 **Principle Compliance:**
 Before starting, check if `.workflow-adapter/principle.md` exists. If it does, read and follow it.
@@ -26,11 +29,27 @@ Before starting, check if `.workflow-adapter/principle.md` exists. If it does, r
 
 | Parameter | Default | Override example |
 |-----------|---------|-----------------:|
-| Target URL | (auto-detect or required) | `https://myapp.com`, `http://localhost:3000` |
-| Mode | full | `--quick`, `--regression` |
+| Target | (auto-detect or required) | URL, tmux pane ID, or TUI app name |
+| Mode | full | `--quick`, `--regression`, `--tui` |
 | Output dir | `.workflow-adapter/qa-reports/` | `Output to /tmp/qa` |
 | Scope | Full app (or diff-scoped) | `Focus on the billing page` |
 | Auth | None | `Sign in to user@example.com`, `Import cookies from cookies.json` |
+
+### Target Type Detection
+
+Determine the target type from the user's input:
+
+| Input Pattern | Target Type | Tool |
+|---------------|-------------|------|
+| URL (`http://`, `https://`, `localhost:...`) | **Browser** | `$B` (qa-browse) |
+| tmux pane ID (`%0`, `session:window.pane`) | **TUI** | `$T` (qa-tui) |
+| TUI app name (`htop`, `lazygit`, `k9s`, `vim`, `btop`, `tig`, etc.) | **TUI** | `$T` (qa-tui) |
+| `--tui` flag | **TUI** | `$T` (qa-tui) |
+| No target + feature branch | **Browser** (diff-aware) | `$B` (qa-browse) |
+
+Set `TARGET_TYPE=browser` or `TARGET_TYPE=tui` accordingly.
+
+### Browser Setup (TARGET_TYPE=browser)
 
 **If no URL is given and you're on a feature branch:** Automatically enter **diff-aware mode** (see Modes below).
 
@@ -39,9 +58,7 @@ Before starting, check if `.workflow-adapter/principle.md` exists. If it does, r
 ```bash
 B=""
 _ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-# Check project-local
 [ -n "$_ROOT" ] && [ -x "$_ROOT/scripts/qa-browse/dist/qa-browse" ] && B="$_ROOT/scripts/qa-browse/dist/qa-browse"
-# Check plugin root
 [ -z "$B" ] && [ -x "${CLAUDE_PLUGIN_ROOT}/scripts/qa-browse/dist/qa-browse" ] && B="${CLAUDE_PLUGIN_ROOT}/scripts/qa-browse/dist/qa-browse"
 if [ -x "$B" ]; then
   echo "READY: $B"
@@ -54,7 +71,28 @@ If `NEEDS_SETUP`:
 1. Tell the user: "qa-browse needs a one-time build (~10 seconds). OK to proceed?"
 2. Run: `cd ${CLAUDE_PLUGIN_ROOT}/scripts/qa-browse && bun install && bun run build`
 
-**Create output directories:**
+### TUI Setup (TARGET_TYPE=tui)
+
+**Find the qa-tui script:**
+
+```bash
+T=""
+_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -n "$_ROOT" ] && [ -x "$_ROOT/scripts/qa-tui/qa-tui" ] && T="$_ROOT/scripts/qa-tui/qa-tui"
+[ -z "$T" ] && [ -x "${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui/qa-tui" ] && T="${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui/qa-tui"
+if [ -x "$T" ]; then
+  echo "READY: $T"
+else
+  echo "NOT_FOUND"
+fi
+```
+
+**Connect to TUI:**
+- If pane ID given: `$T attach <pane-id>`
+- If app name given: `$T launch <app-name> --size 120x40`
+- Start logging: `$T log --start`
+
+### Create output directories
 
 ```bash
 REPORT_DIR=".workflow-adapter/qa-reports"
@@ -207,6 +245,112 @@ Each starts at 100. Deduct: Critical -25, High -15, Medium -8, Low -3. Minimum 0
 
 ---
 
+---
+
+## TUI Mode Workflow
+
+When `TARGET_TYPE=tui`, follow this workflow instead of the browser workflow above.
+Reference `references/tui-checklist.md` for the full per-screen checklist and issue taxonomy.
+
+### Phase 1: Initialize (TUI)
+1. Find qa-tui script (see TUI Setup)
+2. Create output directories
+3. Start timer
+
+### Phase 2: Connect
+
+```bash
+$T launch <app-name> --size 120x40    # or $T attach <pane-id>
+$T log --start                         # start continuous logging
+$T capture
+$T screenshot "$REPORT_DIR/screenshots/initial.png"
+```
+
+Show the initial screenshot to the user via `Read`.
+
+### Phase 3: Orient (TUI)
+
+```bash
+$T capture                             # inspect initial state
+$T size                                # record terminal dimensions
+$T screenshot "$REPORT_DIR/screenshots/orient.png"
+```
+
+**Detect TUI framework** (note in report):
+- `textual` classes → Textual (Python)
+- `lipgloss` styling → Bubbletea (Go)
+- `ratatui`/`crossterm` → Ratatui (Rust)
+- ncurses-style box drawing → ncurses
+- `<Box>` layout → Ink (React)
+
+**Identify available screens**: Look for menus, tabs, help screen (`?` or `F1`), navigation hints in status bar.
+
+### Phase 4: Explore (TUI)
+
+Visit each screen/view systematically. At each screen:
+
+```bash
+$T press <navigation-key>             # navigate to screen
+$T wait "expected header" --timeout 5  # wait for screen to load
+$T capture
+$T screenshot "$REPORT_DIR/screenshots/screen-name.png"
+```
+
+Follow the **per-screen exploration checklist** from `references/tui-checklist.md`:
+1. Visual scan — rendering, colors, alignment
+2. Navigation — Tab, arrows, Enter, Escape, shortcuts
+3. Input fields — type text, empty input, special chars
+4. Data display — completeness, sorting, scrolling
+5. State transitions — loading, success, failure feedback
+6. Error states — invalid input, missing resources
+7. Resize behavior — 80x24, 200x60, restore
+8. Exit & recovery — Ctrl+C, quit, restart
+
+### Phase 5: Document (TUI)
+
+Document each issue **immediately when found**.
+
+```bash
+# Before the issue action
+$T screenshot "$REPORT_DIR/screenshots/issue-001-before.png"
+# Trigger the issue
+$T press <key>
+$T wait "result" --timeout 5
+# After
+$T screenshot "$REPORT_DIR/screenshots/issue-001-after.png"
+$T diff                                # show what changed
+```
+
+Write each issue to the report using the template from `references/report-template.md`.
+Use `$T capture` output for text evidence alongside screenshots.
+
+### Phase 6: Wrap Up (TUI)
+
+1. **Compute TUI health score** using the TUI rubric (see below)
+2. **Write "Top 3 Things to Fix"**
+3. **Check logs for errors**: `$T log --read --errors`
+4. **Update severity counts**
+5. **Fill in report metadata**
+6. **Stop logging and cleanup**: `$T log --stop`
+7. **Save baseline** as `baseline.json`
+
+### TUI Health Score Rubric
+
+| Category | Weight | What to check |
+|----------|--------|---------------|
+| Rendering | 20% | Broken chars, colors, box-drawing, screen redraw |
+| Responsiveness | 15% | Input lag, freezes, progress feedback |
+| Navigation | 20% | Screen reachability, shortcuts, focus traps |
+| Input | 15% | Text input, search, validation, special chars |
+| Error Handling | 10% | Crash handling, error messages, recovery |
+| Layout | 10% | Alignment, overflow, resize behavior |
+| Accessibility | 10% | Keyboard-only use, contrast, help availability |
+
+Each category starts at 100. Deduct: Critical -25, High -15, Medium -8, Low -3. Minimum 0.
+Final score = weighted average.
+
+---
+
 ## Framework-Specific Guidance
 
 ### Next.js
@@ -228,20 +372,44 @@ Each starts at 100. Deduct: Critical -25, High -15, Medium -8, Low -3. Minimum 0
 - Check stale state (navigate away and back)
 - Test browser back/forward
 
+### TUI: Textual (Python)
+- Check `--dev` mode for CSS debugging
+- Test `on_mount`, `on_key` event handlers
+- Verify `textual-` CSS class styling
+- Check `Screen.push`/`Screen.pop` navigation
+
+### TUI: Bubbletea (Go)
+- Check `tea.Quit` and `tea.ClearScreen` handling
+- Verify `lipgloss` styles render with correct colors
+- Test `WindowSizeMsg` handling for resize
+- Check `tea.Batch` command handling
+
+### TUI: Ratatui (Rust)
+- Set `TERM=xterm-256color` for full color support
+- Check `crossterm` event handling
+- Test `Terminal::draw()` rendering completeness
+- Verify `Layout::split()` at various sizes
+
+### TUI: General ncurses
+- Check `SIGWINCH` (window resize) handling
+- Test with `TERM=xterm` and `TERM=xterm-256color`
+- Verify `initscr()`/`endwin()` cleanup on exit
+- Check for cursor positioning issues
+
 ---
 
 ## Important Rules
 
-1. **Repro is everything.** Every issue needs at least one screenshot.
+1. **Repro is everything.** Every issue needs at least one screenshot (or text capture for TUI).
 2. **Verify before documenting.** Retry once to confirm reproducibility.
 3. **Never include credentials.** Write `[REDACTED]` for passwords.
 4. **Write incrementally.** Append each issue as found. Don't batch.
 5. **Never read source code.** Test as a user, not a developer.
-6. **Check console after every interaction.**
+6. **Check for errors after every interaction.** Browser: `$B console --errors`. TUI: `$T log --read --errors`.
 7. **Test like a user.** Realistic data, complete workflows.
 8. **Depth over breadth.** 5-10 well-documented issues > 20 vague descriptions.
 9. **Show screenshots to the user.** After every screenshot command, use Read on the file so the user sees it inline.
-10. **Never refuse to use the browser.** When the user invokes this skill, they want browser-based testing.
+10. **Never refuse to test.** When the user invokes this skill, they want testing — browser or TUI.
 
 ---
 

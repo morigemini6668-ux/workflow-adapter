@@ -20,6 +20,7 @@ import {
 import { createSession as createTmuxSession, hasSession as hasTmuxSession, applyLayout } from './tmux.js';
 import { startServer, type DaemonServer } from './server.js';
 import { startMonitor, type MonitorHandle } from './monitor.js';
+import { spawnAgent } from './spawn.js';
 import {
   loadAndRenderTemplate,
   buildOrchestratorVars,
@@ -79,9 +80,25 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
 
   await appendEvent(ctx, 'session_started', { cwd: opts.cwd });
 
-  // 5. Start IPC server
+  // 5. Start IPC server (with spawn handler)
   const outboxReader = new OutboxReader(ctx);
-  const server = await startServer(ctx, outboxReader);
+  const onSpawn = async (args: Record<string, unknown>) => {
+    const name = args.name as string;
+    const cli = (args.cli as CliType) ?? 'claude';
+    const role = (args.role as string) ?? 'worker';
+    const mode = (args.mode as string) ?? 'interactive';
+    if (!name) throw new Error('Agent name required');
+    const agent = await spawnAgent(ctx, session.tmux_session, {
+      name,
+      cli,
+      role,
+      mode: mode as 'interactive' | 'non_interactive',
+      cwd: opts.cwd,
+    });
+    await applyLayout(tmuxName);
+    return { spawned: name, pane_id: agent.pane_id };
+  };
+  const server = await startServer(ctx, outboxReader, onSpawn);
 
   // 6. Start monitoring loop
   const monitor = startMonitor(ctx, outboxReader, {
@@ -130,7 +147,23 @@ export async function reconnectDaemon(
   };
 
   const outboxReader = new OutboxReader(ctx);
-  const server = await startServer(ctx, outboxReader);
+  const onSpawn = async (args: Record<string, unknown>) => {
+    const name = args.name as string;
+    const cli = (args.cli as CliType) ?? 'claude';
+    const role = (args.role as string) ?? 'worker';
+    const mode = (args.mode as string) ?? 'interactive';
+    if (!name) throw new Error('Agent name required');
+    const agent = await spawnAgent(ctx, existing.tmux_session, {
+      name,
+      cli,
+      role,
+      mode: mode as 'interactive' | 'non_interactive',
+      cwd,
+    });
+    await applyLayout(existing.tmux_session);
+    return { spawned: name, pane_id: agent.pane_id };
+  };
+  const server = await startServer(ctx, outboxReader, onSpawn);
   const monitor = startMonitor(ctx, outboxReader, {
     healthPollMs: DEFAULT_CONFIG.health_poll_interval_ms,
     nudgeDelayMs: DEFAULT_CONFIG.nudge_delay_ms,

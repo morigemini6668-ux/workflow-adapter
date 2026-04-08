@@ -73,6 +73,40 @@ Use AskUserQuestion to ask the user:
 - Explain: worktree creates a single isolated copy of the repository for this subject — all executers work inside it, keeping the main branch untouched
 - Options: Yes (recommended — isolates all changes from main), No (simpler, work directly on current branch)
 
+## Step 3.5: Decision Coverage Checklist
+
+Before creating plan.md, validate decision coverage from source documents:
+
+1. Read the source document (brainstorming.md or investigation.md) and check for a `## Decision Registry` section
+2. If a Decision Registry exists:
+   a. Parse the registry table
+   b. For each decision with status `accepted`:
+      - Map it to a planned task — note which task will address it
+   c. For each decision with status `unresolved`:
+      - Use AskUserQuestion to get the user's decision before planning
+      - Update the registry entry status based on user's answer
+   d. For each decision with status `open`:
+      - Ask the user: create a research task, or defer to backlog?
+      - If deferred: mark as `deferred` in the registry
+   e. Present the completed checklist to the user:
+      ```
+      AskUserQuestion({
+        questions: [{
+          question: "Decision coverage check from brainstorming/investigation:\n\n{for each decision: checkbox, ID, decision text, → planned task or DEFERRED}\n\nAny missing items?",
+          header: "Decision Coverage",
+          options: [
+            { label: "Looks complete", description: "All decisions are accounted for" },
+            { label: "Add missing items", description: "I want to add decisions that were missed" }
+          ],
+          multiSelect: false
+        }]
+      })
+      ```
+   f. If user adds items, incorporate them into the plan
+3. If no Decision Registry exists (old-format source document):
+   - Warn: "No Decision Registry found in source document. Decision coverage cannot be validated automatically. Consider re-running brainstorming/investigation to generate a registry."
+   - Continue without validation
+
 ## Step 4: Create plan.md
 
 Create `.workflow-adapter/{subject}/plan.md` with this structure:
@@ -91,6 +125,15 @@ Create `.workflow-adapter/{subject}/plan.md` with this structure:
 - **Executers**: {number} (see worker.md)
 
 > **Note on worktree**: When worktree is enabled, all executers work inside a single shared worktree directory for code changes. The `.workflow-adapter/` directory (plan.md, checkpoints) stays in the main repo. The orchestrator creates and removes the worktree — individual executers do not manage worktrees themselves.
+
+## Decision Traceability
+
+Populate this section based on the Decision Coverage Checklist from Step 3.5. Every `accepted` decision must map to at least one task. `DEFERRED` items will be auto-added to backlog in Step 4.5.
+
+| Decision ID | Decision | Task(s) | Notes |
+|-------------|----------|---------|-------|
+| D1 | {decision text} | Task N, Task M | {implementation notes} |
+| D2 | {decision text} | DEFERRED | Added to backlog |
 
 ## Tasks
 
@@ -122,6 +165,31 @@ Create `.workflow-adapter/{subject}/plan.md` with this structure:
 - Tasks should be ordered by dependency
 - Parallel-safe tasks should be clearly marked
 - Status tracking: `[ ]` pending, `[~]` in progress, `[x]` completed, `[!]` blocked
+
+## Step 4.5: Auto-Backlog for Deferred Decisions
+
+After creating plan.md, check the Decision Traceability section for deferred decisions:
+
+1. Read the just-created plan.md's Decision Traceability section
+2. For each row where Notes contains "DEFERRED" or "Added to backlog":
+   a. Create `.workflow-adapter/backlog/` directory if it doesn't exist: `mkdir -p .workflow-adapter/backlog`
+   b. Create a backlog file: `.workflow-adapter/backlog/{decision_id}-{slug}.md`
+      - Slug: first 6 words of decision text, lowercased, hyphens, max 50 chars
+      - Example: `D3-use-kubernetes-for-deployment.md`
+   c. File content:
+      ```markdown
+      ---
+      type: task
+      priority: medium
+      source: {subject}
+      status: pending
+      decision_id: {D-number}
+      ---
+      # {Decision text}
+      Deferred from {subject} planning. Original source: {source section in brainstorming/investigation}.
+      ```
+3. If no deferred decisions exist, skip silently
+4. If backlog items were created, inform the user: "Created {N} backlog item(s) for deferred decisions: {list of decision IDs}"
 
 ## Step 5: Create worker.md
 
@@ -253,7 +321,7 @@ Task({
   description: "Reviewer: validate plan",
   subagent_type: "general-purpose",
   run_in_background: false,
-  prompt: "You are a Reviewer subagent. Review a draft execution plan.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nReview these files:\n- .workflow-adapter/{subject}/plan.md\n- .workflow-adapter/{subject}/worker.md\n\n(Substitute the actual subject name for {subject} above.)\n\nVerify:\n- Every task has clear, measurable completion criteria (reject vague criteria like 'improved performance' without a metric)\n- Every task has a verification method\n- Task dependencies are correctly ordered\n- Executer count and task allocation is balanced\n- No tasks are missing from the original brainstorming/investigation scope\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N or general)\nRecommendations:\n- {specific text to add or change in plan.md}"
+  prompt: "You are a Reviewer subagent. Review a draft execution plan.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nReview these files:\n- .workflow-adapter/{subject}/plan.md\n- .workflow-adapter/{subject}/worker.md\n\n(Substitute the actual subject name for {subject} above.)\n\nVerify:\n- Every task has clear, measurable completion criteria (reject vague criteria like 'improved performance' without a metric)\n- Every task has a verification method\n- Task dependencies are correctly ordered\n- Executer count and task allocation is balanced\n- No tasks are missing from the original brainstorming/investigation scope\n- Verify that the plan's Decision Traceability section covers all `accepted` decisions from the source Decision Registry. If no Decision Registry exists in the source document, mark Decision Coverage as N/A.\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N or general)\nRecommendations:\n- {specific text to add or change in plan.md}"
 })
 ```
 
@@ -308,6 +376,7 @@ Verify:
 - Task dependencies are correctly ordered
 - Executer count and task allocation is balanced
 - No tasks are missing from the original brainstorming/investigation scope
+- Verify that the plan's Decision Traceability section covers all `accepted` decisions from the source Decision Registry. If no Decision Registry exists in the source document, mark Decision Coverage as N/A.
 
 Write your review to .workflow-adapter/{subject}/plan-review.md in this format:
 Status: PASS or NEEDS REVISION

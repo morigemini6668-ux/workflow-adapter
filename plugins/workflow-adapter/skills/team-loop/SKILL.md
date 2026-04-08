@@ -368,9 +368,40 @@ Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P1", status: "in_p
    - Update `phase` in ralph-state.md frontmatter to `p2`.
    - Set `status: active` in ralph-state.md.
 
-6. Proceed to Step 7 (Planning Phase).
+6. **Write Phase Handoff Document** before proceeding to the next phase.
+
+   Write a structured handoff document to `{session_dir}/handoff-p1-to-p2.md`:
+
+   ```markdown
+   # Phase Handoff: P1 → P2
+
+   ## Key Findings
+   1. {finding from historian — summarize key context. If no historian output available: "No historian output available for this phase"}
+   2. {finding from researcher — summarize key research. If no researcher output available: "No researcher output available for this phase"}
+
+   ## Decisions Made
+   - {decision 1}: {rationale}
+   - {decision 2}: {rationale}
+
+   ## Open Items Carried Forward
+   - {item 1}: needs user decision
+   - {item 2}: needs more research
+
+   ## Files to Read
+   - {session_dir}/doc/historian-context.md (if exists)
+   - {session_dir}/doc/{researcher docs} (if exist)
+
+   ## Phase Transition Context
+   - Completed phase: P1 (Research)
+   - Next phase: P2 (Planning + Plan Review)
+   - Iteration: {current iteration number}
+   ```
+
+7. Proceed to Step 7 (Planning Phase).
 
 ## Step 7: P2 — Planning + Plan Review
+
+**Read the handoff document** at `{session_dir}/handoff-p1-to-p2.md` before starting this phase.
 
 Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P2", status: "in_progress" })`
 
@@ -425,9 +456,43 @@ Set `status: waiting` in ralph-state.md frontmatter after sending to the reviewe
 2. **Update progress**:
    - `TaskUpdate({ taskId: "iter-{N}-P2", status: "completed" })`
    - Update `phase` in ralph-state.md frontmatter to `p3`.
-3. Proceed to Step 8 (Execution Phase).
+
+3. **Write Phase Handoff Document** before proceeding to the next phase.
+
+   Write a structured handoff document to `{session_dir}/handoff-p2-to-p3.md`:
+
+   ```markdown
+   # Phase Handoff: P2 → P3
+
+   ## Key Findings
+   1. {finding from planner — summarize plan rationale. If no planner output available: "No planner output available for this phase"}
+   2. {finding from reviewer — summarize review verdict. If no reviewer output available: "No reviewer output available for this phase"}
+
+   ## Decisions Made
+   - {decision 1}: {rationale}
+   - {decision 2}: {rationale}
+
+   ## Open Items Carried Forward
+   - {item 1}: needs user decision
+   - {item 2}: needs more research
+
+   ## Files to Read
+   - {session_dir}/iter-{N}-plan.md
+   - {session_dir}/doc/historian-context.md (if exists)
+   - {session_dir}/doc/{researcher docs} (if exist)
+   - {session_dir}/handoff-p1-to-p2.md (previous handoff)
+
+   ## Phase Transition Context
+   - Completed phase: P2 (Planning + Plan Review)
+   - Next phase: P3 (Execution)
+   - Iteration: {current iteration number}
+   ```
+
+4. Proceed to Step 8 (Execution Phase).
 
 ## Step 8: P3 — Execution Phase
+
+**Read the handoff document** at `{session_dir}/handoff-p2-to-p3.md` before starting this phase.
 
 Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P3", status: "in_progress" })`
 
@@ -474,9 +539,43 @@ Set `status: waiting` in ralph-state.md frontmatter after spawning executers. Wa
 2. **Update progress**:
    - `TaskUpdate({ taskId: "iter-{N}-P3", status: "completed" })`
    - Update `phase` in ralph-state.md frontmatter to `p4`.
-3. Proceed to Step 9 (Verification Phase).
+
+3. **Write Phase Handoff Document** before proceeding to the next phase.
+
+   Write a structured handoff document to `{session_dir}/handoff-p3-to-p4.md`:
+
+   ```markdown
+   # Phase Handoff: P3 → P4
+
+   ## Key Findings
+   1. {finding from executer(s) — summarize implementation results. If no executer output available: "No executer output available for this phase"}
+   2. {finding from researcher — summarize any research support provided. If no researcher output available: "No researcher output available for this phase"}
+
+   ## Decisions Made
+   - {decision 1}: {rationale}
+   - {decision 2}: {rationale}
+
+   ## Open Items Carried Forward
+   - {item 1}: needs user decision
+   - {item 2}: needs verification
+
+   ## Files to Read
+   - {session_dir}/iter-{N}-plan.md
+   - {session_dir}/iter-{N}-execution*.md (all execution summaries)
+   - {session_dir}/handoff-p1-to-p2.md (if exists)
+   - {session_dir}/handoff-p2-to-p3.md (previous handoff)
+
+   ## Phase Transition Context
+   - Completed phase: P3 (Execution)
+   - Next phase: P4 (Verification + Loop Decision)
+   - Iteration: {current iteration number}
+   ```
+
+4. Proceed to Step 9 (Verification Phase).
 
 ## Step 9: P4 — Verification + Loop Decision
+
+**Read the handoff document** at `{session_dir}/handoff-p3-to-p4.md` before starting this phase.
 
 Mark the task as in progress: `TaskUpdate({ taskId: "iter-{N}-P4", status: "in_progress" })`
 

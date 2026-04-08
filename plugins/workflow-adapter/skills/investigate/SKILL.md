@@ -351,6 +351,15 @@ If the user selects **"Approve all"**, proceed to Step 7.
 
 ## Step 7: Save Results
 
+Before saving, compile the Decision Registry by extracting decisions from the investigation:
+- From **Recommended Action**: primary decision → status `accepted`
+- From **Proposed Solutions**: selected solution(s) → status `accepted`; explicitly rejected alternatives → status `rejected`
+- From **Telemetry Changes**: each change → status `accepted`
+- From **Open Questions**: each question → status `open`
+- From **Risk Assessment** items needing follow-up → status `unresolved`
+
+Auto-number as D1, D2, D3... Source column records which section. This registry is consumed by the plan skill to ensure all decisions are addressed.
+
 Compile all investigation results into `.workflow-adapter/{subject}/investigation.md`:
 
 ```markdown
@@ -394,6 +403,17 @@ Compile all investigation results into `.workflow-adapter/{subject}/investigatio
 
 ## Open Questions
 {remaining uncertainties if any}
+
+## Decision Registry
+
+| ID | Decision | Source | Status |
+|----|----------|--------|--------|
+| D1 | {recommended action} | Recommended Action | accepted |
+| D2 | {selected solution} | Proposed Solutions | accepted |
+| D3 | {rejected alternative} | Proposed Solutions | rejected |
+| D4 | {telemetry change} | Telemetry Changes | accepted |
+| D5 | {risk item needing follow-up} | Risk Assessment | unresolved |
+| D6 | {open question} | Open Questions | open |
 ```
 
 ## Step 8: Shutdown Team

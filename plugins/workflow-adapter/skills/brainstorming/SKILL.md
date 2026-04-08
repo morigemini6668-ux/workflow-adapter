@@ -290,6 +290,15 @@ If the user selects **"Approve all"**, proceed to Step 7.
 
 ## Step 7: Save Results
 
+Before saving, compile the Decision Registry by extracting decisions from the brainstorming discussion:
+- From **Key Conclusions**: each conclusion → status `accepted`
+- From **User Decisions**: each decision → status `accepted`
+- From **Points of Agreement**: each agreed item → status `accepted`
+- From **Points of Contention** (unresolved): each item → status `unresolved`
+- From **Open Questions**: each question → status `open`
+
+Auto-number decisions as D1, D2, D3... The Source column records which section the decision originated from. This registry is consumed by the plan skill to ensure all decisions are addressed.
+
 Compile all brainstorming results into `.workflow-adapter/{subject}/brainstorming.md`:
 
 ```markdown
@@ -324,6 +333,16 @@ Compile all brainstorming results into `.workflow-adapter/{subject}/brainstormin
 
 ## Review Notes (from Reviewer)
 {reviewer's final assessment after discussion}
+
+## Decision Registry
+
+| ID | Decision | Source | Status |
+|----|----------|--------|--------|
+| D1 | {decision text} | Key Conclusions | accepted |
+| D2 | {decision text} | User Decisions | accepted |
+| D3 | {decision text} | Points of Agreement | accepted |
+| D4 | {unresolved item} | Points of Contention | unresolved |
+| D5 | {open question} | Open Questions | open |
 ```
 
 ## Step 8: Shutdown Team

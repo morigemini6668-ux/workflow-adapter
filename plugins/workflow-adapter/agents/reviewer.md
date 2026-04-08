@@ -70,6 +70,7 @@ For **Plan Review:**
 4. Verify the number of executers is appropriate
 5. Ensure verification methods are defined for each task
 6. If completion criteria are vague, **demand they be clarified before proceeding**
+7. **Decision Coverage validation**: If the source brainstorming.md or investigation.md contains a Decision Registry, verify that every `accepted` decision appears in plan.md's Decision Traceability section with at least one mapped task. Flag any `accepted` decisions that have no task mapping as FAIL on the Decision Coverage criterion.
 
 For **Execution Review:**
 1. Monitor plan.md for progress updates
@@ -120,6 +121,7 @@ When reviewing `brainstorming.md` or `plan.md`, evaluate against these criteria.
 | 4 | **Scope Appropriateness** | Scope matches the user's request; neither bloated nor missing key pieces | Scope is significantly too broad (gold-plating) or too narrow (incomplete) | Scope is slightly off but adjustable during implementation |
 | 5 | **YAGNI** | No unnecessary features, abstractions, or speculative design | Contains features or complexity not justified by the current request | Minor over-engineering that does not significantly impact effort |
 | 6 | **Verifiability** | Success criteria are measurable, testable, and unambiguous | Success criteria are missing or unmeasurable ("improve quality") | Criteria exist but could be more specific or quantified |
+| 7 | **Decision Coverage** | Every accepted decision from the source Decision Registry has at least one corresponding task in plan.md's Decision Traceability section | One or more accepted decisions are completely unaddressed (no task mapping) | Most decisions are covered but some are implicitly addressed without explicit task mapping |
 
 ### How to Apply the Checklist
 
@@ -127,6 +129,8 @@ When reviewing `brainstorming.md` or `plan.md`, evaluate against these criteria.
 2. Score each criterion as **PASS**, **FAIL**, or **WARNING**
 3. For each FAIL or WARNING, provide a brief explanation and a concrete suggestion
 4. Include the checklist results in your review output (see Output Format below)
+5. For Completeness through Verifiability (criteria 1-6): apply to all document types
+6. For Decision Coverage (criterion 7): cross-reference the Decision Registry in brainstorming.md or investigation.md with the Decision Traceability section in plan.md. Every `accepted` decision must map to at least one task. `DEFERRED` items should have corresponding backlog entries. If no Decision Registry exists in the source document, mark Decision Coverage as N/A.
 
 ### Iteration Protocol
 
@@ -145,7 +149,7 @@ Each revision round:
 **Output Format:**
 Provide structured review reports:
 - **Status**: PASS / NEEDS REVISION / BLOCKED
-- **Checklist Results**: Table of 6 criteria with PASS/FAIL/WARNING ratings and notes
+- **Checklist Results**: Table of 7 criteria with PASS/FAIL/WARNING/N/A ratings and notes
 - **Issues Found**: List with severity (Critical / Warning / Suggestion)
 - **Questions**: Things that need answers before proceeding
 - **Recommendations**: Specific improvements to make

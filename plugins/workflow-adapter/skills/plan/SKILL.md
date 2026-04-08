@@ -59,12 +59,19 @@ If a subject was provided as an argument, use it. Otherwise:
 ## Step 2: Read Source Results
 
 Check which source documents exist in `.workflow-adapter/{subject}/`:
+- `spec.md` — output from the spec workflow (most detailed technical design, preferred if exists)
 - `brainstorming.md` — output from the brainstorming workflow
 - `investigation.md` — output from the investigate workflow
 
-Read whichever exists (or both if both exist). Also read any research documents in `.workflow-adapter/{subject}/doc/`.
+Read ALL that exist. When spec.md is present, use it as the PRIMARY source for
+technical decisions, interface contracts, and acceptance criteria. Use brainstorming.md
+or investigation.md for context and the Decision Registry. If spec.md has its own
+Decision Registry (which extends the source registry), prefer spec.md's registry
+as it is a superset.
 
-If neither `brainstorming.md` nor `investigation.md` exists, inform the user to run `/workflow-adapter:brainstorming` or `/workflow-adapter:investigate` first.
+Also read any research documents in `.workflow-adapter/{subject}/doc/`.
+
+If none of `spec.md`, `brainstorming.md`, or `investigation.md` exists, inform the user to run `/workflow-adapter:brainstorming` or `/workflow-adapter:investigate` first.
 
 ## Step 3: Ask About Worktree
 
@@ -77,7 +84,7 @@ Use AskUserQuestion to ask the user:
 
 Before creating plan.md, validate decision coverage from source documents:
 
-1. Read the source document (brainstorming.md or investigation.md) and check for a `## Decision Registry` section
+1. Read the source documents and check for a `## Decision Registry` section. If both spec.md and brainstorming.md/investigation.md exist, prefer the Decision Registry from spec.md as it is a superset (contains both original decisions and new technical decisions from the spec phase).
 2. If a Decision Registry exists:
    a. Parse the registry table
    b. For each decision with status `accepted`:
@@ -321,7 +328,7 @@ Task({
   description: "Reviewer: validate plan",
   subagent_type: "general-purpose",
   run_in_background: false,
-  prompt: "You are a Reviewer subagent. Review a draft execution plan.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nReview these files:\n- .workflow-adapter/{subject}/plan.md\n- .workflow-adapter/{subject}/worker.md\n\n(Substitute the actual subject name for {subject} above.)\n\nVerify:\n- Every task has clear, measurable completion criteria (reject vague criteria like 'improved performance' without a metric)\n- Every task has a verification method\n- Task dependencies are correctly ordered\n- Executer count and task allocation is balanced\n- No tasks are missing from the original brainstorming/investigation scope\n- Verify that the plan's Decision Traceability section covers all `accepted` decisions from the source Decision Registry. If no Decision Registry exists in the source document, mark Decision Coverage as N/A.\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N or general)\nRecommendations:\n- {specific text to add or change in plan.md}"
+  prompt: "You are a Reviewer subagent. Review a draft execution plan.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nReview these files:\n- .workflow-adapter/{subject}/plan.md\n- .workflow-adapter/{subject}/worker.md\n\nAlso check for source documents (spec.md, brainstorming.md, investigation.md) in .workflow-adapter/{subject}/ to verify plan coverage. If spec.md exists, it is the primary source for technical decisions and its Decision Registry is the authoritative superset.\n\n(Substitute the actual subject name for {subject} above.)\n\nVerify:\n- Every task has clear, measurable completion criteria (reject vague criteria like 'improved performance' without a metric)\n- Every task has a verification method\n- Task dependencies are correctly ordered\n- Executer count and task allocation is balanced\n- No tasks are missing from the original brainstorming/investigation/spec scope\n- Verify that the plan's Decision Traceability section covers all `accepted` decisions from the source Decision Registry. If spec.md exists, prefer its Decision Registry as the authoritative source. If no Decision Registry exists in any source document, mark Decision Coverage as N/A.\n\nReturn this exact format:\nStatus: PASS or NEEDS REVISION\nIssues:\n- [CRITICAL|WARNING] {description} (Task N or general)\nRecommendations:\n- {specific text to add or change in plan.md}"
 })
 ```
 
@@ -370,13 +377,15 @@ Review these files:
 - .workflow-adapter/{subject}/plan.md
 - .workflow-adapter/{subject}/worker.md
 
+Also check for source documents (spec.md, brainstorming.md, investigation.md) in .workflow-adapter/{subject}/ to verify plan coverage. If spec.md exists, it is the primary source for technical decisions and its Decision Registry is the authoritative superset.
+
 Verify:
 - Every task has clear, measurable completion criteria
 - Every task has a verification method
 - Task dependencies are correctly ordered
 - Executer count and task allocation is balanced
-- No tasks are missing from the original brainstorming/investigation scope
-- Verify that the plan's Decision Traceability section covers all `accepted` decisions from the source Decision Registry. If no Decision Registry exists in the source document, mark Decision Coverage as N/A.
+- No tasks are missing from the original brainstorming/investigation/spec scope
+- Verify that the plan's Decision Traceability section covers all `accepted` decisions from the source Decision Registry. If spec.md exists, prefer its Decision Registry as the authoritative source. If no Decision Registry exists in any source document, mark Decision Coverage as N/A.
 
 Write your review to .workflow-adapter/{subject}/plan-review.md in this format:
 Status: PASS or NEEDS REVISION

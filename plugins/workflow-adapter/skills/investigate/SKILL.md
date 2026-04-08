@@ -438,7 +438,24 @@ Then clean up the team:
 TeamDelete()
 ```
 
-Inform the user that investigation is complete and suggest running `/workflow-adapter:plan` to create an execution plan for implementing the chosen solution.
+After saving results, perform complexity detection on the investigation output:
+
+Check investigation.md for these complexity signals:
+1. Multiple components mentioned in Proposed Solutions (2+ distinct modules/files/services)
+2. API or protocol design needed in Recommended Action (mentions of "API", "endpoint", "protocol", "interface", "contract")
+3. Data model or schema changes in Proposed Solutions (mentions of "schema", "model", "database", "table", "migration")
+4. 3+ files in Telemetry Changes or implementation scope
+
+If 2+ signals are detected:
+"⚠ This investigation involves complex technical design. Running `/workflow-adapter:spec` before `/workflow-adapter:plan` is strongly recommended to define interface contracts and technical details."
+
+If <2 signals detected, do not show the warning — spec is still listed as an option below.
+
+Inform the user that investigation is complete and suggest:
+- `/workflow-adapter:spec` for detailed technical specification (recommended for complex changes)
+- `/workflow-adapter:plan` to create an execution plan for implementing the chosen solution
+- `/workflow-adapter:retrospective` to extract principles and lessons from this session
+- `/workflow-adapter:archive` to preserve decisions as ADRs when the work is done
 
 **Backlog Offer:**
 Before ending, ask the user if any deferred items from this investigation should be added to the backlog:
@@ -570,7 +587,16 @@ If reviewer returns `PASS` (or after the revision round): proceed to **"## SA-St
 
 Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
 
-**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls.
+**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls. However, you MUST still perform the completion message:
+
+After saving results, perform complexity detection: check investigation.md for complexity signals (multiple components in Proposed Solutions, API/protocol design in Recommended Action, data model changes in Proposed Solutions, 3+ files in Telemetry Changes or implementation scope). If 2+ signals are detected:
+"⚠ This investigation involves complex technical design. Running `/workflow-adapter:spec` before `/workflow-adapter:plan` is strongly recommended to define interface contracts and technical details."
+
+Inform the user that investigation is complete and suggest:
+- `/workflow-adapter:spec` for detailed technical specification (recommended for complex changes)
+- `/workflow-adapter:plan` to create an execution plan for implementing the chosen solution
+- `/workflow-adapter:retrospective` to extract principles and lessons from this session
+- `/workflow-adapter:archive` to preserve decisions as ADRs when the work is done
 
 ---
 
@@ -769,4 +795,13 @@ If reviewer returns `NEEDS REVISION` with CRITICAL issues:
 
 Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
 
-**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls.
+**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls. However, you MUST still perform the completion message:
+
+After saving results, perform complexity detection: check investigation.md for complexity signals (multiple components in Proposed Solutions, API/protocol design in Recommended Action, data model changes in Proposed Solutions, 3+ files in Telemetry Changes or implementation scope). If 2+ signals are detected:
+"⚠ This investigation involves complex technical design. Running `/workflow-adapter:spec` before `/workflow-adapter:plan` is strongly recommended to define interface contracts and technical details."
+
+Inform the user that investigation is complete and suggest:
+- `/workflow-adapter:spec` for detailed technical specification (recommended for complex changes)
+- `/workflow-adapter:plan` to create an execution plan for implementing the chosen solution
+- `/workflow-adapter:retrospective` to extract principles and lessons from this session
+- `/workflow-adapter:archive` to preserve decisions as ADRs when the work is done

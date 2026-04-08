@@ -363,7 +363,21 @@ Then clean up the team:
 TeamDelete()
 ```
 
+After saving results, perform complexity detection on the brainstorming output:
+
+Check brainstorming.md for these complexity signals:
+1. Multiple components mentioned in Key Conclusions (2+ distinct modules/files/services)
+2. API or protocol design needed (mentions of "API", "endpoint", "protocol", "interface", "contract")
+3. Data model or schema changes (mentions of "schema", "model", "database", "table", "migration")
+4. 3+ files expected to be modified
+
+If 2+ signals are detected:
+"⚠ This brainstorming involves complex technical design. Running `/workflow-adapter:spec` before `/workflow-adapter:plan` is strongly recommended to define interface contracts and technical details."
+
+If <2 signals detected, do not show the warning — spec is still listed as an option below.
+
 Inform the user that brainstorming is complete and suggest:
+- `/workflow-adapter:spec` for detailed technical specification (recommended for complex changes)
 - `/workflow-adapter:plan` to create an execution plan
 - `/workflow-adapter:retrospective` to extract principles and lessons from this session
 - `/workflow-adapter:archive` to preserve decisions as ADRs when the work is done
@@ -446,7 +460,7 @@ If reviewer returns `PASS` (or after the revision round): proceed to **"## SA-St
 
 Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
 
-**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls.
+**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls. The completion message from Step 8 (including complexity detection and spec recommendation) still applies — only the team shutdown is skipped.
 
 ---
 
@@ -593,4 +607,4 @@ If reviewer returns `PASS` (or after the revision round): proceed to CX-Step 5.
 
 Continue with the normal **"## Step 6: Final Confirmation"** section (if `auto_confirm = false`) and **"## Step 7: Save Results"** unchanged.
 
-**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls.
+**Step 8 replacement**: No team to shut down — skip all `SendMessage` and `TeamDelete` calls. The completion message from Step 8 (including complexity detection and spec recommendation) still applies — only the team shutdown is skipped.

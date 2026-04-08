@@ -25,7 +25,7 @@ import {
   appendEvent,
 } from './state.js';
 import { dispatchTask, dispatchMessage, nudgeAgent, type DispatchTarget } from './dispatch.js';
-import { capturePane, killPane, isPaneDead } from './tmux.js';
+import { capturePane, killPane, killSession, isPaneDead } from './tmux.js';
 import { respawnAgent } from './spawn.js';
 
 // ── IPC Server ───────────────────────────────────────────────────────
@@ -452,12 +452,25 @@ async function handlePeek(
 }
 
 async function handleStop(ctx: SessionContext): Promise<{ stopped: boolean }> {
-  // Kill all agent panes
+  const session = await loadSession(ctx.project, ctx.sessionId);
+
+  // Kill all agent panes individually
   const agents = await listAgents(ctx);
   for (const agent of agents) {
-    if (!(await isPaneDead(agent.pane_id))) {
-      await killPane(agent.pane_id, agent.cli);
+    try {
+      if (!(await isPaneDead(agent.pane_id))) {
+        await killPane(agent.pane_id, agent.cli);
+      }
+    } catch {
+      // pane_id might be invalid (e.g., "pending") — continue
     }
+  }
+
+  // Fallback: kill the entire tmux session to catch orphan panes
+  try {
+    await killSession(session.tmux_session);
+  } catch {
+    // Session may already be gone
   }
 
   // Log event BEFORE archive (archive moves the directory)

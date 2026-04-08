@@ -5,3 +5,4 @@ claude/scripts/qa-browse/bun.lock
 codex/claude-compat/scripts/qa-browse/dist/
 codex/claude-compat/scripts/qa-browse/bun.lock
 .serena/
+.uniflow-worktrees/

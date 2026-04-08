@@ -1,9 +1,11 @@
 import { sendCommand, parseArgs } from './client.js';
 import { EXIT_AGENT_NOT_FOUND } from '../lib/constants.js';
 
-/** Strip ANSI escape sequences from a string */
+/** Strip ANSI escape sequences and control characters from a string */
 function stripAnsi(str: string): string {
-  return str.replace(/\x1B(?:\[[0-9;]*[A-Za-z]|\][^\x07]*\x07|\(B)/g, '');
+  return str
+    .replace(/\x1B(?:\[[?]?[0-9;]*[A-Za-z]|\][^\x07]*\x07|\([A-Z])/g, '')
+    .replace(/\r/g, '');
 }
 
 export default async function logs(args: string[]): Promise<void> {

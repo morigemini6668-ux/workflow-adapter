@@ -89,7 +89,8 @@ fi
 
 **Connect to TUI:**
 - If pane ID given: `$T attach <pane-id>`
-- If app name given: `$T launch <app-name> --size 120x40`
+- If app name given and inside tmux: `$T launch <app-name> --here` (split current pane)
+- If app name given and NOT inside tmux: `$T launch <app-name> --size 120x40` (detached session)
 - Start logging: `$T log --start`
 
 ### Create output directories
@@ -260,7 +261,10 @@ Reference `references/tui-checklist.md` for the full per-screen checklist and is
 ### Phase 2: Connect
 
 ```bash
-$T launch <app-name> --size 120x40    # or $T attach <pane-id>
+# Inside tmux (preferred): split current pane
+$T launch <app-name> --here            # or $T attach <pane-id>
+# Outside tmux: create detached session
+# $T launch <app-name> --size 120x40
 $T log --start                         # start continuous logging
 $T capture
 $T screenshot "$REPORT_DIR/screenshots/initial.png"

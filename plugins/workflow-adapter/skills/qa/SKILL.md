@@ -110,7 +110,8 @@ fi
 
 **Connect to TUI:**
 - If pane ID given: `$T attach <pane-id>`
-- If app name given: `$T launch <app-name> --size 120x40`
+- If app name given and inside tmux: `$T launch <app-name> --here` (split current pane)
+- If app name given and NOT inside tmux: `$T launch <app-name> --size 120x40` (detached session)
 - Start logging: `$T log --start`
 
 ### Create output directories
@@ -192,7 +193,7 @@ $B snapshot -D
 ```bash
 # Restart the TUI app to pick up code changes
 $T stop
-$T launch <app-command> --size 120x40
+$T launch <app-command> --here         # or --size 120x40 if not in tmux
 $T wait "ready indicator" --timeout 10
 # Navigate to the affected screen
 $T press <navigation-keys>

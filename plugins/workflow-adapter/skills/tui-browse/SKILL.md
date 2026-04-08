@@ -53,7 +53,14 @@ Store the path in `$T` for all subsequent commands.
 
 ## Connecting to a TUI
 
-**Launch a new app:**
+**Launch in current session (recommended when inside tmux):**
+```bash
+$T launch htop --here                   # split current pane vertically
+$T launch lazygit --here --split h      # horizontal split
+$T launch k9s --here --percent 60       # 60% of pane for the app
+```
+
+**Launch in a new detached session:**
 ```bash
 $T launch htop                          # default session, 120x40
 $T launch lazygit --size 160x50         # custom size
@@ -65,6 +72,8 @@ $T launch "k9s --namespace default" --session k9s-test
 $T attach %0                            # by pane ID
 $T attach mysession:0.1                 # by session:window.pane
 ```
+
+When inside tmux, prefer `--here` so the user can see the TUI app live alongside their terminal.
 
 After launch/attach, immediately capture the screen:
 ```bash

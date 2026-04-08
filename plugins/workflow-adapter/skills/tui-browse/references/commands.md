@@ -26,18 +26,39 @@ Important: `qa-tui` manages a single TUI session per project. Do not run two `$T
 
 | Command | What it does |
 |---------|-------------|
-| `$T launch <cmd> [--session S] [--size WxH]` | Start app in new tmux session |
+| `$T launch <cmd> --here [--split h\|v] [--percent N]` | Split current pane and run app there |
+| `$T launch <cmd> [--session S] [--size WxH]` | Start app in new detached tmux session |
 | `$T attach <pane-id>` | Connect to existing tmux pane |
 | `$T status` | Check if pane is alive, show dimensions and running command |
-| `$T stop` | Kill the managed session |
+| `$T stop` | Kill the managed pane (here mode) or session (detached mode) |
 
-### Launch examples
+### Launch — here mode (recommended inside tmux)
+
+Splits the current pane and launches the app there. The user can see the TUI live.
+
+```bash
+$T launch htop --here                             # vertical split (default)
+$T launch lazygit --here --split h                # horizontal split
+$T launch k9s --here --split v --percent 60       # 60% of pane for the app
+$T launch "python -m textual run my_app.py" --here
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--here` | — | Required. Enables split mode instead of new session |
+| `--split` | `v` | Split direction: `v` (vertical) or `h` (horizontal) |
+| `--percent` | — | Split size as percentage of current pane |
+
+Requires running inside tmux (`$TMUX` must be set).
+
+### Launch — detached mode
+
+Creates a new detached tmux session. Use when not inside tmux or when you want isolation.
 
 ```bash
 $T launch htop                                    # defaults: session=qa-tui-$$, 120x40
 $T launch lazygit --size 160x50                   # custom terminal size
 $T launch "k9s --namespace kube-system" --session k9s
-$T launch "python -m textual run my_app.py"       # Textual app
 ```
 
 ### Attach examples

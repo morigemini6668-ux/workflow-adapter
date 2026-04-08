@@ -6,7 +6,12 @@
 #
 # Commands:
 #   attach <pane-id>                Connect to an existing tmux pane
-#   launch <cmd> [--session S] [--size WxH]  Launch app in new tmux session
+#   launch <cmd> [options]          Launch app in tmux
+#     --here                        Split current pane (instead of new session)
+#     --split h|v                   Split direction (default: v, requires --here)
+#     --percent N                   Split size as percentage (requires --here)
+#     --session S                   Session name (detached mode only)
+#     --size WxH                    Terminal size (detached mode only)
 #   capture [--ansi] [--history [-n N]]      Capture pane content
 #   screenshot <path>               Capture pane as image (PNG/HTML/TXT)
 #   send <keys...>                  Send named keys (Enter, Tab, Up, C-c, etc.)
@@ -68,16 +73,23 @@ get_session() {
 }
 
 save_state() {
-  local session="$1" pane_id="$2" app_command="${3:-}" started_at
+  local session="$1" pane_id="$2" app_command="${3:-}" mode="${4:-detached}" started_at
   started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   cat > "$STATE_FILE" <<EOF
 {
   "session": "$session",
   "pane_id": "$pane_id",
   "app_command": "$app_command",
+  "mode": "$mode",
   "started_at": "$started_at"
 }
 EOF
+}
+
+get_mode() {
+  local state
+  state=$(read_state)
+  echo "$state" | grep -oE '"mode"\s*:\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || echo "detached"
 }
 
 pane_alive() {
@@ -120,10 +132,14 @@ cmd_launch() {
   ensure_state_dir
 
   local app_cmd="" session_name="$DEFAULT_SESSION" width=$DEFAULT_WIDTH height=$DEFAULT_HEIGHT
+  local here=false split="v" percent=""
 
   # Parse args
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --here) here=true; shift ;;
+      --split) split="$2"; shift 2 ;;
+      --percent) percent="$2"; shift 2 ;;
       --session) session_name="$2"; shift 2 ;;
       --size)
         width="${2%%x*}"; height="${2##*x}"; shift 2 ;;
@@ -137,25 +153,59 @@ cmd_launch() {
     esac
   done
 
-  [[ -n "$app_cmd" ]] || die "Usage: qa-tui launch <command> [--session name] [--size WxH]"
+  [[ -n "$app_cmd" ]] || die "Usage: qa-tui launch <command> [--here [--split h|v] [--percent N]] [--session name] [--size WxH]"
 
-  # Kill existing session with same name (if managed by us)
-  local existing_session
-  existing_session=$(get_session)
-  if [[ "$existing_session" == "$session_name" ]]; then
-    tmux kill-session -t "$session_name" 2>/dev/null || true
+  if [[ "$here" == true ]]; then
+    # --- Here mode: split current pane ---
+    [[ -n "${TMUX:-}" ]] || die "Not inside a tmux session. Remove --here to create a new detached session."
+
+    local split_flag
+    case "$split" in
+      h|horizontal) split_flag="-h" ;;
+      v|vertical)   split_flag="-v" ;;
+      *) die "Invalid split direction: $split. Use 'h' (horizontal) or 'v' (vertical)." ;;
+    esac
+
+    local -a split_args=("$split_flag")
+    [[ -n "$percent" ]] && split_args+=(-l "${percent}%")
+
+    # Kill existing managed pane if in here mode
+    local existing_mode existing_pane
+    existing_mode=$(get_mode)
+    existing_pane=$(get_pane)
+    if [[ "$existing_mode" == "here" && -n "$existing_pane" ]]; then
+      tmux kill-pane -t "$existing_pane" 2>/dev/null || true
+    fi
+
+    local pane_id
+    pane_id=$(tmux split-window "${split_args[@]}" -PF '#{pane_id}' "$app_cmd")
+    session_name=$(tmux display-message -p '#{session_name}')
+
+    save_state "$session_name" "$pane_id" "$app_cmd" "here"
+
+    sleep 0.5
+    echo "Launched '$app_cmd' in current session (pane: $pane_id, split: $split${percent:+, ${percent}%})"
+  else
+    # --- Detached mode: new tmux session ---
+
+    # Kill existing session with same name (if managed by us)
+    local existing_session
+    existing_session=$(get_session)
+    if [[ "$existing_session" == "$session_name" ]]; then
+      tmux kill-session -t "$session_name" 2>/dev/null || true
+    fi
+
+    # Create new detached session
+    local pane_id
+    pane_id=$(tmux new-session -d -s "$session_name" -x "$width" -y "$height" -PF '#{pane_id}' "$app_cmd")
+
+    save_state "$session_name" "$pane_id" "$app_cmd" "detached"
+
+    # Brief wait for app to initialize
+    sleep 0.5
+
+    echo "Launched '$app_cmd' in session '$session_name' (pane: $pane_id, size: ${width}x${height})"
   fi
-
-  # Create new detached session
-  local pane_id
-  pane_id=$(tmux new-session -d -s "$session_name" -x "$width" -y "$height" -PF '#{pane_id}' "$app_cmd")
-
-  save_state "$session_name" "$pane_id" "$app_cmd"
-
-  # Brief wait for app to initialize
-  sleep 0.5
-
-  echo "Launched '$app_cmd' in session '$session_name' (pane: $pane_id, size: ${width}x${height})"
 }
 
 cmd_capture() {
@@ -384,16 +434,25 @@ cmd_status() {
 }
 
 cmd_stop() {
-  local session
+  local mode pane session
+  mode=$(get_mode)
+  pane=$(get_pane)
   session=$(get_session)
 
-  if [[ -z "$session" ]]; then
+  if [[ -z "$pane" && -z "$session" ]]; then
     die "No active session to stop."
   fi
 
-  tmux kill-session -t "$session" 2>/dev/null || true
+  if [[ "$mode" == "here" ]]; then
+    # Here mode: kill just the pane, not the whole session
+    tmux kill-pane -t "$pane" 2>/dev/null || true
+    echo "Pane '$pane' closed and state cleared."
+  else
+    # Detached mode: kill the whole session
+    tmux kill-session -t "$session" 2>/dev/null || true
+    echo "Session '$session' stopped and state cleared."
+  fi
   rm -f "$STATE_FILE"
-  echo "Session '$session' stopped and state cleared."
 }
 
 cmd_log() {

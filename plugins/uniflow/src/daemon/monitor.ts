@@ -51,6 +51,7 @@ export function startMonitor(
   opts: MonitorOptions,
 ): MonitorHandle {
   const idleTrackers = new Map<string, AgentIdleTracker>();
+  const lastCrashEvent = new Map<string, number>(); // agent → timestamp of last crash event
   let healthTimer: Timer | null = null;
   let fsWatcher: FSWatcher | null = null;
   let stopped = false;
@@ -109,7 +110,13 @@ export function startMonitor(
     cli: CliType,
     role: string,
   ): Promise<void> {
-    await appendEvent(ctx, 'agent_crashed', { agent: name });
+    // Deduplicate: only emit crash event if >60s since last one for this agent
+    const now = Date.now();
+    const lastCrash = lastCrashEvent.get(name);
+    if (!lastCrash || now - lastCrash >= 60_000) {
+      await appendEvent(ctx, 'agent_crashed', { agent: name });
+      lastCrashEvent.set(name, now);
+    }
 
     if (role === 'orchestrator') {
       // Auto-respawn orchestrator (D14)

@@ -5,7 +5,10 @@ description: |
   Use this skill when the user mentions "세션 분석", "session insights", "세션 인사이트",
   "사용 패턴", "usage patterns", "friction analysis", "개선점 분석", "plugin diagnostics",
   "session analysis", "사용 분석", "tool usage", "세션 데이터 분석", "플러그인 진단",
-  or asks about improving the plugin based on usage data.
+  or asks about improving the plugin based on usage data. Also use when the user asks
+  "how can I improve this plugin?", "이 플러그인 어떻게 개선하지?", "뭐가 문제야?",
+  "what's not working well?", "어떤 스킬이 안 쓰여?", or wants a diagnostic overview.
+  Use `--plugin-only` to filter results to workflow-adapter-specific data only.
 argument-hint: "[--project <path>] [--plugin-only] [--yes]"
 allowed-tools:
   - Bash
@@ -87,8 +90,8 @@ Read the `analysis-summary.json` file and produce a structured markdown report.
 
 From the aggregated data, compute:
 
-- **Success rate**: `outcomes.fully_achieved / metadata.total_sessions * 100`
-- **Friction rate**: sessions with any friction count > 0 / total sessions * 100
+- **Success rate**: `outcomes.fully_achieved / metadata.facet_sessions * 100` (use facet_sessions as denominator since outcomes are only available for faceted sessions)
+- **Friction rate**: `friction.total_sessions_with_friction / metadata.facet_sessions * 100` (same denominator)
 - **Top tool**: highest count in `tools` section
 - **Error rate**: total tool errors / total tool invocations * 100
 
@@ -194,7 +197,7 @@ For context, the most frequently invoked skills:
 ```
 
 To enumerate registered skills:
-1. Use Glob to list all `${CLAUDE_PLUGIN_ROOT}/skills/*/SKILL.md` files
+1. Use Glob to list all skill directories. Try `${CLAUDE_PLUGIN_ROOT}/skills/*/SKILL.md` first; if `CLAUDE_PLUGIN_ROOT` is not available, use a Bash command to find skills: `find plugins/workflow-adapter/skills -name SKILL.md -maxdepth 2 2>/dev/null || find skills -name SKILL.md -maxdepth 2 2>/dev/null`
 2. Extract skill names from directory names
 3. Compare against invocation counts in the `skills` section of analysis-summary.json
 

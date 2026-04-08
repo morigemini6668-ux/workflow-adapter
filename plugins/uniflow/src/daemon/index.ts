@@ -237,8 +237,25 @@ async function launchOrchestrator(
   const logPath = join(logsDir(ctx.project, ctx.sessionId), 'orchestrator.log');
   await startPaneLog(paneId, logPath);
 
-  // 8. Register in session
-  const { updateSession } = await import('./state.js');
+  // 8. Register agent state file + session
+  const { updateSession, writeAgentState } = await import('./state.js');
+  const { getPanePid } = await import('./tmux.js');
+  const pid = await getPanePid(paneId).catch(() => 0);
+  const agentState = {
+    name: 'orchestrator',
+    cli: opts.orchestratorCli,
+    role: 'orchestrator' as const,
+    state: 'idle' as const,
+    pane_id: paneId,
+    pid,
+    current_task: null,
+    progress: null,
+    nudge_count: 0,
+    started_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  await writeAgentState(ctx, 'orchestrator', agentState);
+
   const session = await loadSession(ctx.project, ctx.sessionId);
   await updateSession(ctx, {
     agents: [
@@ -248,7 +265,7 @@ async function launchOrchestrator(
         cli: opts.orchestratorCli,
         role: 'orchestrator',
         pane_id: paneId,
-        pid: 0, // Will be updated after getPanePid
+        pid,
       },
     ],
   });

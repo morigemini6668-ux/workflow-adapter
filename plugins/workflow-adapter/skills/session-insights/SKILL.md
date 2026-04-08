@@ -8,7 +8,7 @@ description: |
   or asks about improving the plugin based on usage data. Also use when the user asks
   "how can I improve this plugin?", "이 플러그인 어떻게 개선하지?", "뭐가 문제야?",
   "what's not working well?", "어떤 스킬이 안 쓰여?", or wants a diagnostic overview.
-  Use `--plugin-only` to filter results to workflow-adapter-specific data only.
+  Use --plugin-only flag to filter results to workflow-adapter-specific data only.
 argument-hint: "[--project <path>] [--plugin-only] [--yes]"
 allowed-tools:
   - Bash

@@ -228,7 +228,7 @@ export function classifyOutput(output: string): 'idle' | 'busy' | 'unknown' {
   }
 
   // Codex idle indicators
-  if (tail.includes('codex>') || tail.includes('> ')) {
+  if (tail.includes('codex>') || tail.includes('> ') || tail.includes('›')) {
     return 'idle';
   }
 

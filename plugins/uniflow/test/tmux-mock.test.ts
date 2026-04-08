@@ -170,6 +170,10 @@ async function group1_classifyOutput(): Promise<void> {
     assert(classifyOutput('ready\ncodex> ') === 'idle', 'expected idle');
   });
 
+  await test('Codex idle: › prompt (v0.118+)', async () => {
+    assert(classifyOutput('gpt-5.4 xhigh fast\n› ') === 'idle', 'expected idle');
+  });
+
   await test('Busy: spinner ⠋', async () => {
     assert(classifyOutput('processing\n⠋ Working...') === 'busy', 'expected busy');
   });

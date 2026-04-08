@@ -164,6 +164,9 @@ async function handleRequest(
         return fail(`Unknown command: ${req.command}`);
     }
   } catch (err) {
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return fail('Session not found (may have been archived). Start a new session with "uniflow start".');
+    }
     return fail(err instanceof Error ? err.message : 'Internal error');
   }
 }

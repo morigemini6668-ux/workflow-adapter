@@ -78,12 +78,34 @@ tmux list-panes -a -F '#{pane_id} #{session_name}:#{window_index}.#{pane_index} 
 | Command | What it does |
 |---------|-------------|
 | `$T capture` | Plain text capture of visible pane |
+| `$T capture --stable` | Retry until output stabilizes (for TUIs that repaint, e.g. Ink/React) |
+| `$T capture --raw` | Capture without `-J` join (preserves exact TUI layout with box-drawing) |
+| `$T capture --delay 0.5` | Wait before capturing (let TUI finish rendering) |
 | `$T capture --ansi` | Capture with ANSI colors/formatting |
 | `$T capture --history` | Include full scrollback history |
 | `$T capture --history -n 50` | Include last 50 lines of scrollback |
 | `$T screenshot <path>` | Capture as image (freeze) / HTML (aha) / text |
 | `$T size` | Print pane dimensions (WxH) |
 | `$T diff` | Unified diff against previous capture |
+
+### Capturing complex TUIs (Ink, Bubbletea, etc.)
+
+TUI frameworks that do full-screen repaints (Ink/React, Bubbletea, Textual) can produce garbled captures if caught mid-render. Use these flags:
+
+```bash
+# Best for Ink-based TUIs (Claude Code, etc.)
+$T capture --stable --raw
+
+# Combine: wait 0.3s, then retry until stable
+$T capture --stable --delay 0.3
+
+# If still garbled, use screenshot instead (always captures the final frame)
+$T screenshot /tmp/tui.png
+```
+
+- `--stable`: Captures repeatedly (200ms intervals, max 15 attempts) until two consecutive captures match
+- `--raw`: Omits `-J` flag so box-drawing characters and TUI layout aren't mangled by line joining
+- `--delay N`: Adds an explicit pause before the first capture attempt
 
 ### Screenshot pipeline
 

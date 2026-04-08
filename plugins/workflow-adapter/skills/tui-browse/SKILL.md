@@ -94,11 +94,12 @@ Read `references/commands.md` for the full command reference.
 
 1. **Always launch or attach first.** This is non-negotiable. Never skip setup, never just describe what you would do. Execute.
 2. **Always capture after interactions.** After sending keys, capture the screen so the user sees the result. If `freeze` is available, take a screenshot and `Read` it.
-3. **Use named keys for navigation.** TUI apps are keyboard-driven: `Up`, `Down`, `Tab`, `Enter`, `Escape`, `C-c`, etc.
-4. **Type literal text with `type`.** For search fields, input boxes, etc.
-5. **Use `wait` for slow operations.** If an action triggers loading, use `$T wait <expected-text>` before capturing.
-6. **Ask if unsure.** If you don't know what the user wants to do, ask — but ask AFTER launching/attaching.
-7. **No QA framework.** This skill just controls TUI apps. If the user wants QA testing, suggest `/workflow-adapter:qa-report` or `/workflow-adapter:qa`.
-8. **Never refuse to launch/attach.** When this skill triggers, the user wants TUI interaction — do it.
-9. **Do not parallelize qa-tui commands.** Wait for each command to finish before issuing the next.
-10. **Show the screen to the user.** After every capture or screenshot, either paste the text output or `Read` the screenshot file so the user sees the TUI state.
+3. **Use `--stable --raw` for complex TUIs.** Apps that do full-screen repaints (Ink/React, Bubbletea, Textual) produce garbled output with plain `capture`. Use `$T capture --stable --raw` instead. If still garbled, fall back to `$T screenshot`.
+4. **Use named keys for navigation.** TUI apps are keyboard-driven: `Up`, `Down`, `Tab`, `Enter`, `Escape`, `C-c`, etc.
+5. **Type literal text with `type`.** For search fields, input boxes, etc.
+6. **Use `wait` for slow operations.** If an action triggers loading, use `$T wait <expected-text>` before capturing.
+7. **Ask if unsure.** If you don't know what the user wants to do, ask — but ask AFTER launching/attaching.
+8. **No QA framework.** This skill just controls TUI apps. If the user wants QA testing, suggest `/workflow-adapter:qa-report` or `/workflow-adapter:qa`.
+9. **Never refuse to launch/attach.** When this skill triggers, the user wants TUI interaction — do it.
+10. **Do not parallelize qa-tui commands.** Wait for each command to finish before issuing the next.
+11. **Show the screen to the user.** After every capture or screenshot, either paste the text output or `Read` the screenshot file so the user sees the TUI state.

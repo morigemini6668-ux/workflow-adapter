@@ -12,7 +12,11 @@
 #     --percent N                   Split size as percentage (requires --here)
 #     --session S                   Session name (detached mode only)
 #     --size WxH                    Terminal size (detached mode only)
-#   capture [--ansi] [--history [-n N]]      Capture pane content
+#   capture [--stable] [--raw] [--delay N] [--ansi] [--history [-n N]]
+#                                    Capture pane content
+#     --stable                       Retry until output stabilizes (for TUIs mid-render)
+#     --raw                          Skip -J flag (preserve exact TUI layout)
+#     --delay N                      Wait N seconds before capture
 #   screenshot <path>               Capture pane as image (PNG/HTML/TXT)
 #   send <keys...>                  Send named keys (Enter, Tab, Up, C-c, etc.)
 #   type <text>                     Send literal text
@@ -213,18 +217,28 @@ cmd_capture() {
   pane=$(get_pane)
   [[ -n "$pane" ]] || die "No active pane. Use 'attach' or 'launch' first."
 
-  local ansi=false history=false history_lines=""
+  local ansi=false history=false history_lines="" raw=false stable=false delay=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --ansi) ansi=true; shift ;;
       --history) history=true; shift ;;
+      --raw) raw=true; shift ;;
+      --stable) stable=true; shift ;;
+      --delay) delay="$2"; shift 2 ;;
       -n) history_lines="$2"; shift 2 ;;
       *) shift ;;
     esac
   done
 
-  local -a flags=(-p -J)
+  # Pre-capture delay (let TUI finish rendering)
+  if [[ -n "$delay" ]]; then
+    sleep "$delay"
+  fi
+
+  local -a flags=(-p)
+  # -J joins wrapped lines; skip for raw mode (preserves exact TUI layout)
+  [[ "$raw" != true ]] && flags+=(-J)
   [[ "$ansi" == true ]] && flags+=(-e)
 
   if [[ "$history" == true ]]; then
@@ -236,7 +250,24 @@ cmd_capture() {
   fi
 
   local output
-  output=$(tmux capture-pane "${flags[@]}" -t "$pane" 2>&1) || die "capture-pane failed: $output"
+  if [[ "$stable" == true ]]; then
+    # Stable mode: retry until two consecutive captures match
+    local prev="" attempts=0 max_attempts=15
+    while (( attempts < max_attempts )); do
+      output=$(tmux capture-pane "${flags[@]}" -t "$pane" 2>&1) || die "capture-pane failed: $output"
+      if [[ "$output" == "$prev" && -n "$output" ]]; then
+        break
+      fi
+      prev="$output"
+      sleep 0.2
+      ((attempts++))
+    done
+    if (( attempts >= max_attempts )); then
+      echo "WARN: capture did not stabilize after ${max_attempts} attempts" >&2
+    fi
+  else
+    output=$(tmux capture-pane "${flags[@]}" -t "$pane" 2>&1) || die "capture-pane failed: $output"
+  fi
 
   # Save for diff (only plain text captures)
   if [[ "$ansi" == false ]]; then

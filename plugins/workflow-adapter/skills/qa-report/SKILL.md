@@ -296,7 +296,7 @@ Visit each screen/view systematically. At each screen:
 ```bash
 $T press <navigation-key>             # navigate to screen
 $T wait "expected header" --timeout 5  # wait for screen to load
-$T capture
+$T capture --stable --raw             # stable capture for TUIs that repaint
 $T screenshot "$REPORT_DIR/screenshots/screen-name.png"
 ```
 

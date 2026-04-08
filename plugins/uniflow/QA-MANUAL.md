@@ -36,7 +36,7 @@ uniflow asdfgh        # 잘못된 명령 → "Unknown command" 에러
 ```
 
 **확인 포인트:**
-- [ ] `--help` → 19개 명령 목록 표시
+- [ ] `--help` → 20개 명령 목록 표시
 - [ ] `doctor` → tmux, claude, codex 체크 결과 표시
 - [ ] `init` → .uniflow-id 파일 생성
 - [ ] `init` 재실행 → 기존 ID 유지

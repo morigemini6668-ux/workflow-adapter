@@ -6,7 +6,10 @@ description: |
   "interface design", "detailed design", "architecture design", "data model design",
   "API design", "사양", "기술 설계", "인터페이스 설계", "상세 설계", "아키텍처 설계",
   "데이터 모델 설계", "API 설계", "스펙 작성", "spec 작성",
-  or when complexity detection suggests a spec is needed.
+  or when brainstorming produced decisions involving multiple components, API design,
+  data models, or 3+ files — even if the user doesn't explicitly say "spec".
+  Also use when the user asks "how should we implement this?", "구현 어떻게 하지?",
+  "기술적으로 어떻게?", or wants to define interfaces before planning tasks.
 argument-hint: "<optional: subject name>"
 allowed-tools:
   - Bash
@@ -241,7 +244,7 @@ AskUserQuestion({
 ```
 
 - **Approve**: Proceed to completion message
-- **Revise**: Ask user for feedback, update spec.md accordingly, then re-present
+- **Revise**: Ask the user what they want changed via AskUserQuestion (free text). Apply their feedback to spec.md, then re-present the summary for confirmation. Repeat until approved or cancelled.
 - **Cancel**: Delete spec.md and stop
 
 If `YES_MODE` is true, skip confirmation and proceed directly.

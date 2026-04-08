@@ -21,13 +21,19 @@ const STATUS_ICONS: Record<string, string> = {
   failed: '[!]',
 };
 
+/** Truncate string to width, adding ellipsis if needed */
+function trunc(s: string, w: number): string {
+  if (s.length <= w) return s.padEnd(w);
+  return s.slice(0, w - 1) + '\u2026';
+}
+
 export function TaskList({ tasks, focused, statusFilter }: TaskListProps) {
   const filtered = statusFilter
     ? tasks.filter((t) => t.status === statusFilter)
     : tasks;
 
   return (
-    <Box flexDirection="column" borderStyle={focused ? 'bold' : 'single'} borderColor={focused ? 'cyan' : undefined} paddingLeft={1} paddingRight={1} flexGrow={1}>
+    <Box flexDirection="column" borderStyle={focused ? 'bold' : 'single'} borderColor={focused ? 'cyan' : undefined} paddingLeft={1} paddingRight={1} flexGrow={1} overflowX="hidden">
       <Box flexDirection="row" gap={1}>
         <Text bold underline> Tasks </Text>
         {statusFilter && <Text dimColor>({statusFilter})</Text>}
@@ -37,19 +43,19 @@ export function TaskList({ tasks, focused, statusFilter }: TaskListProps) {
       ) : (
         <>
           <Box flexDirection="row" gap={1}>
-            <Text dimColor bold>{'ID'.padEnd(12)}</Text>
-            <Text dimColor bold>{'STATUS'.padEnd(14)}</Text>
-            <Text dimColor bold>{'ASSIGNEE'.padEnd(14)}</Text>
+            <Text dimColor bold>{trunc('ID', 10)}</Text>
+            <Text dimColor bold>{trunc('STATUS', 12)}</Text>
+            <Text dimColor bold>{trunc('ASSIGNEE', 12)}</Text>
             <Text dimColor bold>SUBJECT</Text>
           </Box>
           {filtered.map((task) => (
             <Box key={task.id} flexDirection="row" gap={1}>
-              <Text>{task.id.padEnd(12)}</Text>
+              <Text>{trunc(task.id, 10)}</Text>
               <Text color={STATUS_COLORS[task.status] ?? 'white'}>
-                {STATUS_ICONS[task.status] ?? '???'} {task.status.padEnd(14)}
+                {STATUS_ICONS[task.status] ?? '???'} {trunc(task.status, 12)}
               </Text>
-              <Text dimColor>{(task.assignee ?? '-').padEnd(14)}</Text>
-              <Text>{task.subject.slice(0, 40)}</Text>
+              <Text dimColor>{trunc(task.assignee ?? '-', 12)}</Text>
+              <Text>{trunc(task.subject, 30)}</Text>
             </Box>
           ))}
         </>

@@ -24,28 +24,34 @@ const STATE_ICONS: Record<string, string> = {
   failed: 'ERR',
 };
 
+/** Truncate string to width, adding ellipsis if needed */
+function trunc(s: string, w: number): string {
+  if (s.length <= w) return s.padEnd(w);
+  return s.slice(0, w - 1) + '\u2026';
+}
+
 export function AgentList({ agents, focused }: AgentListProps) {
   return (
-    <Box flexDirection="column" borderStyle={focused ? 'bold' : 'single'} borderColor={focused ? 'cyan' : undefined} paddingLeft={1} paddingRight={1} flexGrow={1}>
+    <Box flexDirection="column" borderStyle={focused ? 'bold' : 'single'} borderColor={focused ? 'cyan' : undefined} paddingLeft={1} paddingRight={1} flexGrow={1} overflowX="hidden">
       <Text bold underline> Agents </Text>
       {agents.length === 0 ? (
         <Text dimColor>  No agents</Text>
       ) : (
         <>
           <Box flexDirection="row" gap={1}>
-            <Text dimColor bold>{'NAME'.padEnd(16)}</Text>
-            <Text dimColor bold>{'CLI'.padEnd(7)}</Text>
-            <Text dimColor bold>{'STATE'.padEnd(10)}</Text>
+            <Text dimColor bold>{trunc('NAME', 14)}</Text>
+            <Text dimColor bold>{trunc('CLI', 6)}</Text>
+            <Text dimColor bold>{trunc('STATE', 10)}</Text>
             <Text dimColor bold>TASK</Text>
           </Box>
           {agents.map((agent) => (
             <Box key={agent.name} flexDirection="row" gap={1}>
-              <Text>{agent.name.padEnd(16)}</Text>
-              <Text dimColor>{agent.cli.padEnd(7)}</Text>
+              <Text>{trunc(agent.name, 14)}</Text>
+              <Text dimColor>{trunc(agent.cli, 6)}</Text>
               <Text color={STATE_COLORS[agent.state] ?? 'white'}>
-                {STATE_ICONS[agent.state] ?? '???'} {agent.state.padEnd(10)}
+                {STATE_ICONS[agent.state] ?? '???'} {trunc(agent.state, 10)}
               </Text>
-              <Text dimColor>{agent.current_task ?? '-'}</Text>
+              <Text dimColor>{trunc(agent.current_task ?? '-', 12)}</Text>
             </Box>
           ))}
         </>

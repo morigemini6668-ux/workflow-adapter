@@ -11,7 +11,13 @@ import {
 async function cmdLaunch(args: string[]): Promise<void> {
   const cwd = args[0] || '.';
   const command = args.slice(1).join(' ');
-  const paneId = await createPane(cwd, command, cwd);
+  // Split current window (no -t target) — matches bash pane-ctl.sh behavior
+  const paneId = await tmuxOk([
+    'split-window', '-h', '-d',
+    '-P', '-F', '#{pane_id}',
+    '-c', cwd,
+    command,
+  ]);
   console.log(paneId);
 }
 

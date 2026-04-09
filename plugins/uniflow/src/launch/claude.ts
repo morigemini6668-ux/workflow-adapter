@@ -1,7 +1,7 @@
-import { mkdir } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { homedir } from 'node:os';
-import type { LaunchOptions } from './index.js';
+import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+import type { LaunchOptions } from "./index.js";
 
 /**
  * Build Claude Code launch command.
@@ -10,29 +10,29 @@ import type { LaunchOptions } from './index.js';
  * Non-interactive mode: claude -p --bare --dangerously-skip-permissions --append-system-prompt-file ...
  */
 export function buildClaudeCommand(opts: LaunchOptions): string[] {
-  const args: string[] = ['claude'];
+  const args: string[] = ["claude"];
 
-  if (opts.mode === 'non_interactive') {
+  if (opts.mode === "non_interactive") {
     // Headless: -p (pipe) + --bare (no TUI chrome)
-    args.push('-p', '--bare');
+    args.push("-p", "--bare");
   }
 
   // Permission bypass (always)
-  args.push('--dangerously-skip-permissions');
+  args.push("--dangerously-skip-permissions");
 
   // Instruction injection via system prompt file
-  args.push('--append-system-prompt-file', opts.instructionPath);
+  args.push("--append-system-prompt-file", opts.instructionPath);
 
   // Plugin directory for uniflow CLI in PATH + hooks
   if (opts.pluginDir) {
-    args.push('--plugin-dir', opts.pluginDir);
+    args.push("--plugin-dir", opts.pluginDir);
   }
 
   // Session name for identification
-  args.push('--name', `uniflow-${opts.name}`);
+  args.push("--name", `uniflow-${opts.name}`);
 
   // Initial prompt (interactive mode: passed as argument)
-  if (opts.initialPrompt && opts.mode === 'non_interactive') {
+  if (opts.initialPrompt && opts.mode === "non_interactive") {
     args.push(opts.initialPrompt);
   }
 
@@ -47,7 +47,7 @@ export async function prepareClaude(opts: LaunchOptions): Promise<void> {
   // Pre-trust directory: create ~/.claude/projects/{encoded-path}/
   // This prevents Claude from showing the "Trust this folder?" prompt
   const encodedPath = encodeTrustPath(opts.cwd);
-  const trustDir = join(homedir(), '.claude', 'projects', encodedPath);
+  const trustDir = join(homedir(), ".claude", "projects", encodedPath);
   await mkdir(trustDir, { recursive: true });
 }
 
@@ -58,5 +58,5 @@ export async function prepareClaude(opts: LaunchOptions): Promise<void> {
  */
 function encodeTrustPath(dirPath: string): string {
   const resolved = resolve(dirPath);
-  return resolved.replace(/\//g, '-');
+  return resolved.replace(/\//g, "-");
 }

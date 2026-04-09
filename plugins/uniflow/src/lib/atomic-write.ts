@@ -1,5 +1,5 @@
-import { rename, mkdir, appendFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { appendFile, mkdir, rename } from "node:fs/promises";
+import { dirname } from "node:path";
 
 /**
  * Atomic write: write to tmp file, then rename to target.
@@ -17,7 +17,7 @@ export async function atomicWrite(path: string, data: string): Promise<void> {
  * Atomic JSON write: serialize + atomicWrite.
  */
 export async function atomicWriteJSON(path: string, data: unknown): Promise<void> {
-  await atomicWrite(path, JSON.stringify(data, null, 2) + '\n');
+  await atomicWrite(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
 /**
@@ -26,6 +26,6 @@ export async function atomicWriteJSON(path: string, data: unknown): Promise<void
 export async function appendJSONL(path: string, entry: unknown): Promise<void> {
   const dir = dirname(path);
   await mkdir(dir, { recursive: true });
-  const line = JSON.stringify(entry) + '\n';
-  await appendFile(path, line, 'utf-8');
+  const line = `${JSON.stringify(entry)}\n`;
+  await appendFile(path, line, "utf-8");
 }

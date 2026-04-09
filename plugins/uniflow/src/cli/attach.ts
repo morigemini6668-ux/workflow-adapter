@@ -1,5 +1,5 @@
-import { findProjectRoot, readProjectName } from './init.js';
-import { tmuxSessionName } from '../lib/constants.js';
+import { tmuxSessionName } from "../lib/constants.js";
+import { findProjectRoot, readProjectName } from "./init.js";
 
 export default async function attach(_args: string[]): Promise<void> {
   const root = await findProjectRoot();
@@ -12,10 +12,10 @@ export default async function attach(_args: string[]): Promise<void> {
   const sessionName = tmuxSessionName(project);
 
   // Exec into tmux attach-session (replaces this process)
-  const proc = Bun.spawn(['tmux', 'attach-session', '-t', sessionName], {
-    stdin: 'inherit',
-    stdout: 'inherit',
-    stderr: 'inherit',
+  const proc = Bun.spawn(["tmux", "attach-session", "-t", sessionName], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
   });
 
   const exitCode = await proc.exited;

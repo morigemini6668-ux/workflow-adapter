@@ -1,11 +1,11 @@
-import { sendCommand, parseArgs } from './client.js';
-import { EXIT_AGENT_NOT_FOUND } from '../lib/constants.js';
+import { EXIT_AGENT_NOT_FOUND } from "../lib/constants.js";
+import { parseArgs, sendCommand } from "./client.js";
 
 /** Strip ANSI escape sequences and control characters from a string */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape matching
+const ANSI_RE = /\x1B(?:\[[?]?[0-9;]*[A-Za-z]|\][^\x07]*\x07|\([A-Z])/g;
 function stripAnsi(str: string): string {
-  return str
-    .replace(/\x1B(?:\[[?]?[0-9;]*[A-Za-z]|\][^\x07]*\x07|\([A-Z])/g, '')
-    .replace(/\r/g, '');
+  return str.replace(ANSI_RE, "").replace(/\r/g, "");
 }
 
 export default async function logs(args: string[]): Promise<void> {
@@ -13,7 +13,7 @@ export default async function logs(args: string[]): Promise<void> {
   const agent = positional[0];
 
   if (!agent) {
-    console.error('Usage: uniflow logs <agent> [-n lines] [--follow] [--raw]');
+    console.error("Usage: uniflow logs <agent> [-n lines] [--follow] [--raw]");
     process.exit(1);
   }
 
@@ -22,11 +22,11 @@ export default async function logs(args: string[]): Promise<void> {
   const raw = flags.raw === true;
 
   const printLogs = async () => {
-    const response = await sendCommand('logs', { name: agent, lines });
+    const response = await sendCommand("logs", { name: agent, lines });
 
     if (!response.success) {
       console.error(`Error: ${response.error}`);
-      process.exit(response.error?.includes('Agent not found') ? EXIT_AGENT_NOT_FOUND : 1);
+      process.exit(response.error?.includes("Agent not found") ? EXIT_AGENT_NOT_FOUND : 1);
     }
 
     const data = response.data as { logs: string };
@@ -37,7 +37,7 @@ export default async function logs(args: string[]): Promise<void> {
     while (true) {
       console.clear();
       await printLogs();
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 2000));
     }
   } else {
     await printLogs();

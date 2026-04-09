@@ -1,28 +1,31 @@
-import { sendCommand } from './client.js';
-import { findProjectRoot, readProjectName } from './init.js';
-import { findActiveSession, archiveSession } from '../daemon/state.js';
-import { socketPath } from '../lib/constants.js';
-import { existsSync } from 'node:fs';
-import { hasSession, killSession } from '../daemon/tmux.js';
+import { existsSync } from "node:fs";
+import { archiveSession, findActiveSession } from "../daemon/state.js";
+import { hasSession, killSession } from "../daemon/tmux.js";
+import { socketPath } from "../lib/constants.js";
+import { sendCommand } from "./client.js";
+import { findProjectRoot, readProjectName } from "./init.js";
 
 export default async function stop(_args: string[]): Promise<void> {
   try {
-    const response = await sendCommand('stop');
+    const response = await sendCommand("stop");
 
     if (response.success) {
-      console.log('Session stopped and archived.');
+      console.log("Session stopped and archived.");
     } else {
       console.error(`Failed to stop: ${response.error}`);
       process.exit(1);
     }
   } catch (err) {
     // Daemon not running — check for stale session and clean up
-    if (err instanceof Error && (err.message.includes('Daemon not running') || err.message.includes('not responding'))) {
+    if (
+      err instanceof Error &&
+      (err.message.includes("Daemon not running") || err.message.includes("not responding"))
+    ) {
       const cleaned = await cleanupStaleSession();
       if (cleaned) {
-        console.log('Stale session cleaned up and archived.');
+        console.log("Stale session cleaned up and archived.");
       } else {
-        console.error('Error: No active session to stop.');
+        console.error("Error: No active session to stop.");
         process.exit(1);
       }
     } else {
@@ -44,15 +47,17 @@ async function cleanupStaleSession(): Promise<boolean> {
   if (!session) return false;
 
   // Kill leftover tmux session if it exists
-  if (session.tmux_session && await hasSession(session.tmux_session)) {
+  if (session.tmux_session && (await hasSession(session.tmux_session))) {
     await killSession(session.tmux_session);
   }
 
   // Remove stale socket
   const sock = socketPath(project);
   if (existsSync(sock)) {
-    const { unlink } = await import('node:fs/promises');
-    await unlink(sock).catch(() => {});
+    const { unlink } = await import("node:fs/promises");
+    await unlink(sock).catch(() => {
+      /* ignore missing */
+    });
   }
 
   // Archive the stale session

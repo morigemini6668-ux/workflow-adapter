@@ -1,5 +1,5 @@
-import { INTERRUPT_KEY, SUBMIT_PRESSES, type CliType } from '../lib/types.js';
-import { AGENT_READY_TIMEOUT_MS } from '../lib/constants.js';
+import { AGENT_READY_TIMEOUT_MS } from "../lib/constants.js";
+import { type CliType, INTERRUPT_KEY, SUBMIT_PRESSES } from "../lib/types.js";
 
 // ── Low-level tmux wrapper ────────────────────────────────────────────
 
@@ -16,7 +16,9 @@ let _runner: TmuxRunner | null = null;
 /** Replace the tmux runner for testing. Returns a restore function. */
 export function _setRunner(runner: TmuxRunner): () => void {
   _runner = runner;
-  return () => { _runner = null; };
+  return () => {
+    _runner = null;
+  };
 }
 
 /**
@@ -26,9 +28,9 @@ export function _setRunner(runner: TmuxRunner): () => void {
 export async function tmux(args: string[]): Promise<TmuxResult> {
   if (_runner) return _runner(args);
 
-  const proc = Bun.spawn(['tmux', ...args], {
-    stdout: 'pipe',
-    stderr: 'pipe',
+  const proc = Bun.spawn(["tmux", ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
   });
 
   const [stdout, stderr] = await Promise.all([
@@ -58,7 +60,7 @@ async function tmuxOk(args: string[]): Promise<string> {
  * Returns null if not inside a tmux session.
  */
 export async function currentSession(): Promise<string | null> {
-  const result = await tmux(['display-message', '-p', '#{session_name}']);
+  const result = await tmux(["display-message", "-p", "#{session_name}"]);
   if (result.exitCode !== 0 || !result.stdout) return null;
   return result.stdout;
 }
@@ -68,7 +70,7 @@ export async function currentSession(): Promise<string | null> {
  * Returns "session:window" format for use with split-window.
  */
 export async function currentWindowTarget(): Promise<string | null> {
-  const result = await tmux(['display-message', '-p', '#{session_name}:#{window_index}']);
+  const result = await tmux(["display-message", "-p", "#{session_name}:#{window_index}"]);
   if (result.exitCode !== 0 || !result.stdout) return null;
   return result.stdout;
 }
@@ -77,14 +79,14 @@ export async function currentWindowTarget(): Promise<string | null> {
  * Create a new tmux session (detached).
  */
 export async function createSession(name: string, cwd: string): Promise<void> {
-  await tmuxOk(['new-session', '-d', '-s', name, '-c', cwd]);
+  await tmuxOk(["new-session", "-d", "-s", name, "-c", cwd]);
 }
 
 /**
  * Check if a tmux session exists.
  */
 export async function hasSession(name: string): Promise<boolean> {
-  const result = await tmux(['has-session', '-t', name]);
+  const result = await tmux(["has-session", "-t", name]);
   return result.exitCode === 0;
 }
 
@@ -92,7 +94,7 @@ export async function hasSession(name: string): Promise<boolean> {
  * Kill a tmux session.
  */
 export async function killSession(name: string): Promise<void> {
-  await tmux(['kill-session', '-t', name]);
+  await tmux(["kill-session", "-t", name]);
 }
 
 // ── Pane Management ───────────────────────────────────────────────────
@@ -101,18 +103,18 @@ export async function killSession(name: string): Promise<void> {
  * Create a new pane by splitting, running a command.
  * Returns the pane_id (e.g. "%42").
  */
-export async function createPane(
-  session: string,
-  command: string,
-  cwd: string,
-): Promise<string> {
+export async function createPane(session: string, command: string, cwd: string): Promise<string> {
   const paneId = await tmuxOk([
-    'split-window',
-    '-h',
-    '-t', session,
-    '-d',
-    '-P', '-F', '#{pane_id}',
-    '-c', cwd,
+    "split-window",
+    "-h",
+    "-t",
+    session,
+    "-d",
+    "-P",
+    "-F",
+    "#{pane_id}",
+    "-c",
+    cwd,
     command,
   ]);
   return paneId;
@@ -124,44 +126,38 @@ export async function createPane(
  * 2. Wait, then send C-d (EOF)
  * 3. If still alive, force kill-pane
  */
-export async function killPane(paneId: string, cli: CliType = 'claude'): Promise<void> {
+export async function killPane(paneId: string, cli: CliType = "claude"): Promise<void> {
   // Step 1: Send interrupt
   const interruptKey = INTERRUPT_KEY[cli];
-  await tmux(['send-keys', '-t', paneId, interruptKey]);
+  await tmux(["send-keys", "-t", paneId, interruptKey]);
   await sleep(500);
 
   if (await isPaneDead(paneId)) return;
 
   // Step 2: Send EOF
-  await tmux(['send-keys', '-t', paneId, 'C-d']);
+  await tmux(["send-keys", "-t", paneId, "C-d"]);
   await sleep(500);
 
   if (await isPaneDead(paneId)) return;
 
   // Step 3: Force kill
-  await tmux(['kill-pane', '-t', paneId]);
+  await tmux(["kill-pane", "-t", paneId]);
 }
 
 /**
  * Check if a pane's process has exited.
  */
 export async function isPaneDead(paneId: string): Promise<boolean> {
-  const result = await tmux([
-    'list-panes', '-t', paneId,
-    '-F', '#{pane_dead}',
-  ]);
+  const result = await tmux(["list-panes", "-t", paneId, "-F", "#{pane_dead}"]);
   if (result.exitCode !== 0) return true; // Pane doesn't exist
-  return result.stdout === '1';
+  return result.stdout === "1";
 }
 
 /**
  * Get pane PID.
  */
 export async function getPanePid(paneId: string): Promise<number> {
-  const result = await tmuxOk([
-    'list-panes', '-t', paneId,
-    '-F', '#{pane_pid}',
-  ]);
+  const result = await tmuxOk(["list-panes", "-t", paneId, "-F", "#{pane_pid}"]);
   return parseInt(result, 10);
 }
 
@@ -173,8 +169,8 @@ export async function getPanePid(paneId: string): Promise<number> {
  */
 async function pasteText(paneId: string, text: string): Promise<void> {
   // set-buffer loads text into tmux buffer, paste-buffer sends it to pane
-  await tmuxOk(['set-buffer', text]);
-  await tmuxOk(['paste-buffer', '-t', paneId, '-p']);
+  await tmuxOk(["set-buffer", text]);
+  await tmuxOk(["paste-buffer", "-t", paneId, "-p"]);
 }
 
 /**
@@ -184,7 +180,7 @@ async function pressSubmit(paneId: string, cli: CliType): Promise<void> {
   const presses = SUBMIT_PRESSES[cli];
   for (let i = 0; i < presses; i++) {
     if (i > 0) await sleep(150);
-    await tmux(['send-keys', '-t', paneId, 'C-m']);
+    await tmux(["send-keys", "-t", paneId, "C-m"]);
   }
 }
 
@@ -197,11 +193,7 @@ async function pressSubmit(paneId: string, cli: CliType): Promise<void> {
  * Phase 4: Press Enter (CLI-specific count)
  * Phase 5: Verify delivery — retry submit if text retained in input area
  */
-export async function sendMessage(
-  paneId: string,
-  cli: CliType,
-  message: string,
-): Promise<void> {
+export async function sendMessage(paneId: string, cli: CliType, message: string): Promise<void> {
   // Phase 3: Paste the message text
   await pasteText(paneId, message);
 
@@ -218,47 +210,94 @@ export async function sendMessage(
   }
 }
 
+// ── Activity Tracking ────────────────────────────────────────────────
+
+/**
+ * Get the epoch timestamp of last output to a pane.
+ * Uses tmux #{pane_activity} format variable — metadata only, no content capture.
+ * Returns 0 if pane is dead or query fails.
+ */
+export async function getPaneActivity(paneId: string): Promise<number> {
+  try {
+    const result = await tmuxOk(["display-message", "-t", paneId, "-p", "#{pane_activity}"]);
+    return parseInt(result.trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 // ── Capture & Detection ───────────────────────────────────────────────
 
 /**
  * Capture visible pane content (last N lines).
  */
 export async function capturePane(paneId: string, lines = 40): Promise<string> {
-  return tmuxOk([
-    'capture-pane', '-p', '-J',
-    '-t', paneId,
-    '-S', `-${lines}`,
-  ]);
+  return tmuxOk(["capture-pane", "-p", "-J", "-t", paneId, "-S", `-${lines}`]);
 }
 
 /** Detected pane state */
-export type PaneState = 'idle' | 'busy' | 'dead' | 'unknown';
+export type PaneState = "idle" | "busy" | "dead" | "unknown";
+
+/**
+ * Busy indicators validated against real terminal captures.
+ *
+ * Claude Code: Braille spinners + "Thinking"/"Running" keywords.
+ * Codex v0.118: Bullet-prefixed tool calls (• Working, • Explored, etc.)
+ *   — Braille spinners NOT used by Codex.
+ *   — "Generating"/"Editing" etc. NOT observed in Codex output.
+ */
+const BUSY_PATTERNS = [
+  // Claude Code — Braille spinner set (progress indicators)
+  "⠋",
+  "⠙",
+  "⠹",
+  "⠸",
+  "⠼",
+  "⠴",
+  "⠦",
+  "⠧",
+  "⠇",
+  "⠏",
+  // Claude Code — semantic keywords
+  "Thinking",
+  "Running",
+  // Codex v0.118 — bullet-prefixed tool actions (validated from captures)
+  "• Working",
+  "• Explored",
+  "• Ran",
+  "• Added",
+  "• Edited",
+  "• Removed",
+];
 
 /**
  * Classify pane output into a state without any I/O.
  * Exported for testability (pure function).
  */
-export function classifyOutput(output: string): 'idle' | 'busy' | 'unknown' {
-  const lastLines = output.split('\n').filter((l) => l.trim()).slice(-5);
-  const tail = lastLines.join('\n');
+export function classifyOutput(output: string): "idle" | "busy" | "unknown" {
+  const lastLines = output
+    .split("\n")
+    .filter((l) => l.trim())
+    .slice(-5);
+  const tail = lastLines.join("\n");
+
+  // Busy indicators FIRST — Codex always shows › prompt even when working,
+  // so busy must take priority over idle to avoid false nudges.
+  for (const pattern of BUSY_PATTERNS) {
+    if (tail.includes(pattern)) return "busy";
+  }
 
   // Claude Code idle indicators
-  if (tail.includes('❯') || tail.includes('$') || tail.match(/>\s*$/)) {
-    return 'idle';
+  if (tail.includes("❯") || tail.includes("$") || tail.match(/>\s*$/)) {
+    return "idle";
   }
 
   // Codex idle indicators
-  if (tail.includes('codex>') || tail.includes('> ') || tail.includes('›')) {
-    return 'idle';
+  if (tail.includes("codex>") || tail.includes("> ") || tail.includes("›")) {
+    return "idle";
   }
 
-  // Working indicators (progress spinners, tool calls)
-  if (tail.includes('⠋') || tail.includes('⠙') || tail.includes('⠹') ||
-      tail.includes('Running') || tail.includes('Thinking')) {
-    return 'busy';
-  }
-
-  return 'unknown';
+  return "unknown";
 }
 
 /**
@@ -266,7 +305,7 @@ export function classifyOutput(output: string): 'idle' | 'busy' | 'unknown' {
  * Looks for CLI-specific idle indicators.
  */
 export async function detectState(paneId: string): Promise<PaneState> {
-  if (await isPaneDead(paneId)) return 'dead';
+  if (await isPaneDead(paneId)) return "dead";
   const output = await capturePane(paneId, 10);
   return classifyOutput(output);
 }
@@ -305,7 +344,7 @@ export async function waitForReady(
     // Check for trust prompts — auto-dismiss with Enter
     for (const pattern of TRUST_PATTERNS) {
       if (pattern.test(output)) {
-        await tmux(['send-keys', '-t', paneId, 'C-m']);
+        await tmux(["send-keys", "-t", paneId, "C-m"]);
         await sleep(500);
         break;
       }
@@ -313,7 +352,7 @@ export async function waitForReady(
 
     // Check if agent is ready (showing prompt)
     const state = await detectState(paneId);
-    if (state === 'idle') return;
+    if (state === "idle") return;
 
     await sleep(delay);
     delay = Math.min(delay * 2, maxDelay);
@@ -328,14 +367,14 @@ export async function waitForReady(
  * Start logging pane output to a file via pipe-pane.
  */
 export async function startPaneLog(paneId: string, logPath: string): Promise<void> {
-  await tmuxOk(['pipe-pane', '-t', paneId, '-o', `cat >> "${logPath}"`]);
+  await tmuxOk(["pipe-pane", "-t", paneId, "-o", `cat >> "${logPath}"`]);
 }
 
 /**
  * Stop pipe-pane logging.
  */
 export async function stopPaneLog(paneId: string): Promise<void> {
-  await tmux(['pipe-pane', '-t', paneId]);
+  await tmux(["pipe-pane", "-t", paneId]);
 }
 
 // ── Layout ────────────────────────────────────────────────────────────
@@ -344,7 +383,7 @@ export async function stopPaneLog(paneId: string): Promise<void> {
  * Apply main-vertical layout to session window.
  */
 export async function applyLayout(session: string): Promise<void> {
-  await tmux(['select-layout', '-t', `${session}:0`, 'main-vertical']);
+  await tmux(["select-layout", "-t", `${session}:0`, "main-vertical"]);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────

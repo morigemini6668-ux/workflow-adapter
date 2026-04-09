@@ -1,30 +1,29 @@
-import { readFile, readdir, appendFile, rename as fsRename, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { mkdir } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
+import { appendFile, rename as fsRename, mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { atomicWrite, atomicWriteJSON } from "../lib/atomic-write.js";
 import {
+  agentsDir,
+  archiveDir,
+  inboxesDir,
   projectDir,
   sessionDir,
-  agentsDir,
-  inboxesDir,
   tasksDir,
-  archiveDir,
-} from '../lib/constants.js';
+} from "../lib/constants.js";
 import {
-  SessionSchema,
-  AgentStateSchema,
-  TaskSchema,
-  OutboxEntrySchema,
-  EventSchema,
-  type Session,
   type AgentState,
-  type Task,
-  type OutboxEntry,
+  AgentStateSchema,
   type Event,
+  EventSchema,
   type EventType,
+  type OutboxEntry,
+  OutboxEntrySchema,
+  type Session,
+  SessionSchema,
   type SessionStatus,
-} from '../lib/types.js';
-import { atomicWrite, atomicWriteJSON } from '../lib/atomic-write.js';
+  type Task,
+  TaskSchema,
+} from "../lib/types.js";
 
 // ── Session Context ───────────────────────────────────────────────────
 
@@ -38,7 +37,7 @@ function sessDir(ctx: SessionContext): string {
 }
 
 function sessionJsonPath(ctx: SessionContext): string {
-  return join(sessDir(ctx), 'session.json');
+  return join(sessDir(ctx), "session.json");
 }
 
 function agentPath(ctx: SessionContext, name: string): string {
@@ -54,11 +53,11 @@ function taskPath(ctx: SessionContext, id: string): string {
 }
 
 function outboxPath(ctx: SessionContext): string {
-  return join(sessDir(ctx), 'outbox.jsonl');
+  return join(sessDir(ctx), "outbox.jsonl");
 }
 
 function eventsPath(ctx: SessionContext): string {
-  return join(sessDir(ctx), 'events.jsonl');
+  return join(sessDir(ctx), "events.jsonl");
 }
 
 // ── Session Lifecycle ─────────────────────────────────────────────────
@@ -80,17 +79,17 @@ export async function createSession(opts: CreateSessionOptions): Promise<Session
 
   // Create all subdirectories
   await Promise.all([
-    mkdir(join(base, 'agents'), { recursive: true }),
-    mkdir(join(base, 'inboxes'), { recursive: true }),
-    mkdir(join(base, 'tasks'), { recursive: true }),
-    mkdir(join(base, 'logs'), { recursive: true }),
+    mkdir(join(base, "agents"), { recursive: true }),
+    mkdir(join(base, "inboxes"), { recursive: true }),
+    mkdir(join(base, "tasks"), { recursive: true }),
+    mkdir(join(base, "logs"), { recursive: true }),
   ]);
 
   const session: Session = {
     id: sessionId,
     project: opts.project,
     created_at: new Date().toISOString(),
-    status: 'active',
+    status: "active",
     tmux_session: opts.tmuxSession,
     cwd: opts.cwd,
     agents: [],
@@ -100,8 +99,8 @@ export async function createSession(opts: CreateSessionOptions): Promise<Session
   await atomicWriteJSON(sessionJsonPath(ctx), session);
 
   // Initialize empty outbox and events files
-  await Bun.write(outboxPath(ctx), '');
-  await Bun.write(eventsPath(ctx), '');
+  await Bun.write(outboxPath(ctx), "");
+  await Bun.write(eventsPath(ctx), "");
 
   return session;
 }
@@ -111,7 +110,7 @@ export async function createSession(opts: CreateSessionOptions): Promise<Session
  */
 export async function loadSession(project: string, sessionId: string): Promise<Session> {
   const ctx: SessionContext = { project, sessionId };
-  const raw = await readFile(sessionJsonPath(ctx), 'utf-8');
+  const raw = await readFile(sessionJsonPath(ctx), "utf-8");
   return SessionSchema.parse(JSON.parse(raw));
 }
 
@@ -120,14 +119,14 @@ export async function loadSession(project: string, sessionId: string): Promise<S
  * Returns null if no active session exists.
  */
 export async function findActiveSession(project: string): Promise<Session | null> {
-  const sessionsBase = join(projectDir(project), 'sessions');
+  const sessionsBase = join(projectDir(project), "sessions");
   try {
     const entries = await readdir(sessionsBase);
     // Check most recent first (reverse sort by name = UUID, roughly chronological)
     for (const entry of entries.reverse()) {
       try {
         const session = await loadSession(project, entry);
-        if (session.status === 'active') return session;
+        if (session.status === "active") return session;
       } catch {
         // Skip invalid/corrupt session files
       }
@@ -143,7 +142,7 @@ export async function findActiveSession(project: string): Promise<Session | null
  */
 export async function updateSession(
   ctx: SessionContext,
-  updates: Partial<Omit<Session, 'id' | 'project' | 'created_at'>>,
+  updates: Partial<Omit<Session, "id" | "project" | "created_at">>,
 ): Promise<Session> {
   const current = await loadSession(ctx.project, ctx.sessionId);
   const updated = SessionSchema.parse({ ...current, ...updates });
@@ -157,10 +156,10 @@ export async function updateSession(
 export async function archiveSession(ctx: SessionContext): Promise<void> {
   const src = sessDir(ctx);
   const dest = archiveDir(ctx.project, ctx.sessionId);
-  await mkdir(join(dest, '..'), { recursive: true });
+  await mkdir(join(dest, ".."), { recursive: true });
 
   // Update status before moving
-  await updateSession(ctx, { status: 'archived' as SessionStatus });
+  await updateSession(ctx, { status: "archived" as SessionStatus });
   await fsRename(src, dest);
 }
 
@@ -190,7 +189,7 @@ export async function recoverSession(ctx: SessionContext): Promise<Session> {
  * Read and validate an agent's state file.
  */
 export async function readAgentState(ctx: SessionContext, name: string): Promise<AgentState> {
-  const raw = await readFile(agentPath(ctx, name), 'utf-8');
+  const raw = await readFile(agentPath(ctx, name), "utf-8");
   return AgentStateSchema.parse(JSON.parse(raw));
 }
 
@@ -215,9 +214,9 @@ export async function listAgents(ctx: SessionContext): Promise<AgentState[]> {
     const files = await readdir(dir);
     const agents: AgentState[] = [];
     for (const file of files) {
-      if (!file.endsWith('.json')) continue;
+      if (!file.endsWith(".json")) continue;
       try {
-        const raw = await readFile(join(dir, file), 'utf-8');
+        const raw = await readFile(join(dir, file), "utf-8");
         agents.push(AgentStateSchema.parse(JSON.parse(raw)));
       } catch {
         // Skip corrupt agent files
@@ -242,7 +241,7 @@ export async function removeAgentState(ctx: SessionContext, name: string): Promi
  * Read and validate a task file.
  */
 export async function readTask(ctx: SessionContext, id: string): Promise<Task> {
-  const raw = await readFile(taskPath(ctx, id), 'utf-8');
+  const raw = await readFile(taskPath(ctx, id), "utf-8");
   return TaskSchema.parse(JSON.parse(raw));
 }
 
@@ -259,16 +258,16 @@ export async function writeTask(ctx: SessionContext, id: string, task: Task): Pr
  */
 export async function listTasks(
   ctx: SessionContext,
-  statusFilter?: Task['status'],
+  statusFilter?: Task["status"],
 ): Promise<Task[]> {
   const dir = tasksDir(ctx.project, ctx.sessionId);
   try {
     const files = await readdir(dir);
     const tasks: Task[] = [];
     for (const file of files) {
-      if (!file.endsWith('.json')) continue;
+      if (!file.endsWith(".json")) continue;
       try {
-        const raw = await readFile(join(dir, file), 'utf-8');
+        const raw = await readFile(join(dir, file), "utf-8");
         const task = TaskSchema.parse(JSON.parse(raw));
         if (!statusFilter || task.status === statusFilter) {
           tasks.push(task);
@@ -290,9 +289,9 @@ export async function listTasks(
  */
 export async function readInbox(ctx: SessionContext, name: string): Promise<string> {
   try {
-    return await readFile(inboxPath(ctx, name), 'utf-8');
+    return await readFile(inboxPath(ctx, name), "utf-8");
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -311,7 +310,7 @@ export async function writeInbox(
  * Clear agent inbox.
  */
 export async function clearInbox(ctx: SessionContext, name: string): Promise<void> {
-  await atomicWrite(inboxPath(ctx, name), '');
+  await atomicWrite(inboxPath(ctx, name), "");
 }
 
 // ── Outbox (cursor-based) ─────────────────────────────────────────────
@@ -343,7 +342,7 @@ export class OutboxReader {
     this.cursor = content.length;
 
     const entries: OutboxEntry[] = [];
-    for (const line of newContent.split('\n')) {
+    for (const line of newContent.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {
@@ -376,10 +375,10 @@ export class OutboxReader {
  */
 export async function appendOutbox(ctx: SessionContext, entry: OutboxEntry): Promise<void> {
   OutboxEntrySchema.parse(entry);
-  const line = JSON.stringify(entry) + '\n';
+  const line = `${JSON.stringify(entry)}\n`;
   const p = outboxPath(ctx);
-  await mkdir(join(p, '..'), { recursive: true });
-  await appendFile(p, line, 'utf-8');
+  await mkdir(join(p, ".."), { recursive: true });
+  await appendFile(p, line, "utf-8");
 }
 
 // ── Events ────────────────────────────────────────────────────────────
@@ -398,22 +397,19 @@ export async function appendEvent(
     data,
   };
   EventSchema.parse(event);
-  const line = JSON.stringify(event) + '\n';
-  await appendFile(eventsPath(ctx), line, 'utf-8');
+  const line = `${JSON.stringify(event)}\n`;
+  await appendFile(eventsPath(ctx), line, "utf-8");
 }
 
 /**
  * Read all events from events.jsonl.
  * Optionally filter by timestamp (ISO string).
  */
-export async function readEvents(
-  ctx: SessionContext,
-  since?: string,
-): Promise<Event[]> {
+export async function readEvents(ctx: SessionContext, since?: string): Promise<Event[]> {
   try {
-    const content = await readFile(eventsPath(ctx), 'utf-8');
+    const content = await readFile(eventsPath(ctx), "utf-8");
     const events: Event[] = [];
-    for (const line of content.split('\n')) {
+    for (const line of content.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {

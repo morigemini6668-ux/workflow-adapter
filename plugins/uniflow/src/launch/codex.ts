@@ -1,6 +1,6 @@
-import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { LaunchOptions } from './index.js';
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { LaunchOptions } from "./index.js";
 
 /**
  * Build Codex launch command.
@@ -10,7 +10,7 @@ import type { LaunchOptions } from './index.js';
  * which is incompatible with uniflow's persistent agent model.
  */
 export function buildCodexCommand(_opts: LaunchOptions): string[] {
-  const args: string[] = ['codex', '--dangerously-bypass-approvals-and-sandbox'];
+  const args: string[] = ["codex", "--dangerously-bypass-approvals-and-sandbox"];
   return args;
 }
 
@@ -33,17 +33,17 @@ export async function prepareCodex(opts: LaunchOptions): Promise<void> {
   // Codex reads AGENTS.md from cwd automatically.
   // Read the rendered instruction content and write as AGENTS.md.
   const instructionContent = await Bun.file(opts.instructionPath).text();
-  const agentsMdPath = join(opts.cwd, 'AGENTS.md');
+  const agentsMdPath = join(opts.cwd, "AGENTS.md");
 
   // Backup existing AGENTS.md if present
   const existing = Bun.file(agentsMdPath);
   if (await existing.exists()) {
-    const backupPath = join(opts.cwd, 'AGENTS.md.uniflow-backup');
+    const backupPath = join(opts.cwd, "AGENTS.md.uniflow-backup");
     await writeFile(backupPath, await existing.text());
   }
 
   // Write instructions + uniflow section
-  const content = instructionContent.includes('uniflow')
+  const content = instructionContent.includes("uniflow")
     ? instructionContent
     : instructionContent + UNIFLOW_AGENTS_SECTION;
   await writeFile(agentsMdPath, content);

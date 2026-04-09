@@ -1,23 +1,27 @@
-import { randomUUID } from 'node:crypto';
-import { sendCommand, parseArgs } from './client.js';
+import { randomUUID } from "node:crypto";
+import { parseArgs, sendCommand } from "./client.js";
 
 export default async function taskAdd(args: string[]): Promise<void> {
   const { flags, positional } = parseArgs(args);
-  const subject = positional.join(' ');
+  const subject = positional.join(" ");
 
   if (!subject) {
-    console.error('Usage: uniflow task-add <subject> [--assign agent] [--priority 1-5] [--depends-on id,id]');
+    console.error(
+      "Usage: uniflow task-add <subject> [--assign agent] [--priority 1-5] [--depends-on id,id]",
+    );
     process.exit(1);
   }
 
   const taskId = `task-${randomUUID().slice(0, 8)}`;
   const priority = flags.priority ? Number(flags.priority) : 3;
-  const dependsOn = flags['depends-on']
-    ? String(flags['depends-on']).split(',').map(s => s.trim())
+  const dependsOn = flags["depends-on"]
+    ? String(flags["depends-on"])
+        .split(",")
+        .map((s) => s.trim())
     : [];
 
   // Create task via a custom protocol — daemon writes the task file
-  const response = await sendCommand('task-create', {
+  const response = await sendCommand("task-create", {
     id: taskId,
     subject,
     description: subject,
@@ -30,7 +34,7 @@ export default async function taskAdd(args: string[]): Promise<void> {
     console.log(`Task created: ${taskId}`);
     if (flags.assign) {
       // Auto-assign if --assign provided
-      const assignResponse = await sendCommand('assign', {
+      const assignResponse = await sendCommand("assign", {
         taskId,
         agent: String(flags.assign),
       });

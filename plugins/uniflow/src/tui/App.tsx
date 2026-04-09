@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
-import type { AgentState, Task, Event } from '../lib/types.js';
-import { AgentList } from './AgentList.js';
-import { TaskList } from './TaskList.js';
-import { EventFeed } from './EventFeed.js';
-import { StatusBar } from './StatusBar.js';
+import { Box, Text, useApp, useInput } from "ink";
+import { useCallback, useEffect, useState } from "react";
+import type { AgentState, Event, Task } from "../lib/types.js";
+import { AgentList } from "./AgentList.js";
+import { EventFeed } from "./EventFeed.js";
+import { StatusBar } from "./StatusBar.js";
+import { TaskList } from "./TaskList.js";
 
 // ── Data Fetcher Interface ────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ export interface TuiDataSource {
 
 // ── Panels ────────────────────────────────────────────────────────────
 
-const PANELS = ['agents', 'tasks', 'events'] as const;
+const PANELS = ["agents", "tasks", "events"] as const;
 type Panel = (typeof PANELS)[number];
 
 // ── App ───────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ export function App({ dataSource, refreshInterval = 2000 }: AppProps) {
   const [agents, setAgents] = useState<AgentState[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [activePanel, setActivePanel] = useState<Panel>('agents');
+  const [activePanel, setActivePanel] = useState<Panel>("agents");
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -53,7 +53,7 @@ export function App({ dataSource, refreshInterval = 2000 }: AppProps) {
       setError(undefined);
       setLastRefresh(new Date());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch data');
+      setError(err instanceof Error ? err.message : "Failed to fetch data");
     }
   }, [dataSource]);
 
@@ -67,7 +67,7 @@ export function App({ dataSource, refreshInterval = 2000 }: AppProps) {
   // ── Keyboard Input ────────────────────────────────────────────────
 
   useInput((input, key) => {
-    if (input === 'q') {
+    if (input === "q") {
       exit();
       return;
     }
@@ -80,19 +80,19 @@ export function App({ dataSource, refreshInterval = 2000 }: AppProps) {
       return;
     }
 
-    if (input === 'r') {
+    if (input === "r") {
       refresh();
       return;
     }
 
-    if (input === 'f') {
+    if (input === "f") {
       // Cycle through task status filters
-      if (activePanel === 'tasks') {
+      if (activePanel === "tasks") {
         setStatusFilter((current) => {
-          if (!current) return 'pending';
-          if (current === 'pending') return 'in_progress';
-          if (current === 'in_progress') return 'completed';
-          if (current === 'completed') return 'failed';
+          if (!current) return "pending";
+          if (current === "pending") return "in_progress";
+          if (current === "in_progress") return "completed";
+          if (current === "completed") return "failed";
           return undefined;
         });
       }
@@ -108,27 +108,34 @@ export function App({ dataSource, refreshInterval = 2000 }: AppProps) {
     <Box flexDirection="column" width="100%">
       {/* Header */}
       <Box paddingLeft={1} paddingRight={1}>
-        <Text bold color="cyan">uniflow</Text>
+        <Text bold color="cyan">
+          uniflow
+        </Text>
         <Text dimColor> v0.1.0</Text>
         {sessionName && <Text dimColor> — {sessionName}</Text>}
-        <Text dimColor> (refreshed {lastRefresh.toLocaleTimeString('en-GB', { hour12: false })})</Text>
+        <Text dimColor>
+          {" "}
+          (refreshed {lastRefresh.toLocaleTimeString("en-GB", { hour12: false })})
+        </Text>
       </Box>
 
       {/* Error banner */}
       {error && (
         <Box paddingLeft={1} paddingRight={1}>
-          <Text color="red" bold>Error: {error}</Text>
+          <Text color="red" bold>
+            Error: {error}
+          </Text>
         </Box>
       )}
 
       {/* Main panels (agents + tasks side by side) */}
       <Box flexDirection="row" flexGrow={1}>
-        <AgentList agents={agents} focused={activePanel === 'agents'} />
-        <TaskList tasks={tasks} focused={activePanel === 'tasks'} statusFilter={statusFilter} />
+        <AgentList agents={agents} focused={activePanel === "agents"} />
+        <TaskList tasks={tasks} focused={activePanel === "tasks"} statusFilter={statusFilter} />
       </Box>
 
       {/* Event feed */}
-      <EventFeed events={events} focused={activePanel === 'events'} />
+      <EventFeed events={events} focused={activePanel === "events"} />
 
       {/* Status bar */}
       <StatusBar

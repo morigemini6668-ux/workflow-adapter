@@ -1,8 +1,8 @@
-import { connect, type Socket } from 'node:net';
-import { randomUUID } from 'node:crypto';
-import type { DaemonRequest, DaemonResponse } from '../lib/types.js';
-import { socketPath } from '../lib/constants.js';
-import { findProjectRoot, readProjectName } from './init.js';
+import { randomUUID } from "node:crypto";
+import { connect, type Socket } from "node:net";
+import { socketPath } from "../lib/constants.js";
+import type { DaemonRequest, DaemonResponse } from "../lib/types.js";
+import { findProjectRoot, readProjectName } from "./init.js";
 
 /**
  * Send a request to the daemon via Unix domain socket.
@@ -37,16 +37,16 @@ export async function sendCommand(
  */
 function sendToSocket(sock: string, request: DaemonRequest): Promise<DaemonResponse> {
   return new Promise((resolve, reject) => {
-    let data = '';
+    let data = "";
 
     const socket: Socket = connect(sock, () => {
-      socket.write(JSON.stringify(request) + '\n');
+      socket.write(`${JSON.stringify(request)}\n`);
     });
 
-    socket.on('data', (chunk) => {
+    socket.on("data", (chunk) => {
       data += chunk.toString();
       // Try to parse each newline-delimited response
-      const lines = data.split('\n');
+      const lines = data.split("\n");
       for (const line of lines) {
         if (!line.trim()) continue;
         try {
@@ -60,26 +60,26 @@ function sendToSocket(sock: string, request: DaemonRequest): Promise<DaemonRespo
       }
     });
 
-    socket.on('error', (err) => {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    socket.on("error", (err) => {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         reject(new Error('Daemon not running. Start with "uniflow start".'));
-      } else if ((err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
+      } else if ((err as NodeJS.ErrnoException).code === "ECONNREFUSED") {
         reject(new Error('Daemon not responding. Try "uniflow start" to restart.'));
       } else {
         reject(err);
       }
     });
 
-    socket.on('end', () => {
+    socket.on("end", () => {
       if (!data.trim()) {
-        reject(new Error('Daemon closed connection without response.'));
+        reject(new Error("Daemon closed connection without response."));
       }
     });
 
     // Timeout after 30 seconds
     socket.setTimeout(30_000, () => {
       socket.destroy();
-      reject(new Error('Daemon request timed out.'));
+      reject(new Error("Daemon request timed out."));
     });
   });
 }
@@ -88,28 +88,31 @@ function sendToSocket(sock: string, request: DaemonRequest): Promise<DaemonRespo
  * Parse CLI arguments into a key-value map.
  * Handles: --key value, --key=value, --flag (boolean true), positional args.
  */
-export function parseArgs(args: string[]): { flags: Record<string, string | boolean>; positional: string[] } {
+export function parseArgs(args: string[]): {
+  flags: Record<string, string | boolean>;
+  positional: string[];
+} {
   const flags: Record<string, string | boolean> = {};
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg.startsWith('--')) {
-      const eqIdx = arg.indexOf('=');
+    if (arg.startsWith("--")) {
+      const eqIdx = arg.indexOf("=");
       if (eqIdx > 0) {
         flags[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
       } else {
         const next = args[i + 1];
-        if (next && !next.startsWith('--')) {
+        if (next && !next.startsWith("--")) {
           flags[arg.slice(2)] = next;
           i++;
         } else {
           flags[arg.slice(2)] = true;
         }
       }
-    } else if (arg.startsWith('-') && arg.length === 2) {
+    } else if (arg.startsWith("-") && arg.length === 2) {
       const next = args[i + 1];
-      if (next && !next.startsWith('-')) {
+      if (next && !next.startsWith("-")) {
         flags[arg.slice(1)] = next;
         i++;
       } else {

@@ -414,6 +414,7 @@ Final score = weighted average.
 8. **Depth over breadth.** 5-10 well-documented issues > 20 vague descriptions.
 9. **Show screenshots to the user.** After every screenshot command, use Read on the file so the user sees it inline.
 10. **Never refuse to test.** When the user invokes this skill, they want testing — browser or TUI.
+11. **TUI: Verify state after every input.** After every `send`, `press`, or `type`, MUST `capture` and read the result BEFORE sending the next input. Never chain inputs blindly — always observe the actual screen state.
 
 ---
 

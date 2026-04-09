@@ -93,7 +93,22 @@ Read `references/commands.md` for the full command reference.
 ## Guidelines
 
 1. **Always launch or attach first.** This is non-negotiable. Never skip setup, never just describe what you would do. Execute.
-2. **Always capture after interactions.** After sending keys, capture the screen so the user sees the result. If `freeze` is available, take a screenshot and `Read` it.
+2. **VERIFY STATE AFTER EVERY INPUT — NO EXCEPTIONS.** After every `send`, `press`, or `type` command, you MUST `capture` (or `screenshot`) and read the result BEFORE sending the next input. Never chain multiple inputs blindly. Never assume what the screen looks like — always observe.
+   ```bash
+   # CORRECT — verify between every input
+   $T press Down
+   $T capture                    # verify: what is selected now?
+   $T press Down
+   $T capture                    # verify: what is selected now?
+   $T press Enter
+   $T capture                    # verify: did the action succeed?
+
+   # WRONG — blind input chain
+   $T press Down
+   $T press Down
+   $T press Enter
+   $T capture                    # too late — you don't know what happened
+   ```
 3. **Use `--stable --raw` for complex TUIs.** Apps that do full-screen repaints (Ink/React, Bubbletea, Textual) produce garbled output with plain `capture`. Use `$T capture --stable --raw` instead. If still garbled, fall back to `$T screenshot`.
 4. **Use named keys for navigation.** TUI apps are keyboard-driven: `Up`, `Down`, `Tab`, `Enter`, `Escape`, `C-c`, etc.
 5. **Type literal text with `type`.** For search fields, input boxes, etc.

@@ -78,12 +78,18 @@ $T screenshot "$REPORT_DIR/screenshots/screen-name.png"
 - [ ] Status bar/header/footer visible and correct
 
 ### 2. Navigation
+**Always capture after each input to verify state before the next.**
 ```bash
 $T press Tab       # cycle through focusable elements
+$T capture         # verify: which element has focus?
 $T press Up        # menu navigation
+$T capture         # verify: correct item highlighted?
 $T press Down
+$T capture         # verify: correct item highlighted?
 $T press Enter     # activate item
+$T capture         # verify: action triggered?
 $T press Escape    # go back
+$T capture         # verify: returned to previous screen?
 ```
 - [ ] All menu items reachable via keyboard
 - [ ] Tab cycles through interactive elements
@@ -92,10 +98,14 @@ $T press Escape    # go back
 - [ ] Keyboard shortcuts listed in help work
 
 ### 3. Input Fields
+**Always capture after each input to verify state before the next.**
 ```bash
 $T press /         # open search (common pattern)
+$T capture         # verify: search field opened?
 $T type "test input"
+$T capture         # verify: text entered correctly?
 $T press Enter
+$T capture         # verify: search results shown?
 ```
 - [ ] Text fields accept input
 - [ ] Backspace/delete works
@@ -126,8 +136,9 @@ $T capture
 ### 6. Error States
 ```bash
 $T type "nonexistent-resource"
+$T capture         # verify: text entered?
 $T press Enter
-$T capture
+$T capture         # verify: error message shown?
 ```
 - [ ] Invalid input shows meaningful error
 - [ ] Error messages are actionable
@@ -152,8 +163,9 @@ $T resize 120x40   # restore default
 ### 8. Exit & Recovery
 ```bash
 $T send C-c        # interrupt
-$T capture         # check state
+$T capture         # verify: interrupt handled gracefully?
 $T press q         # quit
+$T capture         # verify: app exited or confirm prompt?
 ```
 - [ ] Ctrl+C handled gracefully (not raw crash)
 - [ ] Quit command works

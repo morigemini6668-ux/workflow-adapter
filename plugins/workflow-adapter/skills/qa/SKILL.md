@@ -300,3 +300,4 @@ Each category starts at 100. Deduct: Critical -25, High -15, Medium -8, Low -3. 
 13. **Only modify tests when generating regression tests.** Never modify CI config or existing tests.
 14. **Revert on regression.** `git revert HEAD` immediately.
 15. **Self-regulate.** Follow WTF-likelihood. When in doubt, stop and ask.
+16. **TUI: Verify state after every input.** After every `send`, `press`, or `type`, MUST `capture` and read the result BEFORE sending the next input. Never chain inputs blindly — always observe the actual screen state.

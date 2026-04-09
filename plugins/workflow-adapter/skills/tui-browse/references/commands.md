@@ -156,31 +156,36 @@ Named keys for `send` and `press`:
 
 ### Common interaction patterns
 
-```bash
-# Navigate a menu
-$T press Down
-$T press Down
-$T press Enter
+**CRITICAL: Always `capture` after every input to verify state before the next input.**
 
-# Type in a search field
-$T press /                    # open search in many TUIs
-$T type "search term"
+```bash
+# Navigate a menu — verify each step
+$T press Down
+$T capture                    # verify: correct item highlighted?
+$T press Down
+$T capture                    # verify: correct item highlighted?
 $T press Enter
+$T capture                    # verify: action succeeded?
+
+# Type in a search field — verify each step
+$T press /                    # open search in many TUIs
+$T capture                    # verify: search field opened?
+$T type "search term"
+$T capture                    # verify: text entered correctly?
+$T press Enter
+$T capture                    # verify: search results shown?
 
 # Interrupt a running process
 $T send C-c
-
-# Send Ctrl+Z to suspend
-$T send C-z
+$T capture                    # verify: process interrupted?
 
 # Clear input line
 $T send C-u
-
-# Navigate with Ctrl+arrow
-$T send C-Right
+$T capture                    # verify: input cleared?
 
 # Quit most TUIs
 $T press q
+$T capture                    # verify: app exited or confirm prompt?
 ```
 
 ## Logging

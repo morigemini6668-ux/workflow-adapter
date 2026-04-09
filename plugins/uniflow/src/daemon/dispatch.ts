@@ -119,8 +119,8 @@ export async function dispatchTask(
   mode: DispatchMode = "nudge",
 ): Promise<void> {
   const triggerText = `New task assigned: ${taskId}. Check your inbox.`;
-  await dispatch(ctx, target, instructions, triggerText, mode);
   await markDispatched(target.name);
+  await dispatch(ctx, target, instructions, triggerText, mode);
 
   await appendEvent(ctx, "task_assigned", {
     task: taskId,
@@ -139,8 +139,8 @@ export async function dispatchMessage(
   mode: DispatchMode = "nudge",
 ): Promise<void> {
   const triggerText = "New message in inbox. Check your inbox.";
-  await dispatch(ctx, target, message, triggerText, mode);
   await markDispatched(target.name);
+  await dispatch(ctx, target, message, triggerText, mode);
 
   await appendEvent(ctx, "message_sent", {
     agent: target.name,
@@ -152,15 +152,16 @@ export async function dispatchMessage(
  * Send a nudge to remind agent to check inbox.
  * Doesn't modify inbox — just sends trigger text.
  */
-export async function nudgeAgent(ctx: SessionContext, target: DispatchTarget): Promise<void> {
+export async function nudgeAgent(ctx: SessionContext, target: DispatchTarget): Promise<boolean> {
   const state = await detectState(target.paneId);
-  if (!shouldNudge(state)) return;
+  if (!shouldNudge(state)) return false;
 
   await sendMessage(target.paneId, target.cli, "Check your inbox for pending tasks.");
 
   await appendEvent(ctx, "agent_nudged", {
     agent: target.name,
   });
+  return true;
 }
 
 // ── Grace Period Tracking ────────────────────────────────────────────

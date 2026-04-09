@@ -52,20 +52,21 @@ export async function handleStatus(
       cwd: session.cwd,
     },
     agents: await Promise.all(
-      agents.map(async (a) => ({
-        name: a.name,
-        cli: a.cli,
-        role: a.role,
-        state: a.state,
-        current_task: a.current_task,
-        progress: a.progress,
-        pane_id: a.pane_id,
-        last_activity_seconds: Math.max(
-          0,
-          Math.floor(Date.now() / 1000) - (await getPaneActivity(a.pane_id)),
-        ),
-        ...(peek ? { pane_tail: await capturePane(a.pane_id, 5) } : {}),
-      })),
+      agents.map(async (a) => {
+        const activity = await getPaneActivity(a.pane_id);
+        return {
+          name: a.name,
+          cli: a.cli,
+          role: a.role,
+          state: a.state,
+          current_task: a.current_task,
+          progress: a.progress,
+          pane_id: a.pane_id,
+          last_activity_seconds:
+            activity > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - activity) : null,
+          ...(peek ? { pane_tail: await capturePane(a.pane_id, 5) } : {}),
+        };
+      }),
     ),
     tasks: tasks.map((t) => ({
       id: t.id,
@@ -223,16 +224,18 @@ export async function handleNudge(
     paneId: agent.pane_id,
     cli: agent.cli,
   };
-  await nudgeAgent(ctx, target);
+  const didNudge = await nudgeAgent(ctx, target);
 
-  const updated: AgentState = {
-    ...agent,
-    nudge_count: agent.nudge_count + 1,
-    updated_at: new Date().toISOString(),
-  };
-  await writeAgentState(ctx, agentName, updated);
+  if (didNudge) {
+    const updated: AgentState = {
+      ...agent,
+      nudge_count: agent.nudge_count + 1,
+      updated_at: new Date().toISOString(),
+    };
+    await writeAgentState(ctx, agentName, updated);
+  }
 
-  return { nudged: true };
+  return { nudged: didNudge };
 }
 
 export async function handleRespawn(

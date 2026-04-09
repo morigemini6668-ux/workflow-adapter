@@ -1,12 +1,13 @@
 import { type FSWatcher, watch } from "node:fs";
 import { agentsDir } from "../lib/constants.js";
-import type { AgentStateName, CliType } from "../lib/types.js";
+import type { CliType } from "../lib/types.js";
 import { type DispatchTarget, dispatchTask, nudgeAgent, shouldNudge } from "./dispatch.js";
 import {
   ACTIVITY_THRESHOLD_MS,
   type AgentIdleTracker,
   DISPATCH_GRACE_MS,
   shouldReconcile,
+  toAgentState,
 } from "./reconcile.js";
 import { respawnOrchestrator } from "./respawn.js";
 import {
@@ -22,7 +23,13 @@ import {
 import { detectState, getPaneActivity, isPaneDead, type PaneState } from "./tmux.js";
 
 // Re-export for backward compatibility
-export { ACTIVITY_THRESHOLD_MS, type AgentIdleTracker, DISPATCH_GRACE_MS, shouldReconcile };
+export {
+  ACTIVITY_THRESHOLD_MS,
+  type AgentIdleTracker,
+  DISPATCH_GRACE_MS,
+  shouldReconcile,
+  toAgentState,
+};
 
 // ── Monitor ──────────────────────────────────────────────────────────
 
@@ -95,8 +102,7 @@ export function startMonitor(
 
           // 5. State reconciliation
           if (shouldReconcile(current.state, paneState)) {
-            const reconciledState: AgentStateName =
-              paneState === "dead" ? "failed" : (paneState as AgentStateName);
+            const reconciledState = toAgentState(paneState);
             await writeAgentState(ctx, agent.name, {
               ...current,
               state: reconciledState,
@@ -319,8 +325,7 @@ export function startMonitor(
           const current = await readAgentState(ctx, agentName);
           const paneState = await detectState(current.pane_id);
           if (shouldReconcile(current.state, paneState)) {
-            const reconciledState: AgentStateName =
-              paneState === "dead" ? "failed" : (paneState as AgentStateName);
+            const reconciledState = toAgentState(paneState);
             await writeAgentState(ctx, agentName, {
               ...current,
               state: reconciledState,

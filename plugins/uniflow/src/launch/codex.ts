@@ -5,23 +5,12 @@ import type { LaunchOptions } from './index.js';
 /**
  * Build Codex launch command.
  *
- * Interactive mode: codex --dangerously-bypass-approvals-and-sandbox
- * Non-interactive mode: codex exec --ephemeral "prompt"
+ * Always uses interactive mode with permission bypass.
+ * Codex `exec --ephemeral` exits immediately after one-shot execution,
+ * which is incompatible with uniflow's persistent agent model.
  */
-export function buildCodexCommand(opts: LaunchOptions): string[] {
-  const args: string[] = ['codex'];
-
-  if (opts.mode === 'non_interactive') {
-    // Headless: exec --ephemeral
-    args.push('exec', '--ephemeral');
-    if (opts.initialPrompt) {
-      args.push(opts.initialPrompt);
-    }
-  } else {
-    // Interactive: full TUI with permission bypass
-    args.push('--dangerously-bypass-approvals-and-sandbox');
-  }
-
+export function buildCodexCommand(_opts: LaunchOptions): string[] {
+  const args: string[] = ['codex', '--dangerously-bypass-approvals-and-sandbox'];
   return args;
 }
 

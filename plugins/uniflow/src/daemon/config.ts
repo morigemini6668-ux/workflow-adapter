@@ -1,11 +1,8 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import {
-  UNIFLOW_CONFIG_PATH,
-  projectDir,
-} from '../lib/constants.js';
-import { GlobalConfigSchema, type GlobalConfig } from '../lib/types.js';
-import { atomicWriteJSON } from '../lib/atomic-write.js';
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { atomicWriteJSON } from "../lib/atomic-write.js";
+import { projectDir, UNIFLOW_CONFIG_PATH } from "../lib/constants.js";
+import { type GlobalConfig, GlobalConfigSchema } from "../lib/types.js";
 
 /**
  * Read global config (~/.uniflow/config.json).
@@ -13,7 +10,7 @@ import { atomicWriteJSON } from '../lib/atomic-write.js';
  */
 export async function readGlobalConfig(): Promise<GlobalConfig> {
   try {
-    const raw = await readFile(UNIFLOW_CONFIG_PATH, 'utf-8');
+    const raw = await readFile(UNIFLOW_CONFIG_PATH, "utf-8");
     return GlobalConfigSchema.parse(JSON.parse(raw));
   } catch {
     return GlobalConfigSchema.parse({});
@@ -33,7 +30,7 @@ const ProjectConfigSchema = GlobalConfigSchema.partial();
 type ProjectConfig = Partial<GlobalConfig>;
 
 function projectConfigPath(projectName: string): string {
-  return join(projectDir(projectName), 'config.json');
+  return join(projectDir(projectName), "config.json");
 }
 
 /**
@@ -42,7 +39,7 @@ function projectConfigPath(projectName: string): string {
  */
 export async function readProjectConfig(projectName: string): Promise<ProjectConfig> {
   try {
-    const raw = await readFile(projectConfigPath(projectName), 'utf-8');
+    const raw = await readFile(projectConfigPath(projectName), "utf-8");
     return ProjectConfigSchema.parse(JSON.parse(raw));
   } catch {
     return {};

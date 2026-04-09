@@ -1,11 +1,16 @@
-import { INTERRUPT_KEY, type CliType, type DispatchMode } from '../lib/types.js';
-import {
-  tmux,
-  sendMessage,
-  detectState,
-  isPaneDead,
-} from './tmux.js';
-import { writeInbox, appendEvent, type SessionContext } from './state.js';
+import { type CliType, type DispatchMode, INTERRUPT_KEY } from "../lib/types.js";
+import { appendEvent, type SessionContext, writeInbox } from "./state.js";
+import { detectState, isPaneDead, type PaneState, sendMessage, tmux } from "./tmux.js";
+
+// ── Nudge Gate ──────────────────────────────────────────────────────
+
+/**
+ * Unified nudge gate — replaces 3 inconsistent inline checks.
+ * Only nudge agents confirmed idle. All other states block nudge.
+ */
+export function shouldNudge(paneState: PaneState): boolean {
+  return paneState === "idle";
+}
 
 // ── Dispatch ──────────────────────────────────────────────────────────
 
@@ -37,14 +42,14 @@ export async function dispatch(
   await writeInbox(ctx, target.name, inboxContent);
 
   // Step 2: Deliver trigger based on mode
-  if (mode === 'interrupt') {
+  if (mode === "interrupt") {
     await interruptDeliver(target, triggerText);
   } else {
     await nudgeDeliver(target, triggerText);
   }
 
   // Step 3: Log the event
-  await appendEvent(ctx, 'inbox_written', {
+  await appendEvent(ctx, "inbox_written", {
     agent: target.name,
     mode,
     trigger: triggerText,
@@ -65,12 +70,12 @@ async function interruptDeliver(target: DispatchTarget, triggerText: string): Pr
   const interruptKey = INTERRUPT_KEY[target.cli];
 
   // Phase 1: Send interrupt
-  await tmux(['send-keys', '-t', target.paneId, interruptKey]);
+  await tmux(["send-keys", "-t", target.paneId, interruptKey]);
   await sleep(500);
 
   // Phase 2: Codex fallback — clear line to handle Enter-stuck bug
-  if (target.cli === 'codex') {
-    await tmux(['send-keys', '-t', target.paneId, 'C-u']);
+  if (target.cli === "codex") {
+    await tmux(["send-keys", "-t", target.paneId, "C-u"]);
     await sleep(100);
   }
 
@@ -89,16 +94,14 @@ async function interruptDeliver(target: DispatchTarget, triggerText: string): Pr
 async function nudgeDeliver(target: DispatchTarget, triggerText: string): Promise<void> {
   const state = await detectState(target.paneId);
 
-  if (state === 'busy') {
-    // Agent is working — skip nudge. It will check inbox when done.
-    return;
-  }
-
-  if (state === 'dead') {
+  if (state === "dead") {
     throw new Error(`Agent ${target.name} pane is dead during nudge`);
   }
 
-  // Agent is idle or unknown — send the trigger
+  if (!shouldNudge(state)) {
+    return;
+  }
+
   await sendMessage(target.paneId, target.cli, triggerText);
 }
 
@@ -113,12 +116,13 @@ export async function dispatchTask(
   target: DispatchTarget,
   taskId: string,
   instructions: string,
-  mode: DispatchMode = 'nudge',
+  mode: DispatchMode = "nudge",
 ): Promise<void> {
   const triggerText = `New task assigned: ${taskId}. Check your inbox.`;
   await dispatch(ctx, target, instructions, triggerText, mode);
+  await markDispatched(target.name);
 
-  await appendEvent(ctx, 'task_assigned', {
+  await appendEvent(ctx, "task_assigned", {
     task: taskId,
     agent: target.name,
     mode,
@@ -132,12 +136,13 @@ export async function dispatchMessage(
   ctx: SessionContext,
   target: DispatchTarget,
   message: string,
-  mode: DispatchMode = 'nudge',
+  mode: DispatchMode = "nudge",
 ): Promise<void> {
-  const triggerText = 'New message in inbox. Check your inbox.';
+  const triggerText = "New message in inbox. Check your inbox.";
   await dispatch(ctx, target, message, triggerText, mode);
+  await markDispatched(target.name);
 
-  await appendEvent(ctx, 'message_sent', {
+  await appendEvent(ctx, "message_sent", {
     agent: target.name,
     mode,
   });
@@ -147,18 +152,31 @@ export async function dispatchMessage(
  * Send a nudge to remind agent to check inbox.
  * Doesn't modify inbox — just sends trigger text.
  */
-export async function nudgeAgent(
-  ctx: SessionContext,
-  target: DispatchTarget,
-): Promise<void> {
+export async function nudgeAgent(ctx: SessionContext, target: DispatchTarget): Promise<void> {
   const state = await detectState(target.paneId);
-  if (state !== 'idle' && state !== 'unknown') return;
+  if (!shouldNudge(state)) return;
 
-  await sendMessage(target.paneId, target.cli, 'Check your inbox for pending tasks.');
+  await sendMessage(target.paneId, target.cli, "Check your inbox for pending tasks.");
 
-  await appendEvent(ctx, 'agent_nudged', {
+  await appendEvent(ctx, "agent_nudged", {
     agent: target.name,
   });
+}
+
+// ── Grace Period Tracking ────────────────────────────────────────────
+
+/**
+ * Record that a task/message was dispatched to an agent.
+ * Uses dynamic import to avoid circular dependency with monitor.ts.
+ */
+async function markDispatched(name: string): Promise<void> {
+  const { idleTrackers } = await import("./monitor.js");
+  const tracker = idleTrackers.get(name);
+  if (tracker) {
+    tracker.lastDispatchedAt = Date.now();
+  } else {
+    idleTrackers.set(name, { idleSince: null, lastDispatchedAt: Date.now() });
+  }
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────

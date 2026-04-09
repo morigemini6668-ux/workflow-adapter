@@ -1,14 +1,14 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // ── CLI Types ──────────────────────────────────────────────────────────
 
-export const CLI_TYPES = ['claude', 'codex'] as const;
+export const CLI_TYPES = ["claude", "codex"] as const;
 export type CliType = (typeof CLI_TYPES)[number];
 export const CliTypeSchema = z.enum(CLI_TYPES);
 
 // ── Agent State ────────────────────────────────────────────────────────
 
-export const AGENT_STATES = ['starting', 'idle', 'working', 'blocked', 'done', 'failed'] as const;
+export const AGENT_STATES = ["starting", "idle", "working", "blocked", "done", "failed"] as const;
 export type AgentStateName = (typeof AGENT_STATES)[number];
 
 export const AgentStateSchema = z.object({
@@ -29,7 +29,7 @@ export type AgentState = z.infer<typeof AgentStateSchema>;
 
 // ── Task ───────────────────────────────────────────────────────────────
 
-export const TASK_STATUSES = ['pending', 'in_progress', 'completed', 'failed'] as const;
+export const TASK_STATUSES = ["pending", "in_progress", "completed", "failed"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const TaskSchema = z.object({
@@ -54,7 +54,7 @@ export type Task = z.infer<typeof TaskSchema>;
 export const OutboxEntrySchema = z.object({
   agent: z.string(),
   task: z.string(),
-  status: z.enum(['completed', 'failed']),
+  status: z.enum(["completed", "failed"]),
   summary: z.string(),
   error: z.string().optional(),
   files_changed: z.array(z.string()).optional(),
@@ -66,9 +66,20 @@ export type OutboxEntry = z.infer<typeof OutboxEntrySchema>;
 // ── Daemon IPC Protocol ────────────────────────────────────────────────
 
 export const DAEMON_COMMANDS = [
-  'spawn', 'kill', 'assign', 'send', 'status',
-  'agents', 'tasks', 'logs', 'peek', 'nudge',
-  'respawn', 'stop', 'worktree-create', 'worktree-merge',
+  "spawn",
+  "kill",
+  "assign",
+  "send",
+  "status",
+  "agents",
+  "tasks",
+  "logs",
+  "peek",
+  "nudge",
+  "respawn",
+  "stop",
+  "worktree-create",
+  "worktree-merge",
 ] as const;
 export type DaemonCommand = (typeof DAEMON_COMMANDS)[number];
 
@@ -91,7 +102,7 @@ export type DaemonResponse = z.infer<typeof DaemonResponseSchema>;
 
 // ── Dispatch Options ───────────────────────────────────────────────────
 
-export const DISPATCH_MODES = ['interrupt', 'nudge'] as const;
+export const DISPATCH_MODES = ["interrupt", "nudge"] as const;
 export type DispatchMode = (typeof DISPATCH_MODES)[number];
 
 export const DispatchOptionsSchema = z.object({
@@ -104,8 +115,8 @@ export type DispatchOptions = z.infer<typeof DispatchOptionsSchema>;
 // ── CLI-specific Constants ─────────────────────────────────────────────
 
 export const INTERRUPT_KEY: Record<CliType, string> = {
-  claude: 'C-c',
-  codex: 'Escape',
+  claude: "C-c",
+  codex: "Escape",
 };
 
 export const SUBMIT_PRESSES: Record<CliType, number> = {
@@ -115,12 +126,12 @@ export const SUBMIT_PRESSES: Record<CliType, number> = {
 
 // ── Worker Mode ────────────────────────────────────────────────────────
 
-export const WORKER_MODES = ['interactive', 'non_interactive'] as const;
+export const WORKER_MODES = ["interactive", "non_interactive"] as const;
 export type WorkerMode = (typeof WORKER_MODES)[number];
 
 // ── Session ────────────────────────────────────────────────────────────
 
-export const SESSION_STATUSES = ['active', 'stopped', 'archived'] as const;
+export const SESSION_STATUSES = ["active", "stopped", "archived"] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
 export const SessionAgentSchema = z.object({
@@ -149,13 +160,13 @@ export type Session = z.infer<typeof SessionSchema>;
 // ── Global Config ──────────────────────────────────────────────────────
 
 export const GlobalConfigSchema = z.object({
-  default_cli: CliTypeSchema.default('claude'),
+  default_cli: CliTypeSchema.default("claude"),
   default_worker_count: z.number().min(1).max(5).default(2),
   auto_dismiss_trust: z.boolean().default(true),
   nudge_delay_ms: z.number().default(30000),
   nudge_max_count: z.number().default(3),
   health_poll_interval_ms: z.number().default(5000),
-  log_level: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  log_level: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
@@ -163,12 +174,21 @@ export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 // ── Event Log ──────────────────────────────────────────────────────────
 
 export const EVENT_TYPES = [
-  'session_started', 'session_stopped',
-  'agent_spawned', 'agent_killed', 'agent_crashed', 'agent_status_change',
-  'agent_nudged', 'agent_respawned',
-  'task_created', 'task_assigned', 'task_completed', 'task_failed',
-  'message_sent', 'inbox_written',
-  'error',
+  "session_started",
+  "session_stopped",
+  "agent_spawned",
+  "agent_killed",
+  "agent_crashed",
+  "agent_status_change",
+  "agent_nudged",
+  "agent_respawned",
+  "task_created",
+  "task_assigned",
+  "task_completed",
+  "task_failed",
+  "message_sent",
+  "inbox_written",
+  "error",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

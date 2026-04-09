@@ -1,35 +1,37 @@
-import { existsSync } from 'node:fs';
-import { mkdir, writeFile, readFile, appendFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { homedir } from 'node:os';
+import { existsSync } from "node:fs";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 
 /**
  * Stable source root — resolved from this module's location at import time.
  * import.meta.dir = <repo>/src/cli/, so ../../ = <repo>/
  * This is reliable regardless of how uniflow was invoked (bun link, direct, wrapper).
  */
-const SOURCE_ROOT = resolve(import.meta.dir, '..', '..');
+const SOURCE_ROOT = resolve(import.meta.dir, "..", "..");
 
 async function runBunLink(): Promise<boolean> {
   try {
-    console.log('Global CLI (bun link):');
-    const proc = Bun.spawn(['bun', 'link'], {
+    console.log("Global CLI (bun link):");
+    const proc = Bun.spawn(["bun", "link"], {
       cwd: SOURCE_ROOT,
-      stdout: 'pipe',
-      stderr: 'pipe',
+      stdout: "pipe",
+      stderr: "pipe",
     });
     const stdout = await new Response(proc.stdout).text();
     const stderr = await new Response(proc.stderr).text();
     const code = await proc.exited;
     if (code === 0) {
-      console.log('  \u2713 bun link succeeded \u2014 uniflow available globally');
+      console.log("  \u2713 bun link succeeded \u2014 uniflow available globally");
       return true;
     }
     console.log(`  \u2717 bun link failed (exit ${code}): ${(stderr || stdout).trim()}`);
     console.log(`    Run manually: cd ${SOURCE_ROOT} && bun link`);
     return false;
   } catch (err) {
-    console.log(`  \u2717 bun link failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    console.log(
+      `  \u2717 bun link failed: ${err instanceof Error ? err.message : "unknown error"}`,
+    );
     console.log(`    Run manually: cd ${SOURCE_ROOT} && bun link`);
     return false;
   }
@@ -37,7 +39,7 @@ async function runBunLink(): Promise<boolean> {
 
 async function writeCommandFiles(dir: string): Promise<void> {
   await writeFile(
-    join(dir, 'uniflow.md'),
+    join(dir, "uniflow.md"),
     `---
 description: Show uniflow help and available commands
 allowed-tools: Bash
@@ -49,11 +51,11 @@ Run the following command and show the output to the user:
 uniflow --help
 \`\`\`
 `,
-    'utf-8',
+    "utf-8",
   );
 
   await writeFile(
-    join(dir, 'uniflow-spawn.md'),
+    join(dir, "uniflow-spawn.md"),
     `---
 description: Spawn a uniflow worker agent
 argument-hint: "<name> [--cli claude|codex] [--role executor]"
@@ -66,11 +68,11 @@ Run the following command to spawn a worker agent:
 uniflow spawn $ARGUMENTS
 \`\`\`
 `,
-    'utf-8',
+    "utf-8",
   );
 
   await writeFile(
-    join(dir, 'uniflow-status.md'),
+    join(dir, "uniflow-status.md"),
     `---
 description: Show uniflow session status
 allowed-tools: Bash
@@ -82,11 +84,11 @@ Run the following command to show session status:
 uniflow status $ARGUMENTS
 \`\`\`
 `,
-    'utf-8',
+    "utf-8",
   );
 
   await writeFile(
-    join(dir, 'uniflow-shutdown.md'),
+    join(dir, "uniflow-shutdown.md"),
     `---
 description: Stop the uniflow session and all agents
 allowed-tools: Bash
@@ -98,13 +100,13 @@ Run the following command to stop the session:
 uniflow stop $ARGUMENTS
 \`\`\`
 `,
-    'utf-8',
+    "utf-8",
   );
 }
 
 async function writeOrchestratorSkill(dir: string): Promise<void> {
   await writeFile(
-    join(dir, 'SKILL.md'),
+    join(dir, "SKILL.md"),
     `---
 description: >
   This skill should be used when the user asks to "start a multi-agent workflow",
@@ -136,41 +138,45 @@ You are part of a uniflow multi-agent orchestration session.
 4. Assign work: \`uniflow assign <task-id> worker-1\`
 5. Monitor: \`uniflow status --watch\`
 `,
-    'utf-8',
+    "utf-8",
   );
 }
 
 async function writeHooksJson(dir: string): Promise<void> {
   await writeFile(
-    join(dir, 'hooks.json'),
-    JSON.stringify([
-      {
-        event: 'SessionStart',
-        hooks: [
-          {
-            type: 'command',
-            command: 'uniflow init 2>/dev/null || true',
-          },
-        ],
-      },
-    ], null, 2) + '\n',
-    'utf-8',
+    join(dir, "hooks.json"),
+    `${JSON.stringify(
+      [
+        {
+          event: "SessionStart",
+          hooks: [
+            {
+              type: "command",
+              command: "uniflow init 2>/dev/null || true",
+            },
+          ],
+        },
+      ],
+      null,
+      2,
+    )}\n`,
+    "utf-8",
   );
 }
 
 async function installClaudePlugin(): Promise<boolean> {
-  const claudeDir = join(homedir(), '.claude');
+  const claudeDir = join(homedir(), ".claude");
   if (!existsSync(claudeDir)) {
-    console.log('  \u2717 Claude Code config dir not found (~/.claude/)');
+    console.log("  \u2717 Claude Code config dir not found (~/.claude/)");
     return false;
   }
 
-  const pluginDir = join(claudeDir, 'plugins', 'uniflow');
-  const pluginJsonDir = join(pluginDir, '.claude-plugin');
-  const binDir = join(pluginDir, 'bin');
-  const commandsDir = join(pluginDir, 'commands');
-  const skillDir = join(pluginDir, 'skills', 'uniflow-orchestrator');
-  const hooksDir = join(pluginDir, 'hooks');
+  const pluginDir = join(claudeDir, "plugins", "uniflow");
+  const pluginJsonDir = join(pluginDir, ".claude-plugin");
+  const binDir = join(pluginDir, "bin");
+  const commandsDir = join(pluginDir, "commands");
+  const skillDir = join(pluginDir, "skills", "uniflow-orchestrator");
+  const hooksDir = join(pluginDir, "hooks");
 
   await mkdir(pluginJsonDir, { recursive: true });
   await mkdir(binDir, { recursive: true });
@@ -180,24 +186,26 @@ async function installClaudePlugin(): Promise<boolean> {
 
   // plugin.json — includes source field pointing to repo root for start.ts reference
   await writeFile(
-    join(pluginJsonDir, 'plugin.json'),
-    JSON.stringify({
-      name: 'uniflow',
-      description: 'tmux-native multi-agent orchestration',
-      version: '0.1.0',
-      source: SOURCE_ROOT,
-    }, null, 2) + '\n',
-    'utf-8',
+    join(pluginJsonDir, "plugin.json"),
+    `${JSON.stringify(
+      {
+        name: "uniflow",
+        description: "tmux-native multi-agent orchestration",
+        version: "0.1.0",
+        source: SOURCE_ROOT,
+      },
+      null,
+      2,
+    )}\n`,
+    "utf-8",
   );
 
   // bin/uniflow wrapper — uses stable SOURCE_ROOT (not dirname(process.argv[1]))
-  const binPath = join(binDir, 'uniflow');
-  const entryPoint = join(SOURCE_ROOT, 'src', 'index.ts');
-  await writeFile(
-    binPath,
-    `#!/usr/bin/env bash\nexec bun run "${entryPoint}" "$@"\n`,
-    { mode: 0o755 },
-  );
+  const binPath = join(binDir, "uniflow");
+  const entryPoint = join(SOURCE_ROOT, "src", "index.ts");
+  await writeFile(binPath, `#!/usr/bin/env bash\nexec bun run "${entryPoint}" "$@"\n`, {
+    mode: 0o755,
+  });
 
   // Commands (4 files)
   await writeCommandFiles(commandsDir);
@@ -209,22 +217,22 @@ async function installClaudePlugin(): Promise<boolean> {
   await writeHooksJson(hooksDir);
 
   console.log(`  \u2713 Claude Code plugin installed: ${pluginDir}`);
-  console.log(`  \u2713 uniflow CLI available in Claude Code sessions`);
-  console.log(`  \u2713 4 commands, 1 skill, hooks.json created`);
+  console.log("  \u2713 uniflow CLI available in Claude Code sessions");
+  console.log("  \u2713 4 commands, 1 skill, hooks.json created");
   return true;
 }
 
 async function installCodexSkill(): Promise<boolean> {
-  const codexSkillDir = join(homedir(), '.agents', 'skills', 'uniflow');
-  const scriptsDir = join(codexSkillDir, 'scripts');
-  const referencesDir = join(codexSkillDir, 'references');
+  const codexSkillDir = join(homedir(), ".agents", "skills", "uniflow");
+  const scriptsDir = join(codexSkillDir, "scripts");
+  const referencesDir = join(codexSkillDir, "references");
 
   await mkdir(scriptsDir, { recursive: true });
   await mkdir(referencesDir, { recursive: true });
 
   // Enhanced SKILL.md with trigger conditions, protocol summary, and script references
   await writeFile(
-    join(codexSkillDir, 'SKILL.md'),
+    join(codexSkillDir, "SKILL.md"),
     `---
 name: uniflow
 description: >
@@ -276,47 +284,47 @@ uf-spawn worker-1  # spawn a worker
 uf-send worker-1 "do the thing"
 \`\`\`
 `,
-    'utf-8',
+    "utf-8",
   );
 
   // scripts/uniflow.sh — shell helper for Codex agents
   await writeFile(
-    join(scriptsDir, 'uniflow.sh'),
+    join(scriptsDir, "uniflow.sh"),
     `#!/usr/bin/env bash
 # uniflow shell helpers for Codex agents
 # Source this file: source ~/.agents/skills/uniflow/scripts/uniflow.sh
 
 uf-status() {
-  uniflow status "\$@"
+  uniflow status "$@"
 }
 
 uf-spawn() {
-  uniflow spawn "\$@"
+  uniflow spawn "$@"
 }
 
 uf-send() {
-  local agent="\$1"; shift
-  uniflow send "\$agent" "\$*"
+  local agent="$1"; shift
+  uniflow send "$agent" "$*"
 }
 
 uf-task-add() {
-  uniflow task-add "\$@"
+  uniflow task-add "$@"
 }
 
 uf-assign() {
-  uniflow assign "\$@"
+  uniflow assign "$@"
 }
 
 uf-agents() {
-  uniflow agents "\$@"
+  uniflow agents "$@"
 }
 
 uf-tasks() {
-  uniflow tasks "\$@"
+  uniflow tasks "$@"
 }
 
 uf-logs() {
-  uniflow logs "\$@"
+  uniflow logs "$@"
 }
 `,
     { mode: 0o755 },
@@ -324,7 +332,7 @@ uf-logs() {
 
   // references/protocol.md — agent protocol documentation
   await writeFile(
-    join(referencesDir, 'protocol.md'),
+    join(referencesDir, "protocol.md"),
     `# uniflow Agent Protocol
 
 ## Overview
@@ -392,45 +400,45 @@ Agents report results by appending JSON lines to \`outbox.jsonl\`:
 
 The daemon polls the outbox and processes entries to update task states.
 `,
-    'utf-8',
+    "utf-8",
   );
 
   // Append to AGENTS.md if exists
-  const agentsPath = join(homedir(), '.codex', 'AGENTS.md');
+  const agentsPath = join(homedir(), ".codex", "AGENTS.md");
   if (existsSync(agentsPath)) {
-    const content = await readFile(agentsPath, 'utf-8');
-    if (!content.includes('uniflow')) {
+    const content = await readFile(agentsPath, "utf-8");
+    if (!content.includes("uniflow")) {
       await appendFile(
         agentsPath,
         '\n## uniflow Integration\n\n- Use `uniflow` CLI to orchestrate multi-agent workflows via tmux\n- State directory: ~/.uniflow/\n- To spawn agents: `uniflow spawn <count>:<role> "task description"`\n- Run `uniflow --help` for available commands\n',
-        'utf-8',
+        "utf-8",
       );
-      console.log(`  \u2713 AGENTS.md updated with uniflow section`);
+      console.log("  \u2713 AGENTS.md updated with uniflow section");
     }
   }
 
   console.log(`  \u2713 Codex skill installed: ${codexSkillDir}`);
-  console.log(`  \u2713 scripts/uniflow.sh, references/protocol.md created`);
+  console.log("  \u2713 scripts/uniflow.sh, references/protocol.md created");
   return true;
 }
 
 export default async function install(_args: string[]): Promise<void> {
-  console.log('Installing uniflow integrations...\n');
+  console.log("Installing uniflow integrations...\n");
 
   // 1. Claude Code plugin
-  console.log('Claude Code:');
+  console.log("Claude Code:");
   const claudeOk = await installClaudePlugin();
   if (!claudeOk) {
-    console.log('  (skipped \u2014 Claude Code not detected)\n');
+    console.log("  (skipped \u2014 Claude Code not detected)\n");
   } else {
     console.log();
   }
 
   // 2. Codex CLI skill
-  console.log('Codex CLI:');
+  console.log("Codex CLI:");
   const codexOk = await installCodexSkill();
   if (!codexOk) {
-    console.log('  (skipped)\n');
+    console.log("  (skipped)\n");
   } else {
     console.log();
   }
@@ -440,7 +448,7 @@ export default async function install(_args: string[]): Promise<void> {
   console.log();
 
   // 4. Post-install verification via doctor
-  console.log('Verifying installation...\n');
-  const doctor = (await import('./doctor.js')).default;
+  console.log("Verifying installation...\n");
+  const doctor = (await import("./doctor.js")).default;
   await doctor([]);
 }

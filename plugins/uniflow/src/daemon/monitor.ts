@@ -1,34 +1,36 @@
-import { watch, type FSWatcher } from 'node:fs';
-import { join } from 'node:path';
-import { agentsDir, sessionDir, logsDir } from '../lib/constants.js';
-import type { CliType } from '../lib/types.js';
+import { type FSWatcher, watch } from "node:fs";
+import { agentsDir } from "../lib/constants.js";
+import type { AgentStateName, CliType } from "../lib/types.js";
+import { type DispatchTarget, dispatchTask, nudgeAgent, shouldNudge } from "./dispatch.js";
 import {
-  type SessionContext,
-  loadSession,
-  updateSession,
-  listAgents,
-  readAgentState,
-  writeAgentState,
-  OutboxReader,
-  listTasks,
-  writeTask,
+  ACTIVITY_THRESHOLD_MS,
+  type AgentIdleTracker,
+  DISPATCH_GRACE_MS,
+  shouldReconcile,
+} from "./reconcile.js";
+import { respawnOrchestrator } from "./respawn.js";
+import {
   appendEvent,
-} from './state.js';
-import { isPaneDead, detectState, createPane, waitForReady, startPaneLog } from './tmux.js';
-import { dispatchTask, nudgeAgent, type DispatchTarget } from './dispatch.js';
-import { loadAndRenderTemplate, buildOrchestratorVars } from '../launch/index.js';
+  listAgents,
+  listTasks,
+  type OutboxReader,
+  readAgentState,
+  type SessionContext,
+  writeAgentState,
+  writeTask,
+} from "./state.js";
+import { detectState, getPaneActivity, isPaneDead, type PaneState } from "./tmux.js";
+
+// Re-export for backward compatibility
+export { ACTIVITY_THRESHOLD_MS, type AgentIdleTracker, DISPATCH_GRACE_MS, shouldReconcile };
 
 // ── Monitor ──────────────────────────────────────────────────────────
 
 export interface MonitorOptions {
-  healthPollMs: number;      // Default: 5000
-  nudgeDelayMs: number;      // Default: 30000
-  nudgeMaxCount: number;     // Default: 3
+  healthPollMs: number; // Default: 5000
+  nudgeDelayMs: number; // Default: 30000
+  nudgeMaxCount: number; // Default: 3
   onSpawn?: (name: string, cli: CliType, role: string) => Promise<void>;
-}
-
-interface AgentIdleTracker {
-  idleSince: number | null;
 }
 
 export interface MonitorHandle {
@@ -45,18 +47,21 @@ export interface MonitorHandle {
  * - Outbox cursor check for new results → update task statuses
  * - fs.watch for real-time status change detection
  */
+/** Exported for dispatch.ts to set lastDispatchedAt */
+export const idleTrackers = new Map<string, AgentIdleTracker>();
+
 export function startMonitor(
   ctx: SessionContext,
   outboxReader: OutboxReader,
   opts: MonitorOptions,
 ): MonitorHandle {
-  const idleTrackers = new Map<string, AgentIdleTracker>();
   const lastCrashEvent = new Map<string, number>(); // agent → timestamp of last crash event
   let healthTimer: Timer | null = null;
   let fsWatcher: FSWatcher | null = null;
   let stopped = false;
 
   // ── Health check loop ──────────────────────────────────────────────
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: 3-tier detection adds necessary branches
   async function healthCheck(): Promise<void> {
     if (stopped) return;
 
@@ -75,8 +80,41 @@ export function startMonitor(
         try {
           const current = await readAgentState(ctx, agent.name);
 
-          // 3. Idle nudge check
-          if (current.state === 'idle') {
+          // 3. Tier-1: pane_activity check — fast metadata query
+          const activityEpoch = await getPaneActivity(agent.pane_id);
+          const activityAge = activityEpoch > 0 ? Date.now() - activityEpoch * 1000 : Infinity;
+
+          let paneState: PaneState;
+          if (activityAge < ACTIVITY_THRESHOLD_MS) {
+            // Recently active — infer busy, skip Tier-2
+            paneState = "busy";
+          } else {
+            // 4. Tier-2: capture-pane + classifyOutput
+            paneState = await detectState(agent.pane_id);
+          }
+
+          // 5. State reconciliation
+          if (shouldReconcile(current.state, paneState)) {
+            const reconciledState: AgentStateName =
+              paneState === "dead" ? "failed" : (paneState as AgentStateName);
+            await writeAgentState(ctx, agent.name, {
+              ...current,
+              state: reconciledState,
+              updated_at: new Date().toISOString(),
+            });
+            await appendEvent(ctx, "agent_status_change", {
+              agent: agent.name,
+              from: current.state,
+              to: paneState,
+              source: "daemon",
+            });
+          }
+
+          // 6. Idle nudge check (uses reconciled state)
+          const effectiveState = shouldReconcile(current.state, paneState)
+            ? paneState
+            : current.state;
+          if (effectiveState === "idle") {
             await checkIdleNudge(ctx, agent.name, current, opts);
           } else {
             // Reset idle tracker when not idle
@@ -94,7 +132,7 @@ export function startMonitor(
       // 5. Check dependency resolution
       await resolveDependencies(ctx);
     } catch (err) {
-      console.error('[monitor] health check error:', err);
+      console.error("[monitor] health check error:", err);
     }
 
     // Schedule next check
@@ -114,17 +152,17 @@ export function startMonitor(
     const now = Date.now();
     const lastCrash = lastCrashEvent.get(name);
     if (!lastCrash || now - lastCrash >= 60_000) {
-      await appendEvent(ctx, 'agent_crashed', { agent: name });
+      await appendEvent(ctx, "agent_crashed", { agent: name });
       lastCrashEvent.set(name, now);
     }
 
-    if (role === 'orchestrator') {
+    if (role === "orchestrator") {
       // Auto-respawn orchestrator (D14)
       console.log(`[monitor] Orchestrator ${name} crashed — auto-respawning`);
       try {
         await respawnOrchestrator(ctx, name, cli);
       } catch (err) {
-        console.error('[monitor] Failed to respawn orchestrator:', err);
+        console.error("[monitor] Failed to respawn orchestrator:", err);
       }
     }
     // For workers: just log. Orchestrator handles via status check.
@@ -139,8 +177,16 @@ export function startMonitor(
   ): Promise<void> {
     let tracker = idleTrackers.get(name);
     if (!tracker) {
-      tracker = { idleSince: null };
+      tracker = { idleSince: null, lastDispatchedAt: null };
       idleTrackers.set(name, tracker);
+    }
+
+    // Grace period: skip nudge if recently dispatched (D3)
+    if (
+      tracker.lastDispatchedAt !== null &&
+      Date.now() - tracker.lastDispatchedAt < DISPATCH_GRACE_MS
+    ) {
+      return;
     }
 
     if (tracker.idleSince === null) {
@@ -158,10 +204,10 @@ export function startMonitor(
 
     // Verify idle via capture-pane before nudging
     const paneState = await detectState(agent.pane_id);
-    if (paneState !== 'idle') return;
+    if (!shouldNudge(paneState)) return;
 
     // Check if there are pending tasks for this agent
-    const inbox = await import('./state.js').then((m) => m.readInbox(ctx, name));
+    const inbox = await import("./state.js").then((m) => m.readInbox(ctx, name));
     if (!inbox.trim()) return; // No pending work in inbox
 
     const target: DispatchTarget = {
@@ -183,25 +229,22 @@ export function startMonitor(
   }
 
   // ── Outbox processing ──────────────────────────────────────────────
-  async function processOutbox(
-    ctx: SessionContext,
-    reader: OutboxReader,
-  ): Promise<void> {
+  async function processOutbox(ctx: SessionContext, reader: OutboxReader): Promise<void> {
     const entries = await reader.readNew();
     for (const entry of entries) {
       try {
-        const task = await import('./state.js').then((m) => m.readTask(ctx, entry.task));
+        const task = await import("./state.js").then((m) => m.readTask(ctx, entry.task));
         const updatedTask = {
           ...task,
-          status: entry.status === 'completed' ? 'completed' as const : 'failed' as const,
+          status: entry.status === "completed" ? ("completed" as const) : ("failed" as const),
           completed_at: entry.timestamp,
           result: entry.summary,
           error: entry.error ?? null,
         };
         await writeTask(ctx, entry.task, updatedTask);
 
-        const eventType = entry.status === 'completed' ? 'task_completed' : 'task_failed';
-        await appendEvent(ctx, eventType as 'task_completed' | 'task_failed', {
+        const eventType = entry.status === "completed" ? "task_completed" : "task_failed";
+        await appendEvent(ctx, eventType as "task_completed" | "task_failed", {
           task: entry.task,
           agent: entry.agent,
           summary: entry.summary,
@@ -213,8 +256,9 @@ export function startMonitor(
   }
 
   // ── Dependency resolution ──────────────────────────────────────────
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: dependency graph traversal
   async function resolveDependencies(ctx: SessionContext): Promise<void> {
-    const tasks = await listTasks(ctx, 'pending');
+    const tasks = await listTasks(ctx, "pending");
     for (const task of tasks) {
       if (task.depends_on.length === 0) continue;
       if (!task.assignee) continue;
@@ -223,8 +267,8 @@ export function startMonitor(
       let allDepsComplete = true;
       for (const depId of task.depends_on) {
         try {
-          const dep = await import('./state.js').then((m) => m.readTask(ctx, depId));
-          if (dep.status !== 'completed') {
+          const dep = await import("./state.js").then((m) => m.readTask(ctx, depId));
+          if (dep.status !== "completed") {
             allDepsComplete = false;
             break;
           }
@@ -246,13 +290,13 @@ export function startMonitor(
 
           const inboxContent = [
             `# Task Assignment: ${task.id}`,
-            '',
-            `## Task`,
+            "",
+            "## Task",
             task.subject,
-            '',
-            `## Description`,
+            "",
+            "## Description",
             task.description,
-          ].join('\n');
+          ].join("\n");
 
           await dispatchTask(ctx, target, task.id, inboxContent);
         } catch {
@@ -262,99 +306,36 @@ export function startMonitor(
     }
   }
 
-  // ── Orchestrator auto-respawn ──────────────────────────────────────
-  async function respawnOrchestrator(
-    ctx: SessionContext,
-    name: string,
-    cli: CliType,
-  ): Promise<void> {
-    const session = await loadSession(ctx.project, ctx.sessionId);
-
-    // Build recovery instruction
-    const vars = buildOrchestratorVars(ctx.project, ctx.sessionId);
-    const instructions = await loadAndRenderTemplate('orchestrator', vars);
-
-    // Write recovery inbox with session state
-    const agents = await listAgents(ctx);
-    const tasks = await listTasks(ctx);
-    const recoveryInbox = [
-      '# Recovery: Session State',
-      '',
-      '## Active Agents',
-      ...agents.map((a) => `- ${a.name} (${a.cli}, ${a.role}): ${a.state}`),
-      '',
-      '## Tasks',
-      ...tasks.map((t) => `- ${t.id}: ${t.subject} [${t.status}] → ${t.assignee ?? 'unassigned'}`),
-      '',
-      'Review the state and continue managing the session.',
-    ].join('\n');
-
-    // Write instruction file for the new orchestrator
-    const instructionPath = join(
-      sessionDir(ctx.project, ctx.sessionId),
-      'orchestrator-instructions.md',
-    );
-    await Bun.write(instructionPath, instructions);
-
-    // Build launch command
-    const launchOpts = {
-      name,
-      cli,
-      role: 'orchestrator',
-      mode: 'interactive' as const,
-      cwd: session.cwd,
-      instructionPath,
-    };
-
-    const { buildLaunchCommand: buildCmd } = await import('../launch/index.js');
-    const cmd = buildCmd(launchOpts);
-
-    // Create new pane and launch
-    const paneId = await createPane(
-      session.tmux_session,
-      cmd.join(' '),
-      session.cwd,
-    );
-
-    // Wait for ready
-    await waitForReady(paneId);
-
-    // Start logging
-    const logPath = join(
-      logsDir(ctx.project, ctx.sessionId),
-      `${name}.log`,
-    );
-    await startPaneLog(paneId, logPath);
-
-    // Update session
-    const updatedAgents = session.agents.map((a) => {
-      if (a.name === name) {
-        return { ...a, pane_id: paneId };
-      }
-      return a;
-    });
-    await updateSession(ctx, { agents: updatedAgents });
-
-    // Write recovery inbox
-    const { writeInbox: writeInboxFn } = await import('./state.js');
-    await writeInboxFn(ctx, name, recoveryInbox);
-
-    // Send recovery trigger
-    const { sendMessage } = await import('./tmux.js');
-    await sendMessage(paneId, cli, 'Recovery: read your inbox for session state.');
-
-    await appendEvent(ctx, 'agent_respawned', { agent: name, new_pane: paneId });
-  }
-
   // ── fs.watch supplement ────────────────────────────────────────────
   function startFsWatch(): FSWatcher | null {
     try {
       const watchDir = agentsDir(ctx.project, ctx.sessionId);
       return watch(watchDir, { recursive: true }, async (_event, filename) => {
         if (stopped) return;
-        if (!filename?.endsWith('.json')) return;
-        // Trigger an immediate check on agent state change
-        // (supplement to the 5s polling)
+        if (!filename?.endsWith(".json")) return;
+
+        const agentName = filename.replace(".json", "");
+        try {
+          const current = await readAgentState(ctx, agentName);
+          const paneState = await detectState(current.pane_id);
+          if (shouldReconcile(current.state, paneState)) {
+            const reconciledState: AgentStateName =
+              paneState === "dead" ? "failed" : (paneState as AgentStateName);
+            await writeAgentState(ctx, agentName, {
+              ...current,
+              state: reconciledState,
+              updated_at: new Date().toISOString(),
+            });
+            await appendEvent(ctx, "agent_status_change", {
+              agent: agentName,
+              from: current.state,
+              to: paneState,
+              source: "daemon-fswatch",
+            });
+          }
+        } catch {
+          // Agent file in mid-write or agent removed — skip
+        }
       });
     } catch {
       return null;

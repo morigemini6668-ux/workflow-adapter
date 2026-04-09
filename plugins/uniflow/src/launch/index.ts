@@ -1,9 +1,9 @@
-import { readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
-import type { CliType, WorkerMode } from '../lib/types.js';
-import { sessionDir, inboxesDir, agentsDir, tasksDir } from '../lib/constants.js';
-import { buildClaudeCommand, prepareClaude } from './claude.js';
-import { buildCodexCommand, prepareCodex } from './codex.js';
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { agentsDir, inboxesDir, sessionDir, tasksDir } from "../lib/constants.js";
+import type { CliType, WorkerMode } from "../lib/types.js";
+import { buildClaudeCommand, prepareClaude } from "./claude.js";
+import { buildCodexCommand, prepareCodex } from "./codex.js";
 
 // ── Template Variables ────────────────────────────────────────────────
 
@@ -54,11 +54,11 @@ export function renderTemplate(template: string, vars: TemplateVars): string {
  * Load a template file from src/templates/ and render it with the given variables.
  */
 export async function loadAndRenderTemplate(
-  templateName: 'orchestrator' | 'worker',
+  templateName: "orchestrator" | "worker",
   vars: TemplateVars,
 ): Promise<string> {
-  const templatePath = join(dirname(import.meta.dir), 'templates', `${templateName}.md`);
-  const template = await readFile(templatePath, 'utf-8');
+  const templatePath = join(dirname(import.meta.dir), "templates", `${templateName}.md`);
+  const template = await readFile(templatePath, "utf-8");
   return renderTemplate(template, vars);
 }
 
@@ -67,10 +67,7 @@ export async function loadAndRenderTemplate(
 /**
  * Build orchestrator template variables from session info.
  */
-export function buildOrchestratorVars(
-  projectName: string,
-  sessionId: string,
-): TemplateVars {
+export function buildOrchestratorVars(projectName: string, sessionId: string): TemplateVars {
   return {
     PROJECT_NAME: projectName,
     SESSION_ID: sessionId,
@@ -104,9 +101,9 @@ export function buildWorkerVars(
     STARTED_AT: new Date().toISOString(),
     INBOX_PATH: join(inboxesDir(projectName, sessionId), `${workerName}.md`),
     AGENT_STATUS_PATH: join(agentsDir(projectName, sessionId), `${workerName}.json`),
-    OUTBOX_PATH: join(sd, 'outbox.jsonl'),
+    OUTBOX_PATH: join(sd, "outbox.jsonl"),
     TASKS_DIR: tasksDir(projectName, sessionId),
-    ROLE_INSTRUCTIONS: roleInstructions ?? '',
+    ROLE_INSTRUCTIONS: roleInstructions ?? "",
   };
 }
 
@@ -118,9 +115,9 @@ export function buildWorkerVars(
  */
 export function buildLaunchCommand(opts: LaunchOptions): string[] {
   switch (opts.cli) {
-    case 'claude':
+    case "claude":
       return buildClaudeCommand(opts);
-    case 'codex':
+    case "codex":
       return buildCodexCommand(opts);
     default:
       throw new Error(`Unsupported CLI: ${opts.cli}`);
@@ -133,9 +130,9 @@ export function buildLaunchCommand(opts: LaunchOptions): string[] {
  */
 export async function prepareLaunch(opts: LaunchOptions): Promise<void> {
   switch (opts.cli) {
-    case 'claude':
+    case "claude":
       return prepareClaude(opts);
-    case 'codex':
+    case "codex":
       return prepareCodex(opts);
     default:
       throw new Error(`Unsupported CLI: ${opts.cli}`);

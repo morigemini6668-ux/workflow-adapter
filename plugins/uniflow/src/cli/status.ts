@@ -1,12 +1,13 @@
-import { sendCommand, parseArgs } from './client.js';
+import { parseArgs, sendCommand } from "./client.js";
 
 export default async function status(args: string[]): Promise<void> {
   const { flags } = parseArgs(args);
   const json = flags.json === true;
   const watch = flags.watch === true;
+  const peek = flags.peek === true;
 
   const printStatus = async () => {
-    const response = await sendCommand('status');
+    const response = await sendCommand("status", { peek });
 
     if (!response.success) {
       console.error(`Error: ${response.error}`);
@@ -20,8 +21,21 @@ export default async function status(args: string[]): Promise<void> {
 
     const data = response.data as {
       session: { id: string; project: string; status: string; cwd: string };
-      agents: { name: string; cli: string; role: string; state: string; current_task: string | null; progress: string | null }[];
-      tasks: { id: string; subject: string; status: string; assignee: string | null; priority: number }[];
+      agents: {
+        name: string;
+        cli: string;
+        role: string;
+        state: string;
+        current_task: string | null;
+        progress: string | null;
+      }[];
+      tasks: {
+        id: string;
+        subject: string;
+        status: string;
+        assignee: string | null;
+        priority: number;
+      }[];
       recent_results: unknown[];
     };
 
@@ -30,24 +44,24 @@ export default async function status(args: string[]): Promise<void> {
     console.log(`CWD: ${data.session.cwd}\n`);
 
     // Agents
-    console.log('Agents:');
+    console.log("Agents:");
     if (data.agents.length === 0) {
-      console.log('  (none)');
+      console.log("  (none)");
     } else {
       for (const a of data.agents) {
-        const task = a.current_task ? ` [${a.current_task}]` : '';
-        const progress = a.progress ? ` — ${a.progress}` : '';
+        const task = a.current_task ? ` [${a.current_task}]` : "";
+        const progress = a.progress ? ` — ${a.progress}` : "";
         console.log(`  ${a.name} (${a.cli}/${a.role}): ${a.state}${task}${progress}`);
       }
     }
 
     // Tasks
-    console.log('\nTasks:');
+    console.log("\nTasks:");
     if (data.tasks.length === 0) {
-      console.log('  (none)');
+      console.log("  (none)");
     } else {
       for (const t of data.tasks) {
-        const assignee = t.assignee ? ` → ${t.assignee}` : '';
+        const assignee = t.assignee ? ` → ${t.assignee}` : "";
         console.log(`  [P${t.priority}] ${t.id}: ${t.subject} (${t.status})${assignee}`);
       }
     }
@@ -57,7 +71,7 @@ export default async function status(args: string[]): Promise<void> {
     while (true) {
       console.clear();
       await printStatus();
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 2000));
     }
   } else {
     await printStatus();

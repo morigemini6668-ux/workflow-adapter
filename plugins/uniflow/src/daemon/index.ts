@@ -1,33 +1,40 @@
-import { join } from 'node:path';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
-  socketPath,
-  sessionDir,
+  buildLaunchCommand,
+  buildOrchestratorVars,
+  loadAndRenderTemplate,
+  prepareLaunch,
+} from "../launch/index.js";
+import {
+  DEFAULT_CONFIG,
   logsDir,
+  sessionDir,
+  socketPath,
   tmuxSessionName,
   UNIFLOW_ID_FILE,
-  DEFAULT_CONFIG,
-} from '../lib/constants.js';
-import type { CliType } from '../lib/types.js';
+} from "../lib/constants.js";
+import type { CliType } from "../lib/types.js";
+import { type MonitorHandle, startMonitor } from "./monitor.js";
+import { type DaemonServer, startServer } from "./server.js";
+import { spawnAgent } from "./spawn.js";
 import {
+  appendEvent,
   createSession,
   findActiveSession,
   loadSession,
   OutboxReader,
-  appendEvent,
   type SessionContext,
-} from './state.js';
-import { createSession as createTmuxSession, hasSession as hasTmuxSession, applyLayout, currentSession as currentTmuxSession } from './tmux.js';
-import { startServer, type DaemonServer } from './server.js';
-import { startMonitor, type MonitorHandle } from './monitor.js';
-import { spawnAgent } from './spawn.js';
+} from "./state.js";
 import {
-  loadAndRenderTemplate,
-  buildOrchestratorVars,
-  buildLaunchCommand,
-  prepareLaunch,
-} from '../launch/index.js';
-import { createPane, waitForReady, startPaneLog } from './tmux.js';
+  applyLayout,
+  createPane,
+  createSession as createTmuxSession,
+  currentSession as currentTmuxSession,
+  hasSession as hasTmuxSession,
+  startPaneLog,
+  waitForReady,
+} from "./tmux.js";
 
 // ── Daemon Lifecycle ─────────────────────────────────────────────────
 
@@ -66,7 +73,9 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
     // --here: use current tmux session
     const current = await currentTmuxSession();
     if (!current) {
-      throw new Error('--here requires running inside a tmux session. Use "uniflow start" without --here, or run inside tmux.');
+      throw new Error(
+        '--here requires running inside a tmux session. Use "uniflow start" without --here, or run inside tmux.',
+      );
     }
     tmuxName = current;
   } else {
@@ -90,21 +99,21 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
     sessionId: session.id,
   };
 
-  await appendEvent(ctx, 'session_started', { cwd: opts.cwd });
+  await appendEvent(ctx, "session_started", { cwd: opts.cwd });
 
   // 5. Start IPC server (with spawn handler)
   const outboxReader = new OutboxReader(ctx);
   const onSpawn = async (args: Record<string, unknown>) => {
     const name = args.name as string;
-    const cli = (args.cli as CliType) ?? 'claude';
-    const role = (args.role as string) ?? 'worker';
-    const mode = (args.mode as string) ?? 'interactive';
-    if (!name) throw new Error('Agent name required');
+    const cli = (args.cli as CliType) ?? "claude";
+    const role = (args.role as string) ?? "worker";
+    const mode = (args.mode as string) ?? "interactive";
+    if (!name) throw new Error("Agent name required");
     const agent = await spawnAgent(ctx, session.tmux_session, {
       name,
       cli,
       role,
-      mode: mode as 'interactive' | 'non_interactive',
+      mode: mode as "interactive" | "non_interactive",
       cwd: opts.cwd,
       pluginDir: opts.pluginDir,
     });
@@ -144,15 +153,12 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
  * Reconnect to an existing daemon session.
  * Used when `uniflow start` detects an existing tmux session after a daemon crash.
  */
-export async function reconnectDaemon(
-  cwd: string,
-  pluginDir?: string,
-): Promise<DaemonHandle> {
+export async function reconnectDaemon(cwd: string, pluginDir?: string): Promise<DaemonHandle> {
   const projectName = await readProjectName(cwd);
   const existing = await findActiveSession(projectName);
 
   if (!existing) {
-    throw new Error('No active session to reconnect to');
+    throw new Error("No active session to reconnect to");
   }
 
   const ctx: SessionContext = {
@@ -163,15 +169,15 @@ export async function reconnectDaemon(
   const outboxReader = new OutboxReader(ctx);
   const onSpawn = async (args: Record<string, unknown>) => {
     const name = args.name as string;
-    const cli = (args.cli as CliType) ?? 'claude';
-    const role = (args.role as string) ?? 'worker';
-    const mode = (args.mode as string) ?? 'interactive';
-    if (!name) throw new Error('Agent name required');
+    const cli = (args.cli as CliType) ?? "claude";
+    const role = (args.role as string) ?? "worker";
+    const mode = (args.mode as string) ?? "interactive";
+    if (!name) throw new Error("Agent name required");
     const agent = await spawnAgent(ctx, existing.tmux_session, {
       name,
       cli,
       role,
-      mode: mode as 'interactive' | 'non_interactive',
+      mode: mode as "interactive" | "non_interactive",
       cwd,
       pluginDir,
     });
@@ -203,7 +209,7 @@ export async function reconnectDaemon(
 async function readProjectName(cwd: string): Promise<string> {
   const idPath = join(cwd, UNIFLOW_ID_FILE);
   try {
-    const content = await readFile(idPath, 'utf-8');
+    const content = await readFile(idPath, "utf-8");
     return content.trim();
   } catch {
     throw new Error(`No ${UNIFLOW_ID_FILE} found in ${cwd}. Run "uniflow init" first.`);
@@ -217,25 +223,25 @@ async function launchOrchestrator(
 ): Promise<void> {
   // 1. Render orchestrator instructions
   const vars = buildOrchestratorVars(ctx.project, ctx.sessionId);
-  const instructions = await loadAndRenderTemplate('orchestrator', vars);
+  const instructions = await loadAndRenderTemplate("orchestrator", vars);
 
   // 2. Write instruction file
   const instructionPath = join(
     sessionDir(ctx.project, ctx.sessionId),
-    'orchestrator-instructions.md',
+    "orchestrator-instructions.md",
   );
   await writeFile(instructionPath, instructions);
 
   // 3. Prepare launch environment (pre-trust, etc.)
   const launchOpts = {
-    name: 'orchestrator',
+    name: "orchestrator",
     cli: opts.orchestratorCli,
-    role: 'orchestrator',
-    mode: 'interactive' as const,
+    role: "orchestrator",
+    mode: "interactive" as const,
     cwd: opts.cwd,
     instructionPath,
     pluginDir: opts.pluginDir,
-    initialPrompt: 'You are the uniflow orchestrator. The user will give you instructions.',
+    initialPrompt: "You are the uniflow orchestrator. The user will give you instructions.",
   };
   await prepareLaunch(launchOpts);
 
@@ -243,24 +249,24 @@ async function launchOrchestrator(
   const cmd = buildLaunchCommand(launchOpts);
 
   // 5. Create pane and launch
-  const paneId = await createPane(tmuxSession, cmd.join(' '), opts.cwd);
+  const paneId = await createPane(tmuxSession, cmd.join(" "), opts.cwd);
 
   // 6. Wait for agent to be ready
   await waitForReady(paneId);
 
   // 7. Start logging
-  const logPath = join(logsDir(ctx.project, ctx.sessionId), 'orchestrator.log');
+  const logPath = join(logsDir(ctx.project, ctx.sessionId), "orchestrator.log");
   await startPaneLog(paneId, logPath);
 
   // 8. Register agent state file + session
-  const { updateSession, writeAgentState } = await import('./state.js');
-  const { getPanePid } = await import('./tmux.js');
+  const { updateSession, writeAgentState } = await import("./state.js");
+  const { getPanePid } = await import("./tmux.js");
   const pid = await getPanePid(paneId).catch(() => 0);
   const agentState = {
-    name: 'orchestrator',
+    name: "orchestrator",
     cli: opts.orchestratorCli,
-    role: 'orchestrator' as const,
-    state: 'idle' as const,
+    role: "orchestrator" as const,
+    state: "idle" as const,
     pane_id: paneId,
     pid,
     current_task: null,
@@ -269,24 +275,24 @@ async function launchOrchestrator(
     started_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
-  await writeAgentState(ctx, 'orchestrator', agentState);
+  await writeAgentState(ctx, "orchestrator", agentState);
 
   const session = await loadSession(ctx.project, ctx.sessionId);
   await updateSession(ctx, {
     agents: [
       ...session.agents,
       {
-        name: 'orchestrator',
+        name: "orchestrator",
         cli: opts.orchestratorCli,
-        role: 'orchestrator',
+        role: "orchestrator",
         pane_id: paneId,
         pid,
       },
     ],
   });
 
-  await appendEvent(ctx, 'agent_spawned', {
-    agent: 'orchestrator',
+  await appendEvent(ctx, "agent_spawned", {
+    agent: "orchestrator",
     cli: opts.orchestratorCli,
     pane_id: paneId,
   });

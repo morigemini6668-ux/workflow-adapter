@@ -1,14 +1,14 @@
-import { createElement } from 'react';
-import { render } from 'ink';
-import { App, type TuiDataSource } from './App.js';
+import { render } from "ink";
+import { createElement } from "react";
 import {
+  findActiveSession,
   listAgents,
   listTasks,
   readEvents,
-  findActiveSession,
   type SessionContext,
-} from '../daemon/state.js';
-import type { AgentState, Task, Event } from '../lib/types.js';
+} from "../daemon/state.js";
+import type { AgentState, Event, Task } from "../lib/types.js";
+import { App, type TuiDataSource } from "./App.js";
 
 /**
  * File-based data source: reads state directly from ~/.uniflow session files.
@@ -40,11 +40,11 @@ export async function launchTui(projectName?: string): Promise<void> {
   // Discover project name from .uniflow-id if not provided
   let project = projectName;
   if (!project) {
-    const { readFile } = await import('node:fs/promises');
-    const { UNIFLOW_ID_FILE } = await import('../lib/constants.js');
-    const { join } = await import('node:path');
+    const { readFile } = await import("node:fs/promises");
+    const { UNIFLOW_ID_FILE } = await import("../lib/constants.js");
+    const { join } = await import("node:path");
     try {
-      project = (await readFile(join(process.cwd(), UNIFLOW_ID_FILE), 'utf-8')).trim();
+      project = (await readFile(join(process.cwd(), UNIFLOW_ID_FILE), "utf-8")).trim();
     } catch {
       throw new Error('No .uniflow-id found. Run "uniflow init" first.');
     }
@@ -58,14 +58,12 @@ export async function launchTui(projectName?: string): Promise<void> {
 
   // Check stdin supports raw mode (required by Ink for keyboard input)
   if (!process.stdin.isTTY) {
-    throw new Error('TUI requires a TTY. Run in a terminal or tmux pane.');
+    throw new Error("TUI requires a TTY. Run in a terminal or tmux pane.");
   }
 
   const dataSource = createFileDataSource(project, session.id);
 
-  const { waitUntilExit } = render(
-    createElement(App, { dataSource }),
-  );
+  const { waitUntilExit } = render(createElement(App, { dataSource }));
 
   await waitUntilExit();
 }

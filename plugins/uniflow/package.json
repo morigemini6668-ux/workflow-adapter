@@ -7,6 +7,10 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write src/",
+    "format": "biome format --write src/",
+    "ci": "biome ci src/ && tsc --noEmit",
     "dev": "bun run src/index.ts"
   },
   "dependencies": {
@@ -15,6 +19,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
     "@types/bun": "latest",
     "@types/react": "^19.0.0",
     "typescript": "^6.0.2"

@@ -1,35 +1,24 @@
-import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { CliType, WorkerMode, AgentState, SessionAgent } from '../lib/types.js';
-import {
-  MAX_WORKERS,
-  sessionDir,
-  logsDir,
-  inboxesDir,
-} from '../lib/constants.js';
-import {
-  type SessionContext,
-  writeAgentState,
-  updateSession,
-  loadSession,
-  listAgents,
-  appendEvent,
-} from './state.js';
-import {
-  createPane,
-  waitForReady,
-  getPanePid,
-  startPaneLog,
-  killPane,
-} from './tmux.js';
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   buildLaunchCommand,
-  prepareLaunch,
-  loadAndRenderTemplate,
   buildOrchestratorVars,
   buildWorkerVars,
   type LaunchOptions,
-} from '../launch/index.js';
+  loadAndRenderTemplate,
+  prepareLaunch,
+} from "../launch/index.js";
+import { inboxesDir, logsDir, MAX_WORKERS, sessionDir } from "../lib/constants.js";
+import type { AgentState, CliType, SessionAgent, WorkerMode } from "../lib/types.js";
+import {
+  appendEvent,
+  listAgents,
+  loadSession,
+  type SessionContext,
+  updateSession,
+  writeAgentState,
+} from "./state.js";
+import { createPane, getPanePid, killPane, startPaneLog, waitForReady } from "./tmux.js";
 
 // ── Spawn Options ────────────────────────────────────────────────────
 
@@ -66,29 +55,30 @@ export async function spawnAgent(
   opts: SpawnOptions,
 ): Promise<AgentState> {
   // Step 1: Validate worker count
-  if (opts.role !== 'orchestrator') {
+  if (opts.role !== "orchestrator") {
     const agents = await listAgents(ctx);
-    const workerCount = agents.filter(a => a.role !== 'orchestrator').length;
+    const workerCount = agents.filter((a) => a.role !== "orchestrator").length;
     if (workerCount >= MAX_WORKERS) {
       throw new Error(`Max workers exceeded: ${workerCount}/${MAX_WORKERS}`);
     }
   }
 
   // Step 2: Render instruction template
-  const templateName = opts.role === 'orchestrator' ? 'orchestrator' : 'worker';
+  const templateName = opts.role === "orchestrator" ? "orchestrator" : "worker";
   // Use a placeholder pane_id/pid since we don't have them yet — will update after creation
-  const vars = opts.role === 'orchestrator'
-    ? buildOrchestratorVars(ctx.project, ctx.sessionId)
-    : buildWorkerVars(
-        ctx.project,
-        ctx.sessionId,
-        opts.name,
-        opts.cli,
-        opts.role,
-        'pending',  // placeholder pane_id
-        0,          // placeholder pid
-        opts.roleInstructions,
-      );
+  const vars =
+    opts.role === "orchestrator"
+      ? buildOrchestratorVars(ctx.project, ctx.sessionId)
+      : buildWorkerVars(
+          ctx.project,
+          ctx.sessionId,
+          opts.name,
+          opts.cli,
+          opts.role,
+          "pending", // placeholder pane_id
+          0, // placeholder pid
+          opts.roleInstructions,
+        );
 
   const instructionContent = await loadAndRenderTemplate(templateName, vars);
 
@@ -97,7 +87,7 @@ export async function spawnAgent(
     sessionDir(ctx.project, ctx.sessionId),
     `instructions-${opts.name}.md`,
   );
-  await writeFile(instructionPath, instructionContent, 'utf-8');
+  await writeFile(instructionPath, instructionContent, "utf-8");
 
   // Step 3: Prepare launch environment
   const launchOpts: LaunchOptions = {
@@ -114,7 +104,7 @@ export async function spawnAgent(
 
   // Step 4: Build CLI command
   const cmdArgs = buildLaunchCommand(launchOpts);
-  const fullCommand = cmdArgs.join(' ');
+  const fullCommand = cmdArgs.join(" ");
 
   // Step 5: Create tmux pane
   const paneId = await createPane(tmuxSession, fullCommand, opts.cwd);
@@ -132,7 +122,7 @@ export async function spawnAgent(
   }
 
   // Re-render template with actual pane_id and pid for worker
-  if (opts.role !== 'orchestrator') {
+  if (opts.role !== "orchestrator") {
     const finalVars = buildWorkerVars(
       ctx.project,
       ctx.sessionId,
@@ -143,13 +133,13 @@ export async function spawnAgent(
       pid,
       opts.roleInstructions,
     );
-    const finalInstruction = await loadAndRenderTemplate('worker', finalVars);
-    await writeFile(instructionPath, finalInstruction, 'utf-8');
+    const finalInstruction = await loadAndRenderTemplate("worker", finalVars);
+    await writeFile(instructionPath, finalInstruction, "utf-8");
 
     // Codex reads AGENTS.md (copied in prepareLaunch) — update it too
-    if (opts.cli === 'codex') {
-      const agentsMdPath = join(opts.cwd, 'AGENTS.md');
-      await writeFile(agentsMdPath, finalInstruction, 'utf-8');
+    if (opts.cli === "codex") {
+      const agentsMdPath = join(opts.cwd, "AGENTS.md");
+      await writeFile(agentsMdPath, finalInstruction, "utf-8");
     }
   }
 
@@ -169,7 +159,7 @@ export async function spawnAgent(
     role: opts.role,
     pane_id: paneId,
     pid,
-    state: 'idle',
+    state: "idle",
     current_task: null,
     progress: null,
     nudge_count: 0,
@@ -193,7 +183,7 @@ export async function spawnAgent(
   });
 
   // Step 9: Log event
-  await appendEvent(ctx, 'agent_spawned', {
+  await appendEvent(ctx, "agent_spawned", {
     agent: opts.name,
     cli: opts.cli,
     role: opts.role,
@@ -216,10 +206,10 @@ export async function spawnOrchestrator(
   pluginDir?: string,
 ): Promise<AgentState> {
   return spawnAgent(ctx, tmuxSession, {
-    name: 'orchestrator',
+    name: "orchestrator",
     cli,
-    role: 'orchestrator',
-    mode: 'interactive',
+    role: "orchestrator",
+    mode: "interactive",
     cwd,
     pluginDir,
   });
@@ -237,7 +227,7 @@ export async function respawnAgent(
 ): Promise<AgentState> {
   // Try to kill old pane if it exists
   const session = await loadSession(ctx.project, ctx.sessionId);
-  const existing = session.agents.find(a => a.name === opts.name);
+  const existing = session.agents.find((a) => a.name === opts.name);
   if (existing) {
     try {
       await killPane(existing.pane_id, opts.cli);
@@ -247,7 +237,7 @@ export async function respawnAgent(
 
     // Remove from session agents list
     await updateSession(ctx, {
-      agents: session.agents.filter(a => a.name !== opts.name),
+      agents: session.agents.filter((a) => a.name !== opts.name),
     });
   }
 
@@ -256,14 +246,11 @@ export async function respawnAgent(
 
   // Write recovery inbox if provided
   if (recoveryMessage) {
-    const inboxPath = join(
-      inboxesDir(ctx.project, ctx.sessionId),
-      `${opts.name}.md`,
-    );
-    await writeFile(inboxPath, recoveryMessage, 'utf-8');
+    const inboxPath = join(inboxesDir(ctx.project, ctx.sessionId), `${opts.name}.md`);
+    await writeFile(inboxPath, recoveryMessage, "utf-8");
   }
 
-  await appendEvent(ctx, 'agent_respawned', {
+  await appendEvent(ctx, "agent_respawned", {
     agent: opts.name,
     cli: opts.cli,
     had_existing: !!existing,

@@ -445,6 +445,247 @@ async function scenario3_gracefulStop(): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// Scenario 4: Mixed CLI (Claude + Codex workers)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function isCodexAvailable(): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(['codex', '--version'], { stdout: 'pipe', stderr: 'pipe' });
+    const exitCode = await proc.exited;
+    return exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+async function scenario4_mixedCli(): Promise<void> {
+  console.log('\nScenario 4: Mixed CLI (Claude + Codex workers in same session)');
+
+  const codexOk = await isCodexAvailable();
+  if (!codexOk) {
+    console.log('  SKIP: codex CLI not available');
+    results.push({ name: 'mixed-cli: codex availability', passed: true, skipped: true, durationMs: 0 });
+    return;
+  }
+
+  const {
+    createSession: createTmuxSession,
+    createPane,
+  } = await import('../src/daemon/tmux.js');
+  const {
+    createSession,
+    OutboxReader,
+    writeAgentState,
+  } = await import('../src/daemon/state.js');
+  const { startServer } = await import('../src/daemon/server.js');
+  const { socketPath } = await import('../src/lib/constants.js');
+
+  const tag = randomUUID().slice(0, 8);
+  const projectName = `e2e-mixed-${tag}`;
+  const tmuxName = `uniflow-e2e-mixed-${tag}`;
+  tmuxSessionsToCleanup.push(tmuxName);
+
+  // Setup tmux session + daemon state
+  await createTmuxSession(tmuxName, process.cwd());
+  const session = await createSession({
+    project: projectName,
+    cwd: process.cwd(),
+    tmuxSession: tmuxName,
+    daemonPid: process.pid,
+  });
+  const ctx = { project: projectName, sessionId: session.id };
+  const outboxReader = new OutboxReader(ctx);
+
+  // onSpawn creates real tmux panes and records cli type
+  const onSpawn = async (args: Record<string, unknown>) => {
+    const name = args.name as string;
+    const cli = (args.cli as string) ?? 'claude';
+    const paneId = await createPane(tmuxName, 'sh', process.cwd());
+    await sleep(500);
+    const agent = makeAgentState(name, paneId, 'executor', cli);
+    await writeAgentState(ctx, name, agent as any);
+    return { name, pane_id: paneId, status: 'spawned' };
+  };
+  const server = await startServer(ctx, outboxReader, onSpawn);
+  serversToClose.push(server);
+  const sockPath = socketPath(projectName);
+
+  // ── Spawn Claude worker
+  await test('mixed-cli: spawn claude worker', async () => {
+    const resp = await ipc(sockPath, 'spawn', { name: 'claude-worker', cli: 'claude', role: 'executor' });
+    assert(resp.success === true, 'claude spawn success');
+    assert(resp.data.pane_id.startsWith('%'), 'claude pane_id valid');
+  });
+
+  // ── Spawn Codex worker
+  await test('mixed-cli: spawn codex worker', async () => {
+    const resp = await ipc(sockPath, 'spawn', { name: 'codex-worker', cli: 'codex', role: 'executor' });
+    assert(resp.success === true, 'codex spawn success');
+    assert(resp.data.pane_id.startsWith('%'), 'codex pane_id valid');
+  });
+
+  // ── Status shows both workers with correct cli types
+  await test('mixed-cli: status shows both claude and codex workers', async () => {
+    const resp = await ipc(sockPath, 'status');
+    assert(resp.success === true, 'status success');
+
+    const agents = resp.data.agents as Array<{ name: string; cli: string }>;
+    assert(agents.length >= 2, `expected ≥2 agents, got ${agents.length}`);
+
+    const claudeAgent = agents.find((a) => a.name === 'claude-worker');
+    const codexAgent = agents.find((a) => a.name === 'codex-worker');
+
+    assert(claudeAgent !== undefined, 'claude-worker present in status');
+    assert(codexAgent !== undefined, 'codex-worker present in status');
+    assert(claudeAgent!.cli === 'claude', `claude agent cli: ${claudeAgent!.cli}`);
+    assert(codexAgent!.cli === 'codex', `codex agent cli: ${codexAgent!.cli}`);
+  });
+
+  // ── Create + assign tasks to each worker
+  await test('mixed-cli: assign tasks to both workers', async () => {
+    // Create tasks
+    await ipc(sockPath, 'task-create', { id: 'claude-task', subject: 'Claude work', priority: 2 });
+    await ipc(sockPath, 'task-create', { id: 'codex-task', subject: 'Codex work', priority: 2 });
+
+    // Assign
+    const assignClaude = await ipc(sockPath, 'assign', { agent: 'claude-worker', taskId: 'claude-task' });
+    const assignCodex = await ipc(sockPath, 'assign', { agent: 'codex-worker', taskId: 'codex-task' });
+
+    assert(assignClaude.success === true, 'claude assign success');
+    assert(assignCodex.success === true, 'codex assign success');
+  });
+
+  // ── Stop cleanly
+  await test('mixed-cli: stop kills both cli workers', async () => {
+    const resp = await ipc(sockPath, 'stop');
+    assert(resp.success === true, 'stop success');
+    assert(resp.data.stopped === true, 'stopped flag');
+  });
+
+  server.close();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Scenario 5: TUI smoke test
+// ═══════════════════════════════════════════════════════════════════════
+
+async function scenario5_tuiSmoke(): Promise<void> {
+  console.log('\nScenario 5: TUI smoke test (verify Ink renders in tmux pane)');
+
+  const {
+    createSession: createTmuxSession,
+    createPane,
+    capturePane,
+    killSession,
+  } = await import('../src/daemon/tmux.js');
+  const {
+    createSession,
+    OutboxReader,
+    writeAgentState,
+    writeTask,
+  } = await import('../src/daemon/state.js');
+  const { sessionDir } = await import('../src/lib/constants.js');
+
+  const tag = randomUUID().slice(0, 8);
+  const projectName = `e2e-tui-${tag}`;
+  const tmuxName = `uniflow-e2e-tui-${tag}`;
+  tmuxSessionsToCleanup.push(tmuxName);
+
+  // 1. Create tmux session
+  await createTmuxSession(tmuxName, process.cwd());
+
+  // 2. Create session state with agents + tasks so TUI has data to render
+  const session = await createSession({
+    project: projectName,
+    cwd: process.cwd(),
+    tmuxSession: tmuxName,
+    daemonPid: process.pid,
+  });
+  const ctx = { project: projectName, sessionId: session.id };
+
+  // Write agent state for TUI to read
+  const dummyAgent = makeAgentState('test-agent', '%999', 'executor', 'claude');
+  await writeAgentState(ctx, 'test-agent', dummyAgent as any);
+
+  // Write a task for TUI to render
+  const task = {
+    id: 'tui-task-1',
+    subject: 'TUI test task',
+    description: 'Task for TUI smoke test',
+    status: 'pending' as const,
+    assignee: null,
+    priority: 2,
+    depends_on: [] as string[],
+    created_at: new Date().toISOString(),
+    assigned_at: null,
+    completed_at: null,
+    result: null,
+    error: null,
+  };
+  await writeTask(ctx, 'tui-task-1', task);
+
+  // 3. Write a small runner script that launches the TUI
+  //    The TUI reads .uniflow-id from cwd, so we create a temp cwd with the id file
+  const tmpDir = join(import.meta.dir, `.tui-smoke-${tag}`);
+  await mkdir(tmpDir, { recursive: true });
+  await writeFile(join(tmpDir, '.uniflow-id'), projectName);
+
+  const tuiRunner = join(tmpDir, 'run-tui.ts');
+  await writeFile(tuiRunner, [
+    `process.chdir(${JSON.stringify(tmpDir)});`,
+    `const { launchTui } = await import(${JSON.stringify(join(import.meta.dir, '..', 'src', 'tui', 'index.js'))});`,
+    `await launchTui();`,
+  ].join('\n'));
+
+  // 4. Launch TUI in a tmux pane
+  const tuiCmd = `bun run ${tuiRunner}`;
+  const tuiPaneId = await createPane(tmuxName, tuiCmd, tmpDir);
+
+  // 5. Wait for Ink to render (give it time to start up and paint)
+  await sleep(3000);
+
+  // 6. Capture pane output
+  let paneOutput = '';
+  await test('tui: Ink TUI renders in tmux pane', async () => {
+    paneOutput = await capturePane(tuiPaneId, 80);
+    // Look for known TUI markers from App.tsx / StatusBar.tsx / AgentList.tsx
+    const hasUniflow = paneOutput.includes('uniflow');
+    const hasAgents = paneOutput.includes('Agents') || paneOutput.includes('agents:');
+    const hasStatusBar = paneOutput.includes('q:quit') || paneOutput.includes('Tab');
+    const hasBorder = paneOutput.includes('─') || paneOutput.includes('│') || paneOutput.includes('┌');
+
+    const markers = [
+      hasUniflow && 'uniflow',
+      hasAgents && 'agents',
+      hasStatusBar && 'statusbar',
+      hasBorder && 'border',
+    ].filter(Boolean);
+
+    assert(
+      markers.length >= 2,
+      `Expected ≥2 TUI markers, found [${markers.join(', ')}]. Pane output:\n${paneOutput.slice(0, 500)}`,
+    );
+  });
+
+  await test('tui: TUI shows agent data', async () => {
+    // Narrow pane widths cause text wrapping, so join all lines and check for
+    // fragments that appear in the rendered agent columns (name, cli, state)
+    const flat = paneOutput.replace(/\n/g, '');
+    const hasName = flat.includes('test-agent') || (flat.includes('tes') && flat.includes('agen'));
+    const hasCli = flat.includes('claude') || (flat.includes('cl') && flat.includes('aui'));
+    const hasIdle = flat.includes('idle');
+    assert(
+      hasName || hasCli || hasIdle,
+      `Expected agent info fragments in TUI output:\n${paneOutput.slice(0, 500)}`,
+    );
+  });
+
+  // 7. Cleanup temp files
+  const { rm } = await import('node:fs/promises');
+  await rm(tmpDir, { recursive: true, force: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // Main
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -460,6 +701,8 @@ async function main(): Promise<void> {
       await scenario1_happyPath();
       await scenario2_crashRecovery();
       await scenario3_gracefulStop();
+      await scenario4_mixedCli();
+      await scenario5_tuiSmoke();
     } finally {
       await cleanup();
     }

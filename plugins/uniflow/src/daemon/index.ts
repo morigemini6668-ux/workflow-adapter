@@ -17,7 +17,7 @@ import {
   appendEvent,
   type SessionContext,
 } from './state.js';
-import { createSession as createTmuxSession, hasSession as hasTmuxSession, applyLayout } from './tmux.js';
+import { createSession as createTmuxSession, hasSession as hasTmuxSession, applyLayout, currentSession as currentTmuxSession } from './tmux.js';
 import { startServer, type DaemonServer } from './server.js';
 import { startMonitor, type MonitorHandle } from './monitor.js';
 import { spawnAgent } from './spawn.js';
@@ -42,6 +42,7 @@ export interface StartDaemonOptions {
   cwd: string;
   orchestratorCli: CliType;
   tui?: boolean;
+  here?: boolean;
   pluginDir?: string;
 }
 
@@ -59,10 +60,21 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
     throw new Error(`Session already active: ${existing.id}`);
   }
 
-  // 3. Create tmux session
-  const tmuxName = tmuxSessionName(projectName);
-  if (!(await hasTmuxSession(tmuxName))) {
-    await createTmuxSession(tmuxName, opts.cwd);
+  // 3. Determine tmux session
+  let tmuxName: string;
+  if (opts.here) {
+    // --here: use current tmux session
+    const current = await currentTmuxSession();
+    if (!current) {
+      throw new Error('--here requires running inside a tmux session. Use "uniflow start" without --here, or run inside tmux.');
+    }
+    tmuxName = current;
+  } else {
+    // Default: create a new dedicated tmux session
+    tmuxName = tmuxSessionName(projectName);
+    if (!(await hasTmuxSession(tmuxName))) {
+      await createTmuxSession(tmuxName, opts.cwd);
+    }
   }
 
   // 4. Create session state
@@ -94,6 +106,7 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
       role,
       mode: mode as 'interactive' | 'non_interactive',
       cwd: opts.cwd,
+      pluginDir: opts.pluginDir,
     });
     await applyLayout(tmuxName);
     return { spawned: name, pane_id: agent.pane_id };
@@ -133,6 +146,7 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
  */
 export async function reconnectDaemon(
   cwd: string,
+  pluginDir?: string,
 ): Promise<DaemonHandle> {
   const projectName = await readProjectName(cwd);
   const existing = await findActiveSession(projectName);
@@ -159,6 +173,7 @@ export async function reconnectDaemon(
       role,
       mode: mode as 'interactive' | 'non_interactive',
       cwd,
+      pluginDir,
     });
     await applyLayout(existing.tmux_session);
     return { spawned: name, pane_id: agent.pane_id };

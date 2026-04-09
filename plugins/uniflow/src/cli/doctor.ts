@@ -1,4 +1,7 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import {
   UNIFLOW_HOME,
   UNIFLOW_SOCKETS_DIR,
@@ -110,15 +113,72 @@ export default async function doctor(_args: string[]): Promise<void> {
     checks.push({ name: '.uniflow-id', ok: false, detail: 'not found — run "uniflow init"' });
   }
 
-  // Print results
+  // Print system results
   console.log('Checking system...');
   for (const check of checks) {
     const icon = check.ok ? '\u2713' : '\u2717';
     console.log(`  ${icon} ${check.name}: ${check.detail}`);
   }
 
-  const passed = checks.filter(c => c.ok).length;
-  const total = checks.length;
+  // 7. Integration checks
+  const integrations: CheckResult[] = [];
+
+  // 7a. Claude Code plugin
+  const claudePluginJson = join(homedir(), '.claude', 'plugins', 'uniflow', '.claude-plugin', 'plugin.json');
+  if (existsSync(claudePluginJson)) {
+    try {
+      const content = await readFile(claudePluginJson, 'utf-8');
+      JSON.parse(content);
+      integrations.push({ name: 'Claude Code plugin', ok: true, detail: 'installed' });
+    } catch {
+      integrations.push({ name: 'Claude Code plugin', ok: false, detail: 'plugin.json is invalid JSON' });
+    }
+  } else {
+    integrations.push({ name: 'Claude Code plugin', ok: false, detail: 'not installed \u2014 run "uniflow install"' });
+  }
+
+  // 7b. Claude plugin commands
+  const commandsDir = join(homedir(), '.claude', 'plugins', 'uniflow', 'commands');
+  if (existsSync(commandsDir)) {
+    try {
+      const files = readdirSync(commandsDir).filter(f => f.endsWith('.md'));
+      if (files.length > 0) {
+        integrations.push({ name: 'Claude plugin commands', ok: true, detail: `${files.length} commands found` });
+      } else {
+        integrations.push({ name: 'Claude plugin commands', ok: false, detail: 'no command files found' });
+      }
+    } catch {
+      integrations.push({ name: 'Claude plugin commands', ok: false, detail: 'cannot read commands directory' });
+    }
+  } else {
+    integrations.push({ name: 'Claude plugin commands', ok: false, detail: 'not installed \u2014 run "uniflow install"' });
+  }
+
+  // 7c. Codex skill
+  const codexSkillPath = join(homedir(), '.agents', 'skills', 'uniflow', 'SKILL.md');
+  if (existsSync(codexSkillPath)) {
+    integrations.push({ name: 'Codex skill', ok: true, detail: 'installed' });
+  } else {
+    integrations.push({ name: 'Codex skill', ok: false, detail: 'not installed \u2014 run "uniflow install"' });
+  }
+
+  // 7d. Global CLI
+  const uniflowPath = await whichCommand('uniflow');
+  if (uniflowPath) {
+    integrations.push({ name: 'Global CLI', ok: true, detail: uniflowPath });
+  } else {
+    integrations.push({ name: 'Global CLI', ok: false, detail: 'not in PATH \u2014 run "uniflow install" (includes bun link)' });
+  }
+
+  console.log('\nChecking integrations...');
+  for (const check of integrations) {
+    const icon = check.ok ? '\u2713' : '\u2717';
+    console.log(`  ${icon} ${check.name}: ${check.detail}`);
+  }
+
+  const allChecks = [...checks, ...integrations];
+  const passed = allChecks.filter(c => c.ok).length;
+  const total = allChecks.length;
   console.log(`\n${passed}/${total} checks passed.`);
 
   if (hasCriticalFailure) {

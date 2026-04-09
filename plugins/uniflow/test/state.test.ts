@@ -7,6 +7,7 @@
  * 2. writeInbox() → no *.tmp.* files remain after write
  * 3. Zod validation: invalid data to writeAgentState/writeTask → ZodError thrown
  * 4. archiveSession() → session dir moved to archive/ + original deleted
+ * 5. OutboxReader cursor-based read → only new entries returned after cursor advance
  */
 
 import { existsSync, readdirSync } from 'node:fs';
@@ -22,6 +23,8 @@ import {
   writeTask,
   writeInbox,
   readInbox,
+  OutboxReader,
+  appendOutbox,
 } from '../src/daemon/state.js';
 import {
   projectDir,
@@ -261,6 +264,107 @@ async function main(): Promise<void> {
     assert(existsSync(join(archivedDir, 'session.json')), 'Archived session.json should exist');
     assert(existsSync(join(archivedDir, 'agents', 'w1.json')), 'Archived agent state should exist');
     assert(existsSync(join(archivedDir, 'inboxes', 'w1.md')), 'Archived inbox should exist');
+  });
+
+  // ── 5. OutboxReader cursor-based read ────────────────────────────
+
+  console.log('\n5. OutboxReader cursor-based read');
+
+  await test('OutboxReader initial read returns empty', async () => {
+    // Create a fresh session for outbox tests
+    const outboxSession = await createSession({
+      project: PROJECT,
+      cwd: '/tmp/outbox-test',
+      tmuxSession: `uniflow-${PROJECT}-outbox`,
+      daemonPid: process.pid,
+    });
+    const outboxCtx = { project: PROJECT, sessionId: outboxSession.id };
+    const reader = new OutboxReader(outboxCtx);
+
+    const entries = await reader.readNew();
+    assert(entries.length === 0, `expected 0 entries initially, got ${entries.length}`);
+    assert(reader.getCursor() === 0, `expected cursor at 0, got ${reader.getCursor()}`);
+  });
+
+  await test('OutboxReader returns appended entries and advances cursor', async () => {
+    // Reuse the last created session (from previous test's createSession)
+    // Create a fresh one to be safe
+    const outboxSession = await createSession({
+      project: PROJECT,
+      cwd: '/tmp/outbox-test2',
+      tmuxSession: `uniflow-${PROJECT}-outbox2`,
+      daemonPid: process.pid,
+    });
+    const outboxCtx = { project: PROJECT, sessionId: outboxSession.id };
+    const reader = new OutboxReader(outboxCtx);
+
+    const ts = now();
+    await appendOutbox(outboxCtx, {
+      agent: 'w1',
+      task: 'task-001',
+      status: 'completed',
+      summary: 'First task done',
+      timestamp: ts,
+    });
+    await appendOutbox(outboxCtx, {
+      agent: 'w2',
+      task: 'task-002',
+      status: 'failed',
+      summary: 'Second task failed',
+      error: 'timeout',
+      timestamp: ts,
+    });
+
+    const entries = await reader.readNew();
+    assert(entries.length === 2, `expected 2 entries, got ${entries.length}`);
+    assert(entries[0].agent === 'w1', `expected agent w1, got ${entries[0].agent}`);
+    assert(entries[1].status === 'failed', `expected failed status, got ${entries[1].status}`);
+    assert(reader.getCursor() > 0, 'cursor should advance after read');
+  });
+
+  await test('OutboxReader subsequent read returns only new entries', async () => {
+    const outboxSession = await createSession({
+      project: PROJECT,
+      cwd: '/tmp/outbox-test3',
+      tmuxSession: `uniflow-${PROJECT}-outbox3`,
+      daemonPid: process.pid,
+    });
+    const outboxCtx = { project: PROJECT, sessionId: outboxSession.id };
+    const reader = new OutboxReader(outboxCtx);
+
+    const ts = now();
+    // Append first batch
+    await appendOutbox(outboxCtx, {
+      agent: 'w1',
+      task: 'task-A',
+      status: 'completed',
+      summary: 'Batch 1',
+      timestamp: ts,
+    });
+
+    // Read first batch
+    const batch1 = await reader.readNew();
+    assert(batch1.length === 1, `expected 1 entry in batch 1, got ${batch1.length}`);
+    const cursorAfterBatch1 = reader.getCursor();
+
+    // Append second batch
+    await appendOutbox(outboxCtx, {
+      agent: 'w2',
+      task: 'task-B',
+      status: 'completed',
+      summary: 'Batch 2',
+      timestamp: ts,
+    });
+
+    // Read second batch — should only get new entry
+    const batch2 = await reader.readNew();
+    assert(batch2.length === 1, `expected 1 new entry in batch 2, got ${batch2.length}`);
+    assert(batch2[0].task === 'task-B', `expected task-B, got ${batch2[0].task}`);
+    assert(reader.getCursor() > cursorAfterBatch1, 'cursor should advance further');
+
+    // Read again — no new entries
+    const batch3 = await reader.readNew();
+    assert(batch3.length === 0, `expected 0 entries after drain, got ${batch3.length}`);
   });
 
   // ── Cleanup & Summary ───────────────────────────────────────────

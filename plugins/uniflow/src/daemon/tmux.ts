@@ -54,6 +54,26 @@ async function tmuxOk(args: string[]): Promise<string> {
 // ── Session Management ────────────────────────────────────────────────
 
 /**
+ * Get the current tmux session name (if running inside tmux).
+ * Returns null if not inside a tmux session.
+ */
+export async function currentSession(): Promise<string | null> {
+  const result = await tmux(['display-message', '-p', '#{session_name}']);
+  if (result.exitCode !== 0 || !result.stdout) return null;
+  return result.stdout;
+}
+
+/**
+ * Get a target string for the current tmux window.
+ * Returns "session:window" format for use with split-window.
+ */
+export async function currentWindowTarget(): Promise<string | null> {
+  const result = await tmux(['display-message', '-p', '#{session_name}:#{window_index}']);
+  if (result.exitCode !== 0 || !result.stdout) return null;
+  return result.stdout;
+}
+
+/**
  * Create a new tmux session (detached).
  */
 export async function createSession(name: string, cwd: string): Promise<void> {

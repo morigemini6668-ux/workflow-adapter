@@ -1,15 +1,43 @@
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { ensureInit } from './init.js';
 import { EXIT_SESSION_EXISTS } from '../lib/constants.js';
 import type { CliType } from '../lib/types.js';
 import { parseArgs } from './client.js';
 
+/**
+ * Resolve the uniflow plugin directory for --plugin-dir.
+ * Dev mode: repo root has .claude-plugin/plugin.json → use repo root.
+ * Install mode: ~/.claude/plugins/uniflow/ has plugin.json → use that.
+ */
+function resolvePluginDir(): string | undefined {
+  // Dev mode: navigate from src/cli/ up to repo root
+  const repoRoot = resolve(import.meta.dir, '..', '..');
+  if (existsSync(join(repoRoot, '.claude-plugin', 'plugin.json'))) {
+    return repoRoot;
+  }
+
+  // Install mode: check installed plugin location
+  const installedDir = join(homedir(), '.claude', 'plugins', 'uniflow');
+  if (existsSync(join(installedDir, '.claude-plugin', 'plugin.json'))) {
+    return installedDir;
+  }
+
+  return undefined;
+}
+
 export default async function start(args: string[]): Promise<void> {
   const { flags } = parseArgs(args);
   const cli = (flags.cli as CliType) ?? 'claude';
   const tui = flags.tui === true;
+  const here = flags.here === true;
 
   // Auto-init if needed
   const { root } = await ensureInit();
+
+  // Resolve plugin directory
+  const pluginDir = resolvePluginDir();
 
   // Dynamically import daemon to avoid loading heavy deps for other commands
   const { startDaemon } = await import('../daemon/index.js');
@@ -19,9 +47,15 @@ export default async function start(args: string[]): Promise<void> {
       cwd: root,
       orchestratorCli: cli,
       tui,
+      here,
+      pluginDir,
     });
 
-    console.log(`Session started. Attach with: uniflow attach`);
+    if (here) {
+      console.log(`Session started in current tmux window.`);
+    } else {
+      console.log(`Session started. Attach with: uniflow attach`);
+    }
     console.log(`Status: uniflow status`);
 
     // Keep daemon running until signal

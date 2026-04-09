@@ -25,9 +25,20 @@ export function buildCodexCommand(opts: LaunchOptions): string[] {
   return args;
 }
 
+const UNIFLOW_AGENTS_SECTION = `
+
+## uniflow Integration
+
+- Use \`uniflow\` CLI to orchestrate multi-agent workflows via tmux
+- State directory: ~/.uniflow/
+- To spawn agents: \`uniflow spawn <name>\`
+- Run \`uniflow --help\` for available commands
+`;
+
 /**
  * Prepare Codex launch environment.
  * - Write AGENTS.md to the worker's working directory
+ * - Append uniflow section for CLI awareness
  */
 export async function prepareCodex(opts: LaunchOptions): Promise<void> {
   // Codex reads AGENTS.md from cwd automatically.
@@ -42,5 +53,9 @@ export async function prepareCodex(opts: LaunchOptions): Promise<void> {
     await writeFile(backupPath, await existing.text());
   }
 
-  await writeFile(agentsMdPath, instructionContent);
+  // Write instructions + uniflow section
+  const content = instructionContent.includes('uniflow')
+    ? instructionContent
+    : instructionContent + UNIFLOW_AGENTS_SECTION;
+  await writeFile(agentsMdPath, content);
 }

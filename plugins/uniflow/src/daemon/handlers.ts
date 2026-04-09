@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { logsDir } from "../lib/constants.js";
 import type { AgentState, Task } from "../lib/types.js";
 import { type DispatchTarget, dispatchMessage, dispatchTask, nudgeAgent } from "./dispatch.js";
+import { setShutdownInProgress } from "./monitor.js";
 import { respawnAgent } from "./spawn.js";
 import {
   appendEvent,
@@ -16,6 +17,7 @@ import {
   type SessionContext,
   updateSession,
   writeAgentState,
+  writeInbox,
   writeTask,
 } from "./state.js";
 import { capturePane, getPaneActivity, isPaneDead, killPane, killSession } from "./tmux.js";
@@ -151,6 +153,10 @@ export async function handleAssign(
   if (!agentName || !taskId) throw new Error("Agent name and task ID required");
 
   const agent = await requireAgent(ctx, agentName);
+  if (agent.state === "draining") {
+    throw new Error(`Agent ${agentName} is draining (shutdown in progress)`);
+  }
+
   const task = await readTask(ctx, taskId);
 
   for (const depId of task.depends_on) {
@@ -300,10 +306,87 @@ export async function handlePeek(
   return { output };
 }
 
-export async function handleStop(ctx: SessionContext): Promise<{ stopped: boolean }> {
+export async function handleStop(
+  ctx: SessionContext,
+  args: Record<string, unknown> = {},
+): Promise<{ stopped: boolean }> {
+  const force = args.force === true;
   const session = await loadSession(ctx.project, ctx.sessionId);
-
   const agents = await listAgents(ctx);
+  const workers = agents.filter((a) => a.role !== "orchestrator");
+
+  // ── Shutdown Gate ──────────────────────────────────────────────
+  if (!force) {
+    const tasks = await listTasks(ctx);
+    const inProgress = tasks.filter((t) => t.status === "in_progress");
+    if (inProgress.length > 0) {
+      throw new Error(
+        `Cannot stop: ${inProgress.length} task(s) in progress (${inProgress.map((t) => t.id).join(", ")}). Use --force to override.`,
+      );
+    }
+  }
+
+  // Activate shutdown latch — blocks monitor's resolveDependencies() and idle nudge
+  setShutdownInProgress(true);
+  await appendEvent(ctx, "shutdown_requested", { force });
+
+  // ── Phase 1: Shutdown inbox 전송 ──────────────────────────────
+  for (const agent of workers) {
+    try {
+      // draining 상태로 설정
+      await writeAgentState(ctx, agent.name, {
+        ...agent,
+        state: "draining",
+        progress: "Shutdown requested",
+        updated_at: new Date().toISOString(),
+      });
+
+      // shutdown inbox 작성
+      const shutdownInbox = [
+        "# Shutdown Request",
+        "",
+        "The session is being shut down.",
+        "1. If you are working on a task, save your progress and report the result to outbox",
+        "2. Update your status to done",
+        "3. Wait for pane termination",
+      ].join("\n");
+
+      await writeInbox(ctx, agent.name, shutdownInbox);
+
+      // Nudge to notify — do NOT use dispatchMessage which overwrites inbox
+      if (!(await isPaneDead(agent.pane_id))) {
+        const target: DispatchTarget = {
+          name: agent.name,
+          paneId: agent.pane_id,
+          cli: agent.cli,
+        };
+        await nudgeAgent(ctx, target);
+      }
+    } catch {
+      // Agent might already be dead — continue
+    }
+  }
+
+  // ── Phase 2: 워커 정리 대기 (최대 15초) ──────────────────────
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const currentAgents = await listAgents(ctx);
+    const currentWorkers = currentAgents.filter((a) => a.role !== "orchestrator");
+
+    // done | pane dead = success (idle is NOT success — may not have read shutdown inbox)
+    let allDone = true;
+    for (const a of currentWorkers) {
+      if (a.state !== "done" && !(await isPaneDead(a.pane_id))) {
+        allDone = false;
+        break;
+      }
+    }
+    if (allDone) break;
+
+    await Bun.sleep(2000);
+  }
+
+  // ── Phase 3: 강제 종료 + 정리 ─────────────────────────────────
   for (const agent of agents) {
     try {
       if (!(await isPaneDead(agent.pane_id))) {

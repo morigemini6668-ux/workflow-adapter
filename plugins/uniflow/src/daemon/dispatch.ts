@@ -1,5 +1,5 @@
 import { type CliType, type DispatchMode, INTERRUPT_KEY } from "../lib/types.js";
-import { appendEvent, type SessionContext, writeInbox } from "./state.js";
+import { appendEvent, readAgentState, type SessionContext, writeInbox } from "./state.js";
 import { detectState, isPaneDead, type PaneState, sendMessage, tmux } from "./tmux.js";
 
 // ── Nudge Gate ──────────────────────────────────────────────────────
@@ -118,6 +118,17 @@ export async function dispatchTask(
   instructions: string,
   mode: DispatchMode = "nudge",
 ): Promise<void> {
+  // Block dispatch to draining workers (shutdown in progress)
+  try {
+    const agentState = await readAgentState(ctx, target.name);
+    if (agentState.state === "draining") {
+      throw new Error(`Agent ${target.name} is draining (shutdown in progress)`);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("draining")) throw err;
+    // Agent state file might not exist — continue with dispatch
+  }
+
   const triggerText = `New task assigned: ${taskId}. Check your inbox.`;
   await markDispatched(target.name);
   await dispatch(ctx, target, instructions, triggerText, mode);

@@ -51,7 +51,21 @@ export function renderTemplate(template: string, vars: TemplateVars): string {
 }
 
 /**
+ * Load a role instruction file from src/templates/roles/{role}.md.
+ * Returns the file content if it exists, or an empty string for unknown roles.
+ */
+export async function loadRoleInstructions(role: string): Promise<string> {
+  const rolePath = join(dirname(import.meta.dir), "templates", "roles", `${role}.md`);
+  try {
+    return await readFile(rolePath, "utf-8");
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Load a template file from src/templates/ and render it with the given variables.
+ * For worker templates, automatically loads role instructions if not already provided.
  */
 export async function loadAndRenderTemplate(
   templateName: "orchestrator" | "worker",
@@ -59,6 +73,12 @@ export async function loadAndRenderTemplate(
 ): Promise<string> {
   const templatePath = join(dirname(import.meta.dir), "templates", `${templateName}.md`);
   const template = await readFile(templatePath, "utf-8");
+
+  // Auto-load role instructions for workers if not explicitly provided
+  if (templateName === "worker" && !vars.ROLE_INSTRUCTIONS && vars.ROLE) {
+    vars.ROLE_INSTRUCTIONS = await loadRoleInstructions(vars.ROLE);
+  }
+
   return renderTemplate(template, vars);
 }
 

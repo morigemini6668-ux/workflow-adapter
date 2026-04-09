@@ -8,7 +8,7 @@ export const CliTypeSchema = z.enum(CLI_TYPES);
 
 // ── Agent State ────────────────────────────────────────────────────────
 
-export const AGENT_STATES = ["starting", "idle", "working", "blocked", "done", "failed"] as const;
+export const AGENT_STATES = ["starting", "idle", "working", "blocked", "done", "failed", "draining"] as const;
 export type AgentStateName = (typeof AGENT_STATES)[number];
 
 export const AgentStateSchema = z.object({
@@ -188,6 +188,7 @@ export const EVENT_TYPES = [
   "task_failed",
   "message_sent",
   "inbox_written",
+  "shutdown_requested",
   "error",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];

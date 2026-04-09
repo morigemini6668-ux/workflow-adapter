@@ -153,7 +153,7 @@ async function handleRequest(
         return ok(await handlePeek(ctx, req.args));
 
       case "stop":
-        return ok(await handleStop(ctx));
+        return ok(await handleStop(ctx, req.args));
 
       case "worktree-create":
         return ok(await handleWorktreeCreate(req.args));

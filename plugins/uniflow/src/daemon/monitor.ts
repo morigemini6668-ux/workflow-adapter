@@ -57,6 +57,12 @@ export interface MonitorHandle {
 /** Exported for dispatch.ts to set lastDispatchedAt */
 export const idleTrackers = new Map<string, AgentIdleTracker>();
 
+/** Shutdown latch — when true, monitor skips resolveDependencies() and idle nudge */
+export let shutdownInProgress = false;
+export function setShutdownInProgress(value: boolean): void {
+  shutdownInProgress = value;
+}
+
 export function startMonitor(
   ctx: SessionContext,
   outboxReader: OutboxReader,
@@ -116,11 +122,11 @@ export function startMonitor(
             });
           }
 
-          // 6. Idle nudge check (uses reconciled state)
+          // 6. Idle nudge check (uses reconciled state) — skip during shutdown
           const effectiveState = shouldReconcile(current.state, paneState)
             ? paneState
             : current.state;
-          if (effectiveState === "idle") {
+          if (!shutdownInProgress && effectiveState === "idle") {
             await checkIdleNudge(ctx, agent.name, current, opts);
           } else {
             // Reset idle tracker when not idle
@@ -135,8 +141,10 @@ export function startMonitor(
       // 4. Check outbox for new results
       await processOutbox(ctx, outboxReader);
 
-      // 5. Check dependency resolution
-      await resolveDependencies(ctx);
+      // 5. Check dependency resolution — skip during shutdown
+      if (!shutdownInProgress) {
+        await resolveDependencies(ctx);
+      }
     } catch (err) {
       console.error("[monitor] health check error:", err);
     }

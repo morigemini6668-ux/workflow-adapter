@@ -5,9 +5,11 @@ import { socketPath } from "../lib/constants.js";
 import { sendCommand } from "./client.js";
 import { findProjectRoot, readProjectName } from "./init.js";
 
-export default async function stop(_args: string[]): Promise<void> {
+export default async function stop(args: string[]): Promise<void> {
+  const force = args.includes("--force") || args.includes("-f");
+
   try {
-    const response = await sendCommand("stop");
+    const response = await sendCommand("stop", { force });
 
     if (response.success) {
       console.log("Session stopped and archived.");

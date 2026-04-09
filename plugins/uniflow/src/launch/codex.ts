@@ -26,19 +26,23 @@ const UNIFLOW_AGENTS_SECTION = `
 
 /**
  * Prepare Codex launch environment.
- * - Write AGENTS.md to the worker's working directory
- * - Append uniflow section for CLI awareness
+ *
+ * Codex reads AGENTS.md from cwd automatically — there is no CLI flag for
+ * instruction file injection. We write a session-scoped AGENTS.md to the
+ * worker's cwd, backing up any existing file for restore on session end.
+ *
+ * Limitation: multiple Codex workers sharing the same cwd will overwrite
+ * each other's AGENTS.md. Use --worktree to give each worker its own cwd.
  */
 export async function prepareCodex(opts: LaunchOptions): Promise<void> {
-  // Codex reads AGENTS.md from cwd automatically.
-  // Read the rendered instruction content and write as AGENTS.md.
   const instructionContent = await Bun.file(opts.instructionPath).text();
   const agentsMdPath = join(opts.cwd, "AGENTS.md");
 
-  // Backup existing AGENTS.md if present
+  // Backup existing AGENTS.md if present and not already backed up
+  const backupPath = join(opts.cwd, "AGENTS.md.uniflow-backup");
   const existing = Bun.file(agentsMdPath);
-  if (await existing.exists()) {
-    const backupPath = join(opts.cwd, "AGENTS.md.uniflow-backup");
+  const backupExists = await Bun.file(backupPath).exists();
+  if ((await existing.exists()) && !backupExists) {
     await writeFile(backupPath, await existing.text());
   }
 

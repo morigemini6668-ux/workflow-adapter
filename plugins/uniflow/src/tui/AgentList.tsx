@@ -13,6 +13,7 @@ const STATE_COLORS: Record<string, string> = {
   blocked: "red",
   done: "gray",
   failed: "red",
+  draining: "yellow",
 };
 
 const STATE_ICONS: Record<string, string> = {
@@ -22,6 +23,7 @@ const STATE_ICONS: Record<string, string> = {
   blocked: "!!!",
   done: "ok ",
   failed: "ERR",
+  draining: "<--",
 };
 
 /** Truncate string to width, adding ellipsis if needed */

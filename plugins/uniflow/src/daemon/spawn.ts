@@ -136,7 +136,7 @@ export async function spawnAgent(
     const finalInstruction = await loadAndRenderTemplate("worker", finalVars);
     await writeFile(instructionPath, finalInstruction, "utf-8");
 
-    // Codex reads AGENTS.md (copied in prepareLaunch) — update it too
+    // Codex reads AGENTS.md from cwd — update it with final instructions
     if (opts.cli === "codex") {
       const agentsMdPath = join(opts.cwd, "AGENTS.md");
       await writeFile(agentsMdPath, finalInstruction, "utf-8");

@@ -8,7 +8,7 @@ export const ACTIVITY_THRESHOLD_MS = 10_000;
 export const DISPATCH_GRACE_MS = 15_000;
 
 /** States that only a worker should set — daemon must not overwrite */
-const PROTECTED_STATES: ReadonlySet<AgentStateName> = new Set(["blocked", "done", "failed"]);
+const PROTECTED_STATES: ReadonlySet<AgentStateName> = new Set(["blocked", "done", "failed", "draining"]);
 
 export interface AgentIdleTracker {
   idleSince: number | null;

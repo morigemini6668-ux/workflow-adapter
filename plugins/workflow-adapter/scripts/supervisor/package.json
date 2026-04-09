@@ -1,0 +1,12 @@
+{
+  "name": "pane-ctl",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "bun build --compile src/cli.ts --outfile dist/pane-ctl",
+    "dev": "bun run src/cli.ts"
+  },
+  "dependencies": {
+    "tmux-lib": "file:../tmux-lib"
+  }
+}

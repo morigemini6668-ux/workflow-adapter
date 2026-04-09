@@ -99,14 +99,18 @@ If `NEEDS_SETUP`: Build with `cd ${CLAUDE_PLUGIN_ROOT}/scripts/qa-browse && bun 
 ```bash
 T=""
 _ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-[ -n "$_ROOT" ] && [ -x "$_ROOT/scripts/qa-tui/qa-tui" ] && T="$_ROOT/scripts/qa-tui/qa-tui"
+[ -n "$_ROOT" ] && [ -x "$_ROOT/scripts/qa-tui/dist/qa-tui" ] && T="$_ROOT/scripts/qa-tui/dist/qa-tui"
+[ -z "$T" ] && [ -x "${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui/dist/qa-tui" ] && T="${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui/dist/qa-tui"
+[ -z "$T" ] && [ -n "$_ROOT" ] && [ -x "$_ROOT/scripts/qa-tui/qa-tui" ] && T="$_ROOT/scripts/qa-tui/qa-tui"
 [ -z "$T" ] && [ -x "${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui/qa-tui" ] && T="${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui/qa-tui"
 if [ -x "$T" ]; then
   echo "READY: $T"
 else
-  echo "NOT_FOUND"
+  echo "NEEDS_SETUP"
 fi
 ```
+
+If `NEEDS_SETUP`: Build with `cd ${CLAUDE_PLUGIN_ROOT}/scripts/qa-tui && bun install && bun run build`
 
 **Connect to TUI:**
 - If pane ID given: `$T attach <pane-id>`

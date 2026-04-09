@@ -4,5 +4,13 @@ claude/scripts/qa-browse/dist/
 claude/scripts/qa-browse/bun.lock
 codex/claude-compat/scripts/qa-browse/dist/
 codex/claude-compat/scripts/qa-browse/bun.lock
+plugins/workflow-adapter/scripts/qa-tui/dist/
+plugins/workflow-adapter/scripts/qa-tui/node_modules/
+plugins/workflow-adapter/scripts/qa-tui/bun.lock
+plugins/workflow-adapter/scripts/supervisor/dist/
+plugins/workflow-adapter/scripts/supervisor/node_modules/
+plugins/workflow-adapter/scripts/supervisor/bun.lock
+plugins/workflow-adapter/scripts/tmux-lib/node_modules/
+plugins/workflow-adapter/scripts/tmux-lib/bun.lock
 .serena/
 .uniflow-worktrees/

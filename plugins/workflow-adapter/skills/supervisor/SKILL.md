@@ -34,12 +34,13 @@ Find the `pane-ctl.sh` helper script:
 ```bash
 P=""
 for DIR in "${CLAUDE_PLUGIN_ROOT}" "$(git rev-parse --show-toplevel 2>/dev/null)/plugins/workflow-adapter"; do
+  [ -n "$DIR" ] && [ -x "$DIR/scripts/supervisor/dist/pane-ctl" ] && P="$DIR/scripts/supervisor/dist/pane-ctl" && break
   [ -n "$DIR" ] && [ -x "$DIR/scripts/supervisor/pane-ctl.sh" ] && P="$DIR/scripts/supervisor/pane-ctl.sh" && break
 done
-if [ -n "$P" ]; then echo "READY: $P"; else echo "NOT_FOUND"; fi
+if [ -n "$P" ]; then echo "READY: $P"; else echo "NEEDS_SETUP"; fi
 ```
 
-If `NOT_FOUND`: check `${CLAUDE_PLUGIN_ROOT}/scripts/supervisor/pane-ctl.sh`.
+If `NEEDS_SETUP`: Build with `cd ${CLAUDE_PLUGIN_ROOT}/scripts/supervisor && bun install && bun run build`
 
 Store the path as `$P` for all subsequent commands.
 

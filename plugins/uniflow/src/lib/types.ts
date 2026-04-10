@@ -8,7 +8,15 @@ export const CliTypeSchema = z.enum(CLI_TYPES);
 
 // ── Agent State ────────────────────────────────────────────────────────
 
-export const AGENT_STATES = ["starting", "idle", "working", "blocked", "done", "failed", "draining"] as const;
+export const AGENT_STATES = [
+  "starting",
+  "idle",
+  "working",
+  "blocked",
+  "done",
+  "failed",
+  "draining",
+] as const;
 export type AgentStateName = (typeof AGENT_STATES)[number];
 
 export const AgentStateSchema = z.object({
@@ -140,6 +148,7 @@ export const SessionAgentSchema = z.object({
   role: z.string(),
   pane_id: z.string(),
   pid: z.number(),
+  roleFile: z.string().optional(),
 });
 
 export type SessionAgent = z.infer<typeof SessionAgentSchema>;
@@ -154,6 +163,7 @@ export const SessionSchema = z.object({
   agents: z.array(SessionAgentSchema),
   daemon_pid: z.number(),
   here: z.boolean().default(false),
+  pluginDirs: z.array(z.string()).default([]),
 });
 
 export type Session = z.infer<typeof SessionSchema>;

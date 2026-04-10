@@ -7,11 +7,11 @@ import { parseArgs } from "./client.js";
 import { ensureInit } from "./init.js";
 
 /**
- * Resolve the uniflow plugin directory for --plugin-dir.
+ * Resolve the core uniflow plugin directory.
  * Dev mode: repo root has .claude-plugin/plugin.json → use repo root.
  * Install mode: ~/.claude/plugins/uniflow/ has plugin.json → use that.
  */
-function resolvePluginDir(): string | undefined {
+function resolveCorePluginDir(): string | undefined {
   // Dev mode: navigate from src/cli/ up to repo root
   const repoRoot = resolve(import.meta.dir, "..", "..");
   if (existsSync(join(repoRoot, ".claude-plugin", "plugin.json"))) {
@@ -27,17 +27,54 @@ function resolvePluginDir(): string | undefined {
   return undefined;
 }
 
+/**
+ * Resolve all plugin directories: core uniflow + user plugins via --plugin flags.
+ * Each user plugin path must contain .claude-plugin/plugin.json to be valid.
+ */
+function resolvePluginDirs(extraPluginPaths: string[]): string[] {
+  const dirs: string[] = [];
+
+  // Core uniflow plugin (always first if available)
+  const coreDir = resolveCorePluginDir();
+  if (coreDir) {
+    dirs.push(coreDir);
+  }
+
+  // User plugins from --plugin flags
+  for (const p of extraPluginPaths) {
+    const resolved = resolve(p);
+    if (existsSync(join(resolved, ".claude-plugin", "plugin.json"))) {
+      dirs.push(resolved);
+    } else {
+      console.warn(
+        `Warning: Plugin directory not valid (missing .claude-plugin/plugin.json): ${resolved}`,
+      );
+    }
+  }
+
+  return dirs;
+}
+
 export default async function start(args: string[]): Promise<void> {
   const { flags } = parseArgs(args);
   const cli = (flags.cli as CliType) ?? "claude";
   const tui = flags["no-tui"] !== true;
   const here = flags.here === true;
 
+  // Collect --plugin flags from raw args (parseArgs doesn't handle repeated flags)
+  const extraPlugins: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--plugin" && i + 1 < args.length && !args[i + 1].startsWith("--")) {
+      extraPlugins.push(args[i + 1]);
+      i++; // skip value
+    }
+  }
+
   // Auto-init if needed
   const { root } = await ensureInit();
 
-  // Resolve plugin directory
-  const pluginDir = resolvePluginDir();
+  // Resolve plugin directories (core + user plugins)
+  const pluginDirs = resolvePluginDirs(extraPlugins);
 
   // Dynamically import daemon to avoid loading heavy deps for other commands
   const { startDaemon } = await import("../daemon/index.js");
@@ -48,7 +85,7 @@ export default async function start(args: string[]): Promise<void> {
       orchestratorCli: cli,
       tui,
       here,
-      pluginDir,
+      pluginDirs,
     });
 
     if (here) {

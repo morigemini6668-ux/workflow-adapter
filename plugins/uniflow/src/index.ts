@@ -18,7 +18,7 @@ const COMMANDS: Record<string, { description: string; usage?: string }> = {
   spawn: {
     description: "Spawn a worker agent",
     usage:
-      "uniflow spawn <name> [--cli claude|codex] [--role executor] [--mode interactive|non_interactive]",
+      "uniflow spawn <name> [--cli claude|codex] [--role executor] [--role-file <path>] [--mode interactive|non_interactive]",
   },
   send: {
     description: "Send message to agent inbox",
@@ -29,6 +29,7 @@ const COMMANDS: Record<string, { description: string; usage?: string }> = {
     description: "Create a new task",
     usage: "uniflow task-add <subject> [--assign agent] [--priority 1-5] [--depends-on id,id]",
   },
+  kill: { description: "Kill an agent", usage: "uniflow kill <agent>" },
   agents: { description: "List agents", usage: "uniflow agents" },
   tasks: {
     description: "List tasks",
@@ -42,6 +43,10 @@ const COMMANDS: Record<string, { description: string; usage?: string }> = {
   worktree: {
     description: "Manage git worktrees",
     usage: "uniflow worktree <create|merge> [options]",
+  },
+  plugin: {
+    description: "Manage uniflow native plugins",
+    usage: "uniflow plugin <create|list|install|remove> [options]",
   },
   tui: { description: "Open TUI monitor", usage: "uniflow tui" },
 };
@@ -133,6 +138,8 @@ async function loadCommand(command: string): Promise<CommandHandler> {
       return (await import("./cli/assign.js")).default;
     case "task-add":
       return (await import("./cli/task-add.js")).default;
+    case "kill":
+      return (await import("./cli/kill.js")).default;
     case "agents":
       return (await import("./cli/agents.js")).default;
     case "tasks":
@@ -149,6 +156,8 @@ async function loadCommand(command: string): Promise<CommandHandler> {
       return (await import("./cli/attach.js")).default;
     case "worktree":
       return (await import("./cli/worktree.js")).default;
+    case "plugin":
+      return (await import("./cli/plugin.js")).default;
     case "tui":
       return (await import("./cli/tui.js")).default;
     default:

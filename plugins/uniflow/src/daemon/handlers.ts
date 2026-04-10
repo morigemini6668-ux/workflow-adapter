@@ -20,7 +20,14 @@ import {
   writeInbox,
   writeTask,
 } from "./state.js";
-import { capturePane, getPaneActivity, isPaneDead, killPane, killSession, killWindow } from "./tmux.js";
+import {
+  capturePane,
+  getPaneActivity,
+  isPaneDead,
+  killPane,
+  killSession,
+  killWindow,
+} from "./tmux.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -264,10 +271,20 @@ export async function handleRespawn(
     "Check your inbox for any pending tasks. Run status update immediately.",
   ].join("\n");
 
+  // Restore roleFile from session agent record for respawn
+  const sessionAgent = session.agents.find((a) => a.name === name);
   const newAgent = await respawnAgent(
     ctx,
     session.tmux_session,
-    { name, cli: agent.cli, role: agent.role, mode: "interactive", cwd: session.cwd },
+    {
+      name,
+      cli: agent.cli,
+      role: agent.role,
+      mode: "interactive",
+      cwd: session.cwd,
+      pluginDirs: session.pluginDirs,
+      roleFile: sessionAgent?.roleFile,
+    },
     recoveryMessage,
   );
 
@@ -399,8 +416,16 @@ export async function handleStop(
 
   if (session.here) {
     // --here mode: only kill uniflow-created windows, preserve user's session
-    try { await killWindow(session.tmux_session, "app"); } catch { /* window may already be gone */ }
-    try { await killWindow(session.tmux_session, "workers"); } catch { /* window may already be gone */ }
+    try {
+      await killWindow(session.tmux_session, "app");
+    } catch {
+      /* window may already be gone */
+    }
+    try {
+      await killWindow(session.tmux_session, "workers");
+    } catch {
+      /* window may already be gone */
+    }
   } else {
     try {
       await killSession(session.tmux_session);

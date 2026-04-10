@@ -23,9 +23,11 @@ export function buildClaudeCommand(opts: LaunchOptions): string[] {
   // Instruction injection via system prompt file
   args.push("--append-system-prompt-file", opts.instructionPath);
 
-  // Plugin directory for uniflow CLI in PATH + hooks
-  if (opts.pluginDir) {
-    args.push("--plugin-dir", opts.pluginDir);
+  // Plugin directories for uniflow CLI in PATH + hooks (supports multiple)
+  if (opts.pluginDirs?.length) {
+    for (const dir of opts.pluginDirs) {
+      args.push("--plugin-dir", dir);
+    }
   }
 
   // Session name for identification

@@ -33,7 +33,7 @@ export interface LaunchOptions {
   mode: WorkerMode;
   cwd: string;
   instructionPath: string;
-  pluginDir?: string;
+  pluginDirs?: string[];
   initialPrompt?: string;
 }
 

@@ -142,6 +142,121 @@ You are part of a uniflow multi-agent orchestration session.
   );
 }
 
+async function writeManagePluginSkill(dir: string): Promise<void> {
+  await writeFile(
+    join(dir, "SKILL.md"),
+    `---
+name: manage-plugin
+description: >
+  Create, list, install, and remove uniflow native plugins.
+  Use when the user asks to "create a uniflow plugin", "플러그인 만들어줘",
+  "하네스 만들어줘", "uniflow plugin list", "플러그인 목록",
+  "플러그인 삭제", "플러그인 설치", "make a harness", "build a plugin".
+  Requires a running uniflow session for create.
+allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
+argument-hint: "create|list|install|remove [name]"
+---
+
+# Uniflow Plugin Manager
+
+Determine the operation from the user's request (default: create).
+
+## Operation: List
+
+\`\`\`bash
+uniflow plugin list
+\`\`\`
+
+## Operation: Install
+
+\`\`\`bash
+uniflow plugin install $2
+\`\`\`
+
+## Operation: Remove
+
+\`\`\`bash
+uniflow plugin remove $2
+\`\`\`
+
+## Operation: Create (default)
+
+Interactive plugin creation workflow. Guide the user through designing and
+building a uniflow native plugin.
+
+### Step 1: Understand the Domain
+
+Ask the user about their plugin using AskUserQuestion:
+
+1. "어떤 작업을 자동화하고 싶으신가요?" (domain — e.g., QA testing, code review)
+2. "이 워크플로우에 어떤 agent 역할이 필요한가요?" (suggest examples: reviewer, tester, researcher)
+3. "agent들이 어떤 순서로 작업하나요?" (workflow pattern: parallel, sequential, pipeline)
+4. "plugin 이름은?" (auto-suggest based on domain, confirm with user)
+
+### Step 2: Design Agents
+
+For each agent role identified in Step 1, define:
+- **Name**: lowercase, hyphenated (e.g., \`code-reviewer\`)
+- **Purpose**: one-line description
+- **Core loop**: main workflow pattern (e.g., Explore → Analyze → Report)
+- **Key constraints**: scope limits, output format
+
+### Step 3: Design Workflow
+
+Write the SKILL.md workflow that the orchestrator will follow:
+- Which agents to spawn (with \`uniflow spawn --role-file\`)
+- Task assignment order
+- Communication pattern (send messages, poll status)
+- Convergence/completion criteria
+- Cleanup (kill agents)
+
+Use the brainstorming-harness as a reference pattern:
+\`\`\`bash
+cat \${CLAUDE_PLUGIN_ROOT}/../examples/brainstorming-harness/skills/brainstorming/SKILL.md
+\`\`\`
+
+### Step 4: Scaffold Plugin
+
+Generate the plugin directory:
+
+\`\`\`bash
+uniflow plugin create {name}
+\`\`\`
+
+Then write the actual content:
+1. Update \`.claude-plugin/plugin.json\` with proper description
+2. Replace \`skills/default/SKILL.md\` with the designed workflow
+3. Write \`skills/{skill-name}/references/*.md\` for each agent role instruction
+4. Remove the sample agent file
+
+### Step 5: Verify Structure
+
+Verify the generated plugin:
+\`\`\`bash
+cat {name}/.claude-plugin/plugin.json
+ls {name}/skills/*/SKILL.md
+ls {name}/skills/*/references/*.md
+\`\`\`
+
+### Step 6: Install
+
+Install the plugin for immediate use:
+\`\`\`bash
+uniflow plugin install ./{name}
+\`\`\`
+
+Confirm installation:
+\`\`\`bash
+uniflow plugin list
+\`\`\`
+
+Inform the user: "Plugin \\"{name}\\" created and installed. Start a new uniflow session
+to use it, or add \`--plugin ./{name}\` to your current session."
+`,
+    "utf-8",
+  );
+}
+
 async function writeHooksJson(dir: string): Promise<void> {
   await writeFile(
     join(dir, "hooks.json"),
@@ -176,12 +291,14 @@ async function installClaudePlugin(): Promise<boolean> {
   const binDir = join(pluginDir, "bin");
   const commandsDir = join(pluginDir, "commands");
   const skillDir = join(pluginDir, "skills", "uniflow-orchestrator");
+  const managePluginSkillDir = join(pluginDir, "skills", "manage-plugin");
   const hooksDir = join(pluginDir, "hooks");
 
   await mkdir(pluginJsonDir, { recursive: true });
   await mkdir(binDir, { recursive: true });
   await mkdir(commandsDir, { recursive: true });
   await mkdir(skillDir, { recursive: true });
+  await mkdir(managePluginSkillDir, { recursive: true });
   await mkdir(hooksDir, { recursive: true });
 
   // plugin.json — includes source field pointing to repo root for start.ts reference
@@ -213,12 +330,15 @@ async function installClaudePlugin(): Promise<boolean> {
   // Skill (uniflow-orchestrator)
   await writeOrchestratorSkill(skillDir);
 
+  // Skill (manage-plugin — builder for creating new uniflow plugins)
+  await writeManagePluginSkill(managePluginSkillDir);
+
   // Hooks (SessionStart auto-init)
   await writeHooksJson(hooksDir);
 
   console.log(`  \u2713 Claude Code plugin installed: ${pluginDir}`);
   console.log("  \u2713 uniflow CLI available in Claude Code sessions");
-  console.log("  \u2713 4 commands, 1 skill, hooks.json created");
+  console.log("  \u2713 4 commands, 2 skills (orchestrator, manage-plugin), hooks.json created");
   return true;
 }
 

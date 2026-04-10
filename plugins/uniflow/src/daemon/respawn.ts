@@ -48,7 +48,7 @@ export async function respawnOrchestrator(
   );
   await Bun.write(instructionPath, instructions);
 
-  // Build launch command
+  // Build launch command (restore pluginDirs from session)
   const launchOpts = {
     name,
     cli,
@@ -56,6 +56,7 @@ export async function respawnOrchestrator(
     mode: "interactive" as const,
     cwd: session.cwd,
     instructionPath,
+    pluginDirs: session.pluginDirs,
   };
 
   const { buildLaunchCommand: buildCmd } = await import("../launch/index.js");

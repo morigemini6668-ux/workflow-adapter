@@ -51,7 +51,7 @@ export interface StartDaemonOptions {
   orchestratorCli: CliType;
   tui?: boolean;
   here?: boolean;
-  pluginDir?: string;
+  pluginDirs?: string[];
 }
 
 /**
@@ -95,6 +95,7 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
     tmuxSession: tmuxName,
     daemonPid: process.pid,
     here: opts.here ?? false,
+    pluginDirs: opts.pluginDirs,
   });
 
   const ctx: SessionContext = {
@@ -111,6 +112,7 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
     const cli = (args.cli as CliType) ?? "claude";
     const role = (args.role as string) ?? "worker";
     const mode = (args.mode as string) ?? "interactive";
+    const roleFile = args.roleFile as string | undefined;
     if (!name) throw new Error("Agent name required");
     const agent = await spawnAgent(ctx, session.tmux_session, {
       name,
@@ -118,7 +120,8 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
       role,
       mode: mode as "interactive" | "non_interactive",
       cwd: opts.cwd,
-      pluginDir: opts.pluginDir,
+      pluginDirs: opts.pluginDirs,
+      roleFile,
     });
     return { spawned: name, pane_id: agent.pane_id };
   };
@@ -160,7 +163,7 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
  * Reconnect to an existing daemon session.
  * Used when `uniflow start` detects an existing tmux session after a daemon crash.
  */
-export async function reconnectDaemon(cwd: string, pluginDir?: string): Promise<DaemonHandle> {
+export async function reconnectDaemon(cwd: string, pluginDirs?: string[]): Promise<DaemonHandle> {
   const projectName = await readProjectName(cwd);
   const existing = await findActiveSession(projectName);
 
@@ -173,12 +176,16 @@ export async function reconnectDaemon(cwd: string, pluginDir?: string): Promise<
     sessionId: existing.id,
   };
 
+  // Restore pluginDirs from session if not provided (reconnect after crash)
+  const effectivePluginDirs = pluginDirs ?? existing.pluginDirs;
+
   const outboxReader = new OutboxReader(ctx);
   const onSpawn = async (args: Record<string, unknown>) => {
     const name = args.name as string;
     const cli = (args.cli as CliType) ?? "claude";
     const role = (args.role as string) ?? "worker";
     const mode = (args.mode as string) ?? "interactive";
+    const roleFile = args.roleFile as string | undefined;
     if (!name) throw new Error("Agent name required");
     const agent = await spawnAgent(ctx, existing.tmux_session, {
       name,
@@ -186,7 +193,8 @@ export async function reconnectDaemon(cwd: string, pluginDir?: string): Promise<
       role,
       mode: mode as "interactive" | "non_interactive",
       cwd,
-      pluginDir,
+      pluginDirs: effectivePluginDirs,
+      roleFile,
     });
     return { spawned: name, pane_id: agent.pane_id };
   };
@@ -246,7 +254,7 @@ async function launchOrchestrator(
     mode: "interactive" as const,
     cwd: opts.cwd,
     instructionPath,
-    pluginDir: opts.pluginDir,
+    pluginDirs: opts.pluginDirs,
     initialPrompt: "You are the uniflow orchestrator. The user will give you instructions.",
   };
   await prepareLaunch(launchOpts);

@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   buildLaunchCommand,
@@ -18,7 +18,15 @@ import {
   updateSession,
   writeAgentState,
 } from "./state.js";
-import { createPane, createWindow, getPanePid, killPane, startPaneLog, tmux, waitForReady } from "./tmux.js";
+import {
+  createPane,
+  createWindow,
+  getPanePid,
+  killPane,
+  startPaneLog,
+  tmux,
+  waitForReady,
+} from "./tmux.js";
 
 // ── Spawn Options ────────────────────────────────────────────────────
 
@@ -28,9 +36,10 @@ export interface SpawnOptions {
   role: string;
   mode: WorkerMode;
   cwd: string;
-  pluginDir?: string;
+  pluginDirs?: string[];
   initialPrompt?: string;
   roleInstructions?: string;
+  roleFile?: string;
 }
 
 // ── Spawn Agent ──────────────────────────────────────────────────────
@@ -63,7 +72,20 @@ export async function spawnAgent(
     }
   }
 
-  // Step 2: Render instruction template
+  // Step 2: Resolve role instructions (roleFile takes priority over roleInstructions)
+  let effectiveRoleInstructions = opts.roleInstructions;
+  if (opts.roleFile) {
+    try {
+      effectiveRoleInstructions = await readFile(opts.roleFile, "utf-8");
+    } catch {
+      console.warn(
+        `[spawn] Warning: roleFile not found: ${opts.roleFile} — using default role instructions`,
+      );
+      // Preserve roleFile in metadata for future respawn attempts
+    }
+  }
+
+  // Render instruction template
   const templateName = opts.role === "orchestrator" ? "orchestrator" : "worker";
   // Use a placeholder pane_id/pid since we don't have them yet — will update after creation
   const vars =
@@ -77,7 +99,7 @@ export async function spawnAgent(
           opts.role,
           "pending", // placeholder pane_id
           0, // placeholder pid
-          opts.roleInstructions,
+          effectiveRoleInstructions,
         );
 
   const instructionContent = await loadAndRenderTemplate(templateName, vars);
@@ -97,7 +119,7 @@ export async function spawnAgent(
     mode: opts.mode,
     cwd: opts.cwd,
     instructionPath,
-    pluginDir: opts.pluginDir,
+    pluginDirs: opts.pluginDirs,
     initialPrompt: opts.initialPrompt,
   };
   await prepareLaunch(launchOpts);
@@ -111,7 +133,8 @@ export async function spawnAgent(
   if (opts.role !== "orchestrator") {
     // Check if "workers" window exists
     const listResult = await tmux(["list-windows", "-t", tmuxSession, "-F", "#{window_name}"]);
-    const hasWorkersWindow = listResult.exitCode === 0 && listResult.stdout.split("\n").includes("workers");
+    const hasWorkersWindow =
+      listResult.exitCode === 0 && listResult.stdout.split("\n").includes("workers");
 
     if (!hasWorkersWindow) {
       // First worker: create "workers" window with the command
@@ -149,7 +172,7 @@ export async function spawnAgent(
       opts.role,
       paneId,
       pid,
-      opts.roleInstructions,
+      effectiveRoleInstructions,
     );
     const finalInstruction = await loadAndRenderTemplate("worker", finalVars);
     await writeFile(instructionPath, finalInstruction, "utf-8");
@@ -187,7 +210,7 @@ export async function spawnAgent(
 
   await writeAgentState(ctx, opts.name, agentState);
 
-  // Add to session.json agents list
+  // Add to session.json agents list (persist roleFile for respawn)
   const session = await loadSession(ctx.project, ctx.sessionId);
   const sessionAgent: SessionAgent = {
     name: opts.name,
@@ -195,6 +218,7 @@ export async function spawnAgent(
     role: opts.role,
     pane_id: paneId,
     pid,
+    ...(opts.roleFile ? { roleFile: opts.roleFile } : {}),
   };
   await updateSession(ctx, {
     agents: [...session.agents, sessionAgent],
@@ -221,7 +245,7 @@ export async function spawnOrchestrator(
   tmuxSession: string,
   cli: CliType,
   cwd: string,
-  pluginDir?: string,
+  pluginDirs?: string[],
 ): Promise<AgentState> {
   return spawnAgent(ctx, tmuxSession, {
     name: "orchestrator",
@@ -229,7 +253,7 @@ export async function spawnOrchestrator(
     role: "orchestrator",
     mode: "interactive",
     cwd,
-    pluginDir,
+    pluginDirs,
   });
 }
 

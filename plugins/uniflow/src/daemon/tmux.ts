@@ -107,7 +107,12 @@ export async function killSession(name: string): Promise<void> {
  * Returns the pane_id of the initial pane in the new window.
  * @param command - Optional command to run. If omitted, opens a shell.
  */
-export async function createWindow(session: string, name: string, command: string | undefined, cwd: string): Promise<string> {
+export async function createWindow(
+  session: string,
+  name: string,
+  command: string | undefined,
+  cwd: string,
+): Promise<string> {
   const args = ["new-window", "-t", session, "-n", name, "-d", "-P", "-F", "#{pane_id}", "-c", cwd];
   if (command) args.push(command);
   return tmuxOk(args);
@@ -127,7 +132,12 @@ export async function killWindow(session: string, windowName: string): Promise<v
  * Returns the pane_id (e.g. "%42").
  * @param targetWindow - Optional window name. If provided, splits within "session:windowName".
  */
-export async function createPane(session: string, command: string, cwd: string, targetWindow?: string): Promise<string> {
+export async function createPane(
+  session: string,
+  command: string,
+  cwd: string,
+  targetWindow?: string,
+): Promise<string> {
   const target = targetWindow ? `${session}:${targetWindow}` : session;
   const paneId = await tmuxOk([
     "split-window",

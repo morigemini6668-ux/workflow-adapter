@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { archiveSession, findActiveSession } from "../daemon/state.js";
-import { hasSession, killSession } from "../daemon/tmux.js";
-import { socketPath } from "../lib/constants.js";
+import { hasSession, killSession, killWindow } from "../daemon/tmux.js";
+import { socketPath, tmuxSessionName } from "../lib/constants.js";
 import { sendCommand } from "./client.js";
 import { findProjectRoot, readProjectName } from "./init.js";
 
@@ -48,9 +48,18 @@ async function cleanupStaleSession(): Promise<boolean> {
   const session = await findActiveSession(project);
   if (!session) return false;
 
-  // Kill leftover tmux session if it exists
+  // Kill leftover tmux session/windows.
+  // Detect --here mode: either session.here flag, or tmux_session name doesn't
+  // match the expected "uniflow-{project}" pattern (i.e. it's a user-owned session).
+  const isHere = session.here || session.tmux_session !== tmuxSessionName(project);
   if (session.tmux_session && (await hasSession(session.tmux_session))) {
-    await killSession(session.tmux_session);
+    if (isHere) {
+      // --here mode: only kill uniflow-created windows, preserve user's session
+      await killWindow(session.tmux_session, "app").catch(() => {});
+      await killWindow(session.tmux_session, "workers").catch(() => {});
+    } else {
+      await killSession(session.tmux_session);
+    }
   }
 
   // Remove stale socket

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { logsDir } from "../lib/constants.js";
+import { logsDir, tmuxSessionName } from "../lib/constants.js";
 import type { AgentState, Task } from "../lib/types.js";
 import { type DispatchTarget, dispatchMessage, dispatchTask, nudgeAgent } from "./dispatch.js";
 import { setShutdownInProgress } from "./monitor.js";
@@ -414,7 +414,10 @@ export async function handleStop(
     }
   }
 
-  if (session.here) {
+  // Detect --here mode: either session.here flag, or tmux_session name doesn't
+  // match the expected "uniflow-{project}" pattern (i.e. it's a user-owned session).
+  const isHere = session.here || session.tmux_session !== tmuxSessionName(ctx.project);
+  if (isHere) {
     // --here mode: only kill uniflow-created windows, preserve user's session
     try {
       await killWindow(session.tmux_session, "app");

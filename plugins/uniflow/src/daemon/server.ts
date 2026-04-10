@@ -152,8 +152,12 @@ async function handleRequest(
       case "peek":
         return ok(await handlePeek(ctx, req.args));
 
-      case "stop":
-        return ok(await handleStop(ctx, req.args));
+      case "stop": {
+        const result = await handleStop(ctx, req.args);
+        // Schedule process exit after response is flushed
+        setTimeout(() => process.exit(0), 200);
+        return ok(result);
+      }
 
       case "worktree-create":
         return ok(await handleWorktreeCreate(req.args));

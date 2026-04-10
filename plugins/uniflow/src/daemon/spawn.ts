@@ -147,7 +147,9 @@ export async function spawnAgent(
     // Apply tiled layout to workers window
     await tmux(["select-layout", "-t", `${tmuxSession}:workers`, "tiled"]);
   } else {
-    paneId = await createPane(tmuxSession, fullCommand, opts.cwd, "app");
+    // Orchestrator: split from current pane (where TUI/daemon runs)
+    const tuiPane = process.env.TMUX_PANE;
+    paneId = await createPane(tmuxSession, fullCommand, opts.cwd, undefined, tuiPane ?? undefined);
   }
 
   // Step 6: Start log capture

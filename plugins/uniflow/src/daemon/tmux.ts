@@ -131,14 +131,16 @@ export async function killWindow(session: string, windowName: string): Promise<v
  * Create a new pane by splitting, running a command.
  * Returns the pane_id (e.g. "%42").
  * @param targetWindow - Optional window name. If provided, splits within "session:windowName".
+ * @param targetPane - Optional pane ID (e.g. "%42"). Takes priority over targetWindow.
  */
 export async function createPane(
   session: string,
   command: string,
   cwd: string,
   targetWindow?: string,
+  targetPane?: string,
 ): Promise<string> {
-  const target = targetWindow ? `${session}:${targetWindow}` : session;
+  const target = targetPane ?? (targetWindow ? `${session}:${targetWindow}` : session);
   const paneId = await tmuxOk([
     "split-window",
     "-h",

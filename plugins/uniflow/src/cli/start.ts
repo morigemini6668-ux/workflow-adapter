@@ -58,8 +58,6 @@ function resolvePluginDirs(extraPluginPaths: string[]): string[] {
 export default async function start(args: string[]): Promise<void> {
   const { flags } = parseArgs(args);
   const cli = (flags.cli as CliType) ?? "claude";
-  const tui = flags["no-tui"] !== true;
-  const here = flags.here === true;
 
   // Collect --plugin flags from raw args (parseArgs doesn't handle repeated flags)
   const extraPlugins: string[] = [];
@@ -83,32 +81,26 @@ export default async function start(args: string[]): Promise<void> {
     const handle = await startDaemon({
       cwd: root,
       orchestratorCli: cli,
-      tui,
-      here,
       pluginDirs,
     });
 
-    if (here) {
-      console.log("Session started in current tmux window.");
-    } else {
-      console.log("Session started. Attach with: uniflow attach");
-    }
-    console.log("Status: uniflow status");
-
-    // Keep daemon running until signal
+    // Graceful shutdown on signals
+    let stopping = false;
     const shutdown = async () => {
-      console.log("\nShutting down...");
+      if (stopping) return;
+      stopping = true;
       await handle.stop();
       process.exit(0);
     };
-
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
 
-    // Block forever (daemon runs in event loop)
-    await new Promise(() => {
-      /* intentionally never resolves */
-    });
+    // Launch TUI in current process (blocks until user exits with 'q')
+    const { launchTuiInProcess } = await import("../tui/index.js");
+    await launchTuiInProcess(handle.ctx.project, handle.ctx.sessionId);
+
+    // TUI exited — shut down daemon
+    await shutdown();
   } catch (err) {
     if (err instanceof Error && err.message.includes("Session already active")) {
       console.error(`Error: ${err.message}`);

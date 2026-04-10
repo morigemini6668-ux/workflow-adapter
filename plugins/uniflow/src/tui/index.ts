@@ -56,14 +56,19 @@ export async function launchTui(projectName?: string): Promise<void> {
     throw new Error(`No active session found for project "${project}". Run "uniflow start" first.`);
   }
 
-  // Check stdin supports raw mode (required by Ink for keyboard input)
+  await launchTuiInProcess(project, session.id);
+}
+
+/**
+ * Launch the TUI in the current process with a known session context.
+ * Used by `uniflow start` to render TUI in the same process as the daemon.
+ */
+export async function launchTuiInProcess(project: string, sessionId: string): Promise<void> {
   if (!process.stdin.isTTY) {
     throw new Error("TUI requires a TTY. Run in a terminal or tmux pane.");
   }
 
-  const dataSource = createFileDataSource(project, session.id);
-
+  const dataSource = createFileDataSource(project, sessionId);
   const { waitUntilExit } = render(createElement(App, { dataSource }));
-
   await waitUntilExit();
 }

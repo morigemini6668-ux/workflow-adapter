@@ -153,6 +153,7 @@ export const SessionSchema = z.object({
   cwd: z.string(),
   agents: z.array(SessionAgentSchema),
   daemon_pid: z.number(),
+  here: z.boolean().default(false),
 });
 
 export type Session = z.infer<typeof SessionSchema>;

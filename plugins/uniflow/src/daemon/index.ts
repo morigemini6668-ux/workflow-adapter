@@ -27,12 +27,13 @@ import {
   type SessionContext,
 } from "./state.js";
 import {
-  applyLayout,
   createPane,
   createSession as createTmuxSession,
+  createWindow,
   currentSession as currentTmuxSession,
   hasSession as hasTmuxSession,
   startPaneLog,
+  tmux,
   waitForReady,
 } from "./tmux.js";
 
@@ -70,7 +71,7 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
   // 3. Determine tmux session
   let tmuxName: string;
   if (opts.here) {
-    // --here: use current tmux session
+    // --here: use current tmux session, create "app" window inside it
     const current = await currentTmuxSession();
     if (!current) {
       throw new Error(
@@ -78,11 +79,12 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
       );
     }
     tmuxName = current;
+    await createWindow(tmuxName, "app", undefined, opts.cwd);
   } else {
     // Default: create a new dedicated tmux session
     tmuxName = tmuxSessionName(projectName);
     if (!(await hasTmuxSession(tmuxName))) {
-      await createTmuxSession(tmuxName, opts.cwd);
+      await createTmuxSession(tmuxName, opts.cwd, "app");
     }
   }
 
@@ -92,6 +94,7 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
     cwd: opts.cwd,
     tmuxSession: tmuxName,
     daemonPid: process.pid,
+    here: opts.here ?? false,
   });
 
   const ctx: SessionContext = {
@@ -117,7 +120,6 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
       cwd: opts.cwd,
       pluginDir: opts.pluginDir,
     });
-    await applyLayout(tmuxName);
     return { spawned: name, pane_id: agent.pane_id };
   };
   const server = await startServer(ctx, outboxReader, onSpawn);
@@ -129,11 +131,16 @@ export async function startDaemon(opts: StartDaemonOptions): Promise<DaemonHandl
     nudgeMaxCount: DEFAULT_CONFIG.nudge_max_count,
   });
 
-  // 7. Launch orchestrator
+  // 7. Launch TUI in Window 0 "app" (unless disabled)
+  if (opts.tui !== false) {
+    await tmux(["send-keys", "-t", `${tmuxName}:app`, "uniflow tui", "C-m"]);
+  }
+
+  // 8. Launch orchestrator in Window 0 "app"
   await launchOrchestrator(ctx, session.tmux_session, opts);
 
-  // 8. Apply tmux layout
-  await applyLayout(tmuxName);
+  // 9. Apply main-vertical layout to Window 0 "app"
+  await tmux(["select-layout", "-t", `${tmuxName}:app`, "main-vertical"]);
 
   console.log(`[daemon] Session ${session.id} started for project ${projectName}`);
   console.log(`[daemon] Socket: ${socketPath(projectName)}`);
@@ -181,7 +188,6 @@ export async function reconnectDaemon(cwd: string, pluginDir?: string): Promise<
       cwd,
       pluginDir,
     });
-    await applyLayout(existing.tmux_session);
     return { spawned: name, pane_id: agent.pane_id };
   };
   const server = await startServer(ctx, outboxReader, onSpawn);
@@ -248,8 +254,8 @@ async function launchOrchestrator(
   // 4. Build launch command
   const cmd = buildLaunchCommand(launchOpts);
 
-  // 5. Create pane and launch
-  const paneId = await createPane(tmuxSession, cmd.join(" "), opts.cwd);
+  // 5. Create pane in Window 0 "app" and launch
+  const paneId = await createPane(tmuxSession, cmd.join(" "), opts.cwd, "app");
 
   // 6. Wait for agent to be ready
   await waitForReady(paneId);

@@ -67,6 +67,7 @@ export interface CreateSessionOptions {
   cwd: string;
   tmuxSession: string;
   daemonPid: number;
+  here?: boolean;
 }
 
 /**
@@ -94,6 +95,7 @@ export async function createSession(opts: CreateSessionOptions): Promise<Session
     cwd: opts.cwd,
     agents: [],
     daemon_pid: opts.daemonPid,
+    here: opts.here ?? false,
   };
 
   await atomicWriteJSON(sessionJsonPath(ctx), session);

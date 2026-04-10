@@ -61,8 +61,8 @@ export async function respawnOrchestrator(
   const { buildLaunchCommand: buildCmd } = await import("../launch/index.js");
   const cmd = buildCmd(launchOpts);
 
-  // Create new pane and launch
-  const paneId = await createPane(session.tmux_session, cmd.join(" "), session.cwd);
+  // Create new pane in Window 0 "app" and launch
+  const paneId = await createPane(session.tmux_session, cmd.join(" "), session.cwd, "app");
   await waitForReady(paneId);
 
   // Start logging

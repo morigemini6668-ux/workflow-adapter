@@ -77,9 +77,12 @@ export async function currentWindowTarget(): Promise<string | null> {
 
 /**
  * Create a new tmux session (detached).
+ * @param windowName - Optional name for the initial window (tmux -n flag).
  */
-export async function createSession(name: string, cwd: string): Promise<void> {
-  await tmuxOk(["new-session", "-d", "-s", name, "-c", cwd]);
+export async function createSession(name: string, cwd: string, windowName?: string): Promise<void> {
+  const args = ["new-session", "-d", "-s", name, "-c", cwd];
+  if (windowName) args.push("-n", windowName);
+  await tmuxOk(args);
 }
 
 /**
@@ -97,18 +100,40 @@ export async function killSession(name: string): Promise<void> {
   await tmux(["kill-session", "-t", name]);
 }
 
+// ── Window Management ────────────────────────────────────────────────
+
+/**
+ * Create a new tmux window in a session.
+ * Returns the pane_id of the initial pane in the new window.
+ * @param command - Optional command to run. If omitted, opens a shell.
+ */
+export async function createWindow(session: string, name: string, command: string | undefined, cwd: string): Promise<string> {
+  const args = ["new-window", "-t", session, "-n", name, "-d", "-P", "-F", "#{pane_id}", "-c", cwd];
+  if (command) args.push(command);
+  return tmuxOk(args);
+}
+
+/**
+ * Kill a named tmux window.
+ */
+export async function killWindow(session: string, windowName: string): Promise<void> {
+  await tmux(["kill-window", "-t", `${session}:${windowName}`]);
+}
+
 // ── Pane Management ───────────────────────────────────────────────────
 
 /**
  * Create a new pane by splitting, running a command.
  * Returns the pane_id (e.g. "%42").
+ * @param targetWindow - Optional window name. If provided, splits within "session:windowName".
  */
-export async function createPane(session: string, command: string, cwd: string): Promise<string> {
+export async function createPane(session: string, command: string, cwd: string, targetWindow?: string): Promise<string> {
+  const target = targetWindow ? `${session}:${targetWindow}` : session;
   const paneId = await tmuxOk([
     "split-window",
     "-h",
     "-t",
-    session,
+    target,
     "-d",
     "-P",
     "-F",
@@ -375,15 +400,6 @@ export async function startPaneLog(paneId: string, logPath: string): Promise<voi
  */
 export async function stopPaneLog(paneId: string): Promise<void> {
   await tmux(["pipe-pane", "-t", paneId]);
-}
-
-// ── Layout ────────────────────────────────────────────────────────────
-
-/**
- * Apply main-vertical layout to session window.
- */
-export async function applyLayout(session: string): Promise<void> {
-  await tmux(["select-layout", "-t", `${session}:0`, "main-vertical"]);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────

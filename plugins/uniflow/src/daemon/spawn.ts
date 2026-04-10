@@ -18,7 +18,7 @@ import {
   updateSession,
   writeAgentState,
 } from "./state.js";
-import { createPane, getPanePid, killPane, startPaneLog, waitForReady } from "./tmux.js";
+import { createPane, createWindow, getPanePid, killPane, startPaneLog, tmux, waitForReady } from "./tmux.js";
 
 // ── Spawn Options ────────────────────────────────────────────────────
 
@@ -106,8 +106,26 @@ export async function spawnAgent(
   const cmdArgs = buildLaunchCommand(launchOpts);
   const fullCommand = cmdArgs.join(" ");
 
-  // Step 5: Create tmux pane
-  const paneId = await createPane(tmuxSession, fullCommand, opts.cwd);
+  // Step 5: Create tmux pane (workers go to "workers" window)
+  let paneId: string;
+  if (opts.role !== "orchestrator") {
+    // Check if "workers" window exists
+    const listResult = await tmux(["list-windows", "-t", tmuxSession, "-F", "#{window_name}"]);
+    const hasWorkersWindow = listResult.exitCode === 0 && listResult.stdout.split("\n").includes("workers");
+
+    if (!hasWorkersWindow) {
+      // First worker: create "workers" window with the command
+      paneId = await createWindow(tmuxSession, "workers", fullCommand, opts.cwd);
+    } else {
+      // Subsequent workers: split within "workers" window
+      paneId = await createPane(tmuxSession, fullCommand, opts.cwd, "workers");
+    }
+
+    // Apply tiled layout to workers window
+    await tmux(["select-layout", "-t", `${tmuxSession}:workers`, "tiled"]);
+  } else {
+    paneId = await createPane(tmuxSession, fullCommand, opts.cwd, "app");
+  }
 
   // Step 6: Start log capture
   const logPath = join(logsDir(ctx.project, ctx.sessionId), `${opts.name}.log`);

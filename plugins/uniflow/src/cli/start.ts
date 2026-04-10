@@ -30,7 +30,7 @@ function resolvePluginDir(): string | undefined {
 export default async function start(args: string[]): Promise<void> {
   const { flags } = parseArgs(args);
   const cli = (flags.cli as CliType) ?? "claude";
-  const tui = flags.tui === true;
+  const tui = flags["no-tui"] !== true;
   const here = flags.here === true;
 
   // Auto-init if needed

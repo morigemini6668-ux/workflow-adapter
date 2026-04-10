@@ -20,7 +20,7 @@ import {
   writeInbox,
   writeTask,
 } from "./state.js";
-import { capturePane, getPaneActivity, isPaneDead, killPane, killSession } from "./tmux.js";
+import { capturePane, getPaneActivity, isPaneDead, killPane, killSession, killWindow } from "./tmux.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -397,10 +397,16 @@ export async function handleStop(
     }
   }
 
-  try {
-    await killSession(session.tmux_session);
-  } catch {
-    // Session may already be gone
+  if (session.here) {
+    // --here mode: only kill uniflow-created windows, preserve user's session
+    try { await killWindow(session.tmux_session, "app"); } catch { /* window may already be gone */ }
+    try { await killWindow(session.tmux_session, "workers"); } catch { /* window may already be gone */ }
+  } else {
+    try {
+      await killSession(session.tmux_session);
+    } catch {
+      // Session may already be gone
+    }
   }
 
   await appendEvent(ctx, "session_stopped", {});

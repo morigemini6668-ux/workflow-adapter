@@ -7,10 +7,13 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
+    "test": "bun test test/unit/",
+    "test:all": "bun test test/",
+    "test:e2e": "bun test test/e2e/",
     "lint": "biome check src/",
     "lint:fix": "biome check --write src/",
     "format": "biome format --write src/",
-    "ci": "biome ci src/ && tsc --noEmit",
+    "ci": "biome ci src/ && tsc --noEmit && bun test test/unit/",
     "dev": "bun run src/index.ts"
   },
   "dependencies": {

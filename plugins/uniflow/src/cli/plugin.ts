@@ -8,7 +8,7 @@ const CLAUDE_PLUGINS_DIR = join(homedir(), ".claude", "plugins");
 const CODEX_SKILLS_DIR = join(homedir(), ".agents", "skills");
 const VALID_PLUGIN_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
-function validatePluginName(name: string): void {
+export function validatePluginName(name: string): void {
   if (!VALID_PLUGIN_NAME.test(name)) {
     console.error(
       `Invalid plugin name: "${name}". Only lowercase letters, numbers, and hyphens allowed.`,
@@ -22,7 +22,7 @@ function pluginInstallDir(name: string): string {
 }
 
 /** Scan skills/ subdirectories and return skill names (dirs containing SKILL.md). */
-async function scanSkills(pluginDir: string): Promise<string[]> {
+export async function scanSkills(pluginDir: string): Promise<string[]> {
   const skillsDir = join(pluginDir, "skills");
   if (!existsSync(skillsDir)) return [];
   const entries = await readdir(skillsDir, { withFileTypes: true });

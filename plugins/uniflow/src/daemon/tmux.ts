@@ -247,6 +247,63 @@ export async function sendMessage(paneId: string, cli: CliType, message: string)
   }
 }
 
+// ── Batch Query ──────────────────────────────────────────────────────
+
+export interface PaneBatchState {
+  paneId: string;
+  pid: number;
+  dead: boolean;
+  deadStatus: number;
+  currentCommand: string;
+  paneTitle: string;
+  activity: number; // epoch seconds (may be 0 if pane_activity unavailable)
+}
+
+/**
+ * Query all agent panes in one tmux call.
+ * Replaces N × isPaneDead() + N × getPaneActivity() calls.
+ *
+ * Note: pane_activity returns empty in tmux 3.6a (macOS); Number('') → 0.
+ * Tab characters in pane_title are a theoretical risk but not observed
+ * in practice with Claude Code or Codex CLIs.
+ */
+export async function batchQueryPanes(
+  tmuxSession: string,
+): Promise<PaneBatchState[]> {
+  const fmt = [
+    "#{pane_id}",
+    "#{pane_pid}",
+    "#{pane_dead}",
+    "#{pane_dead_status}",
+    "#{pane_current_command}",
+    "#{pane_title}",
+    "#{pane_activity}",
+  ].join("\t");
+
+  let result: string;
+  try {
+    result = await tmuxOk(["list-panes", "-t", tmuxSession, "-F", fmt]);
+  } catch {
+    return []; // Session doesn't exist or no panes
+  }
+
+  return result
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [paneId, pid, dead, deadStatus, cmd, title, activity] = line.split("\t");
+      return {
+        paneId,
+        pid: Number(pid),
+        dead: dead === "1",
+        deadStatus: Number(deadStatus),
+        currentCommand: cmd,
+        paneTitle: title,
+        activity: Number(activity),
+      };
+    });
+}
+
 // ── Activity Tracking ────────────────────────────────────────────────
 
 /**
@@ -274,6 +331,42 @@ export async function capturePane(paneId: string, lines = 40): Promise<string> {
 
 /** Detected pane state */
 export type PaneState = "idle" | "busy" | "dead" | "unknown";
+
+/**
+ * Effective state for dispatch decisions.
+ * D1: 'unknown' treated as 'busy' (conservative).
+ */
+export function effectiveState(state: PaneState): "idle" | "busy" | "dead" {
+  if (state === "idle") return "idle";
+  if (state === "dead") return "dead";
+  return "busy"; // busy + unknown → busy
+}
+
+/**
+ * Classify pane state from pane_title (zero-cost — already in batch query).
+ *
+ * Claude Code: `✳ {name}` = idle, `{braille} {name}` = busy
+ * Codex: `{name}` (no prefix) = idle, `{braille} {name}` = busy
+ *
+ * Edge case: Claude Code team lead with active teammates shows spinner
+ * even when own prompt is idle. Use as supplementary signal, not sole source.
+ */
+export function classifyByTitle(paneTitle: string): "idle" | "busy" | "unknown" {
+  if (!paneTitle || paneTitle.length === 0) return "unknown";
+
+  const firstChar = paneTitle.codePointAt(0) ?? 0;
+
+  // ✳ (U+2733) = Claude Code idle
+  if (firstChar === 0x2733) return "idle";
+
+  // Braille Pattern block (U+2800–U+28FF) = busy spinner (both CLIs)
+  if (firstChar >= 0x2800 && firstChar <= 0x28ff) return "busy";
+
+  // No icon prefix (starts with ASCII letter) = Codex idle
+  if (firstChar >= 0x41 && firstChar <= 0x7a) return "idle";
+
+  return "unknown";
+}
 
 /**
  * Busy indicators validated against real terminal captures.
@@ -347,7 +440,119 @@ export async function detectState(paneId: string): Promise<PaneState> {
   return classifyOutput(output);
 }
 
-// ── Readiness Polling ─────────────────────────────────────────────────
+// ── wait-for Channel Primitives ──────────────────────────────────────
+
+/**
+ * Wait for a tmux wait-for channel with timeout.
+ * Uses Bun.spawn (non-blocking) + setTimeout race.
+ *
+ * On timeout: KILLS the waiter process (SIGTERM) instead of signaling
+ * the channel. This prevents a stale timeout signal from satisfying
+ * a future wait on the same channel name. (D21)
+ *
+ * Returns true if channel was signaled, false if timeout.
+ */
+export async function waitForChannel(
+  channel: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  const waiter = Bun.spawn(["tmux", "wait-for", channel], {
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    waiter.kill(); // Kill the waiter process — do NOT signal the channel
+  }, timeoutMs);
+
+  await waiter.exited;
+  clearTimeout(timer);
+  return !timedOut;
+}
+
+/**
+ * Signal a wait-for channel (wake up all waiters).
+ */
+export async function signalChannel(channel: string): Promise<void> {
+  await tmux(["wait-for", "-S", channel]);
+}
+
+// ── tmux Hook Setup ──────────────────────────────────────────────────
+
+/**
+ * Register a pane-exited hook for a specific pane.
+ *
+ * tmux hook syntax: `set-hook -t <pane> pane-exited <command>`
+ * - `-t <pane>` scopes the hook to that specific pane (not global) (D22)
+ * - No need for run-shell pane_id filtering when using -t scoping
+ *
+ * The channel includes spawnId to prevent cross-spawn false positives. (D20)
+ */
+export async function registerExitHook(
+  name: string,
+  paneId: string,
+  spawnId: string,
+): Promise<void> {
+  const channel = `agent-${name}-${spawnId}-exited`;
+  await tmux([
+    "set-hook",
+    "-t",
+    paneId,
+    "pane-exited",
+    `run-shell "tmux wait-for -S ${channel}"`,
+  ]);
+}
+
+/**
+ * Unregister pane-exited hook for a pane.
+ * Called during respawn to clean up old hooks before re-registering.
+ */
+export async function unregisterExitHook(paneId: string): Promise<void> {
+  await tmux(["set-hook", "-u", "-t", paneId, "pane-exited"]).catch(() => {});
+}
+
+/**
+ * Wait for an agent's pane to exit, with timeout.
+ * Uses spawnId-scoped channel to avoid false positives from prior spawns.
+ */
+export async function waitForExit(
+  name: string,
+  spawnId: string,
+  timeoutMs = 30_000,
+): Promise<boolean> {
+  const channel = `agent-${name}-${spawnId}-exited`;
+  return waitForChannel(channel, timeoutMs);
+}
+
+// ── Ready Signal ─────────────────────────────────────────────────────
+
+/**
+ * Build a pane command that launches the agent and signals readiness.
+ *
+ * Background poller: checks for idle prompt every 500ms via capture-pane,
+ * signals the ready channel when found. (D23)
+ * The poller runs in the pane's shell alongside the agent process.
+ */
+export function buildReadySignalCommand(
+  agentCmd: string,
+  readyChannel: string,
+): string {
+  // Background poller: check for idle prompt every 500ms, signal when found
+  const poller = [
+    "while true; do",
+    '  OUT=$(tmux capture-pane -p -t "$TMUX_PANE" -S -5 2>/dev/null)',
+    "  if echo \"$OUT\" | grep -qE '^(❯|\\$|›)\\s*$'; then",
+    `    tmux wait-for -S ${readyChannel}; break`,
+    "  fi",
+    "  sleep 0.5",
+    "done &",
+  ].join(" ");
+  return `${poller} ${agentCmd}`;
+}
+
+// ── Readiness ────────────────────────────────────────────────────────
 
 /** Patterns that indicate a trust/permission prompt needing auto-dismiss */
 const TRUST_PATTERNS = [
@@ -360,15 +565,36 @@ const TRUST_PATTERNS = [
 
 /**
  * Wait for a pane to become ready (idle/prompt visible).
- * Uses exponential backoff polling (150ms → 8s).
+ *
+ * When spawnId is provided, uses wait-for channel with capture-pane fallback.
+ * When spawnId is omitted, falls back to legacy polling (backward compat).
+ *
  * Auto-dismisses trust prompts by sending C-m.
  */
 export async function waitForReady(
   paneId: string,
   timeout = AGENT_READY_TIMEOUT_MS,
+  name?: string,
+  spawnId?: string,
 ): Promise<void> {
+  // New path: wait-for channel with fallback
+  if (name && spawnId) {
+    const channel = `agent-${name}-${spawnId}-ready`;
+    const ready = await waitForChannel(channel, timeout);
+
+    if (!ready) {
+      // Fallback: check if pane is idle via capture-pane
+      const state = await detectState(paneId);
+      if (state === "idle") return;
+      if (state === "dead") throw new Error(`Pane ${paneId} died while waiting for ready`);
+      throw new Error(`Agent ${name} did not become ready within ${timeout}ms`);
+    }
+    return;
+  }
+
+  // Legacy path: exponential backoff polling (for agents without spawnId)
   const startTime = Date.now();
-  let delay = 150; // Start at 150ms
+  let delay = 150;
   const maxDelay = 8000;
 
   while (Date.now() - startTime < timeout) {

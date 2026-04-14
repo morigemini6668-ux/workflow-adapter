@@ -12,6 +12,25 @@ export function shouldNudge(paneState: PaneState): boolean {
   return paneState === "idle";
 }
 
+// ── Dispatch Queue (stub — full implementation in Task 2) ───────────
+
+/**
+ * Drain one queued message for an agent.
+ * Called by monitor.ts when agent transitions to idle.
+ *
+ * Stub: returns 0 (no messages drained). Full implementation with
+ * enqueueDispatch, overflow protection, and stale eviction to be
+ * added by Task 2 (dispatch queue with force mode).
+ */
+export async function drainQueue(
+  _ctx: SessionContext,
+  _agentName: string,
+  _target: DispatchTarget,
+): Promise<number> {
+  // TODO: Task 2 will replace this with full queue drain logic (D18, D25)
+  return 0;
+}
+
 // ── Dispatch ──────────────────────────────────────────────────────────
 
 export interface DispatchTarget {

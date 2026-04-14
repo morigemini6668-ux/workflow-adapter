@@ -19,12 +19,15 @@ import {
   writeAgentState,
 } from "./state.js";
 import {
+  buildReadySignalCommand,
   createPane,
   createWindow,
   getPanePid,
   killPane,
+  registerExitHook,
   startPaneLog,
   tmux,
+  unregisterExitHook,
   waitForReady,
 } from "./tmux.js";
 
@@ -124,9 +127,14 @@ export async function spawnAgent(
   };
   await prepareLaunch(launchOpts);
 
-  // Step 4: Build CLI command
+  // Step 4: Build CLI command with ready-signal wrapper
   const cmdArgs = buildLaunchCommand(launchOpts);
   const fullCommand = cmdArgs.join(" ");
+
+  // Generate unique spawnId for this spawn (prevents cross-spawn channel collisions) (D20)
+  const spawnId = crypto.randomUUID().slice(0, 8);
+  const readyChannel = `agent-${opts.name}-${spawnId}-ready`;
+  const wrappedCommand = buildReadySignalCommand(fullCommand, readyChannel);
 
   // Step 5: Create tmux pane (workers go to "workers" window)
   let paneId: string;
@@ -138,10 +146,10 @@ export async function spawnAgent(
 
     if (!hasWorkersWindow) {
       // First worker: create "workers" window with the command
-      paneId = await createWindow(tmuxSession, "workers", fullCommand, opts.cwd);
+      paneId = await createWindow(tmuxSession, "workers", wrappedCommand, opts.cwd);
     } else {
       // Subsequent workers: split within "workers" window
-      paneId = await createPane(tmuxSession, fullCommand, opts.cwd, "workers");
+      paneId = await createPane(tmuxSession, wrappedCommand, opts.cwd, "workers");
     }
 
     // Apply tiled layout to workers window
@@ -149,8 +157,14 @@ export async function spawnAgent(
   } else {
     // Orchestrator: split from current pane (where TUI/daemon runs)
     const tuiPane = process.env.TMUX_PANE;
-    paneId = await createPane(tmuxSession, fullCommand, opts.cwd, undefined, tuiPane ?? undefined);
+    paneId = await createPane(tmuxSession, wrappedCommand, opts.cwd, undefined, tuiPane ?? undefined);
   }
+
+  // Step 5b: Set remain-on-exit so pane-exited hook can inspect exit status (D9)
+  await tmux(["set-option", "-t", paneId, "remain-on-exit", "on"]);
+
+  // Step 5c: Register exit hook for crash detection (with spawnId) (D7)
+  await registerExitHook(opts.name, paneId, spawnId);
 
   // Step 6: Start log capture
   const logPath = join(logsDir(ctx.project, ctx.sessionId), `${opts.name}.log`);
@@ -187,14 +201,14 @@ export async function spawnAgent(
   }
 
   try {
-    await waitForReady(paneId);
+    await waitForReady(paneId, undefined, opts.name, spawnId);
   } catch (err) {
     // Clean up on failure
     await killPane(paneId, opts.cli);
     throw err;
   }
 
-  // Step 8: Register agent identity
+  // Step 8: Register agent identity (includes spawnId for hook/channel cleanup)
   const now = new Date().toISOString();
   const agentState: AgentState = {
     name: opts.name,
@@ -202,6 +216,7 @@ export async function spawnAgent(
     role: opts.role,
     pane_id: paneId,
     pid,
+    spawn_id: spawnId,
     state: "idle",
     current_task: null,
     progress: null,
@@ -232,6 +247,7 @@ export async function spawnAgent(
     cli: opts.cli,
     role: opts.role,
     pane_id: paneId,
+    spawn_id: spawnId,
     mode: opts.mode,
   });
 
@@ -273,6 +289,9 @@ export async function respawnAgent(
   const session = await loadSession(ctx.project, ctx.sessionId);
   const existing = session.agents.find((a) => a.name === opts.name);
   if (existing) {
+    // Clean up old hooks before re-registering (D22)
+    await unregisterExitHook(existing.pane_id);
+
     try {
       await killPane(existing.pane_id, opts.cli);
     } catch {

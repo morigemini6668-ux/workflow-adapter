@@ -25,6 +25,7 @@ export const AgentStateSchema = z.object({
   role: z.string(),
   pane_id: z.string(),
   pid: z.number(),
+  spawn_id: z.string().optional(), // Unique per-spawn ID for channel naming (D20)
   state: z.enum(AGENT_STATES),
   current_task: z.string().nullable(),
   progress: z.string().nullable(),

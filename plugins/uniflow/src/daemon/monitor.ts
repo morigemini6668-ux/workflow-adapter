@@ -1,7 +1,13 @@
 import { type FSWatcher, watch } from "node:fs";
 import { agentsDir } from "../lib/constants.js";
 import type { CliType } from "../lib/types.js";
-import { type DispatchTarget, dispatchTask, nudgeAgent, shouldNudge } from "./dispatch.js";
+import {
+  type DispatchTarget,
+  dispatchTask,
+  drainQueue,
+  nudgeAgent,
+  shouldNudge,
+} from "./dispatch.js";
 import {
   ACTIVITY_THRESHOLD_MS,
   type AgentIdleTracker,
@@ -14,13 +20,14 @@ import {
   appendEvent,
   listAgents,
   listTasks,
+  loadSession,
   type OutboxReader,
   readAgentState,
   type SessionContext,
   writeAgentState,
   writeTask,
 } from "./state.js";
-import { detectState, getPaneActivity, isPaneDead, type PaneState } from "./tmux.js";
+import { batchQueryPanes, detectState, effectiveState, type PaneState } from "./tmux.js";
 
 // Re-export for backward compatibility
 export {
@@ -74,17 +81,22 @@ export function startMonitor(
   let stopped = false;
 
   // ── Health check loop ──────────────────────────────────────────────
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: 3-tier detection adds necessary branches
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: batch query + state reconciliation + queue drain
   async function healthCheck(): Promise<void> {
     if (stopped) return;
 
     try {
+      const session = await loadSession(ctx.project, ctx.sessionId);
       const agents = await listAgents(ctx);
 
+      // D6: Single batch query replaces N individual isPaneDead + getPaneActivity calls
+      const paneStates = await batchQueryPanes(session.tmux_session);
+
       for (const agent of agents) {
-        // 1. Check pane alive
-        const dead = await isPaneDead(agent.pane_id);
-        if (dead) {
+        const pane = paneStates.find((p) => p.paneId === agent.pane_id);
+
+        // 1. Crash detection — hooks are primary (D7), this is D14 safety net
+        if (!pane || pane.dead) {
           await handleCrash(ctx, agent.name, agent.cli, agent.role);
           continue;
         }
@@ -93,20 +105,23 @@ export function startMonitor(
         try {
           const current = await readAgentState(ctx, agent.name);
 
-          // 3. Tier-1: pane_activity check — fast metadata query
-          const activityEpoch = await getPaneActivity(agent.pane_id);
-          const activityAge = activityEpoch > 0 ? Date.now() - activityEpoch * 1000 : Infinity;
+          // 3. Tier-1: activity check from batch query — fast metadata
+          const activityAge =
+            pane.activity > 0 ? Date.now() - pane.activity * 1000 : Infinity;
 
           let paneState: PaneState;
           if (activityAge < ACTIVITY_THRESHOLD_MS) {
             // Recently active — infer busy, skip Tier-2
             paneState = "busy";
           } else {
-            // 4. Tier-2: capture-pane + classifyOutput
+            // 4. Tier-2: capture-pane + classifyOutput (still needed for accurate state)
             paneState = await detectState(agent.pane_id);
           }
 
-          // 5. State reconciliation
+          // 5. Apply effectiveState (D1: unknown → busy)
+          const effective = effectiveState(paneState);
+
+          // 6. State reconciliation
           if (shouldReconcile(current.state, paneState)) {
             const reconciledState = toAgentState(paneState);
             await writeAgentState(ctx, agent.name, {
@@ -122,11 +137,20 @@ export function startMonitor(
             });
           }
 
-          // 6. Idle nudge check (uses reconciled state) — skip during shutdown
-          const effectiveState = shouldReconcile(current.state, paneState)
+          // 7. Queue drain: deliver one queued message when agent is idle (D18)
+          if (effective === "idle") {
+            await drainQueue(ctx, agent.name, {
+              name: agent.name,
+              paneId: agent.pane_id,
+              cli: agent.cli,
+            });
+          }
+
+          // 8. Idle nudge check — skip during shutdown
+          const resolvedState = shouldReconcile(current.state, paneState)
             ? paneState
             : current.state;
-          if (!shutdownInProgress && effectiveState === "idle") {
+          if (!shutdownInProgress && resolvedState === "idle") {
             await checkIdleNudge(ctx, agent.name, current, opts);
           } else {
             // Reset idle tracker when not idle
@@ -138,10 +162,10 @@ export function startMonitor(
         }
       }
 
-      // 4. Check outbox for new results
+      // 9. Check outbox for new results
       await processOutbox(ctx, outboxReader);
 
-      // 5. Check dependency resolution — skip during shutdown
+      // 10. Check dependency resolution — skip during shutdown
       if (!shutdownInProgress) {
         await resolveDependencies(ctx);
       }

@@ -49,9 +49,15 @@ function assert(condition: boolean, message: string): void {
 // ── Imports ─────────────────────────────────────────────────────────────
 
 import {
+  batchQueryPanes,
+  buildReadySignalCommand,
+  classifyByTitle,
   classifyOutput,
   detectState,
+  effectiveState,
+  registerExitHook,
   sendMessage,
+  unregisterExitHook,
   waitForReady,
   _setRunner,
   type TmuxResult,
@@ -638,6 +644,311 @@ async function group6_waitForReadyTrust(): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// Group 7: batchQueryPanes
+// ═══════════════════════════════════════════════════════════════════════
+
+async function group7_batchQueryPanes(): Promise<void> {
+  console.log('\nGroup 7: batchQueryPanes');
+
+  await test('Parses 7-field tab-separated output', async () => {
+    installMock((args) => {
+      if (args[0] === 'list-panes') {
+        return {
+          stdout: '%42\t12345\t0\t0\t2.1.104\t✳ Claude Code\t1713000000',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', exitCode: 0 };
+    });
+
+    const panes = await batchQueryPanes('test-session');
+    assert(panes.length === 1, `expected 1 pane, got ${panes.length}`);
+    assert(panes[0].paneId === '%42', `expected paneId %42, got ${panes[0].paneId}`);
+    assert(panes[0].pid === 12345, `expected pid 12345, got ${panes[0].pid}`);
+    assert(panes[0].dead === false, `expected dead=false, got ${panes[0].dead}`);
+    assert(panes[0].deadStatus === 0, `expected deadStatus=0, got ${panes[0].deadStatus}`);
+    assert(panes[0].currentCommand === '2.1.104', `expected cmd 2.1.104, got ${panes[0].currentCommand}`);
+    assert(panes[0].paneTitle === '✳ Claude Code', `expected title '✳ Claude Code', got '${panes[0].paneTitle}'`);
+    assert(panes[0].activity === 1713000000, `expected activity 1713000000, got ${panes[0].activity}`);
+  });
+
+  await test('Parses multiple panes', async () => {
+    installMock((args) => {
+      if (args[0] === 'list-panes') {
+        const lines = [
+          '%38\t74788\t0\t0\t2.1.104\t⠐ Claude Code\t1713000001',
+          '%39\t47171\t0\t0\t2.1.104\t✳ Worker Alpha\t1713000002',
+          '%40\t48846\t1\t137\tcodex\tfeedback-loop\t1713000003',
+        ];
+        return { stdout: lines.join('\n'), exitCode: 0 };
+      }
+      return { stdout: '', exitCode: 0 };
+    });
+
+    const panes = await batchQueryPanes('test-session');
+    assert(panes.length === 3, `expected 3 panes, got ${panes.length}`);
+    assert(panes[0].paneTitle === '⠐ Claude Code', 'first pane title');
+    assert(panes[1].dead === false, 'second pane alive');
+    assert(panes[2].dead === true, 'third pane dead');
+    assert(panes[2].deadStatus === 137, `expected deadStatus 137, got ${panes[2].deadStatus}`);
+  });
+
+  await test('Empty session returns empty array', async () => {
+    installMock((args) => {
+      if (args[0] === 'list-panes') {
+        return { stdout: '', exitCode: 1 }; // Session not found
+      }
+      return { stdout: '', exitCode: 0 };
+    });
+
+    const panes = await batchQueryPanes('nonexistent');
+    assert(panes.length === 0, `expected empty array, got ${panes.length}`);
+  });
+
+  await test('Handles empty pane_activity gracefully', async () => {
+    installMock((args) => {
+      if (args[0] === 'list-panes') {
+        // pane_activity is empty (tmux 3.6a on macOS)
+        return {
+          stdout: '%42\t12345\t0\t\t2.1.104\t✳ Claude Code\t',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', exitCode: 0 };
+    });
+
+    const panes = await batchQueryPanes('test-session');
+    assert(panes.length === 1, 'expected 1 pane');
+    assert(panes[0].activity === 0, `expected activity=0 for empty, got ${panes[0].activity}`);
+    assert(panes[0].deadStatus === 0, `expected deadStatus=0 for empty, got ${panes[0].deadStatus}`);
+  });
+
+  await test('Single tmux call per invocation', async () => {
+    installMock((args) => {
+      if (args[0] === 'list-panes') {
+        return { stdout: '%42\t1\t0\t0\tclaude\ttitle\t0', exitCode: 0 };
+      }
+      return { stdout: '', exitCode: 0 };
+    });
+
+    await batchQueryPanes('test-session');
+    const calls = getCalls();
+    assert(calls.length === 1, `expected 1 tmux call, got ${calls.length}`);
+    assert(calls[0].args[0] === 'list-panes', 'expected list-panes call');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Group 8: classifyByTitle
+// ═══════════════════════════════════════════════════════════════════════
+
+async function group8_classifyByTitle(): Promise<void> {
+  console.log('\nGroup 8: classifyByTitle');
+
+  await test('Claude Code idle: ✳ prefix', async () => {
+    assert(classifyByTitle('✳ Claude Code') === 'idle', 'expected idle');
+  });
+
+  await test('Claude Code idle: ✳ with custom name', async () => {
+    assert(classifyByTitle('✳ Review tmux agent communication tasks') === 'idle', 'expected idle');
+  });
+
+  await test('Claude Code busy: ⠐ prefix (braille spinner)', async () => {
+    assert(classifyByTitle('⠐ Claude Code') === 'busy', 'expected busy');
+  });
+
+  await test('Claude Code busy: ⠂ prefix (braille spinner)', async () => {
+    assert(classifyByTitle('⠂ Implement tasks') === 'busy', 'expected busy');
+  });
+
+  await test('Claude Code busy: ⠋ prefix (braille spinner)', async () => {
+    assert(classifyByTitle('⠋ Working') === 'busy', 'expected busy');
+  });
+
+  await test('Codex idle: no prefix (starts with letter)', async () => {
+    assert(classifyByTitle('feedback-loop-uniflow') === 'idle', 'expected idle');
+  });
+
+  await test('Codex busy: ⠹ prefix (braille spinner)', async () => {
+    assert(classifyByTitle('⠹ feedback-loop-uniflow') === 'busy', 'expected busy');
+  });
+
+  await test('Codex busy: ⠏ prefix (braille spinner)', async () => {
+    assert(classifyByTitle('⠏ my-project') === 'busy', 'expected busy');
+  });
+
+  await test('Empty title: unknown', async () => {
+    assert(classifyByTitle('') === 'unknown', 'expected unknown');
+  });
+
+  await test('Null-like empty: unknown', async () => {
+    assert(classifyByTitle('') === 'unknown', 'expected unknown');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Group 8b: effectiveState
+// ═══════════════════════════════════════════════════════════════════════
+
+async function group8b_effectiveState(): Promise<void> {
+  console.log('\nGroup 8b: effectiveState');
+
+  await test('idle → idle', async () => {
+    assert(effectiveState('idle') === 'idle', 'expected idle');
+  });
+
+  await test('busy → busy', async () => {
+    assert(effectiveState('busy') === 'busy', 'expected busy');
+  });
+
+  await test('dead → dead', async () => {
+    assert(effectiveState('dead') === 'dead', 'expected dead');
+  });
+
+  await test('unknown → busy (D1: conservative)', async () => {
+    assert(effectiveState('unknown') === 'busy', 'expected busy for unknown');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Group 9: Hook registration (mocked tmux calls)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function group9_hooks(): Promise<void> {
+  console.log('\nGroup 9: Hook registration');
+
+  await test('registerExitHook sends set-hook with spawnId-scoped channel', async () => {
+    installMock(() => ({ stdout: '', exitCode: 0 }));
+
+    await registerExitHook('worker-1', '%42', 'abc12345');
+
+    const calls = getCalls();
+    assert(calls.length === 1, `expected 1 tmux call, got ${calls.length}`);
+    const args = calls[0].args;
+    assert(args[0] === 'set-hook', `expected set-hook, got ${args[0]}`);
+    assert(args[1] === '-t', 'expected -t flag for pane scoping');
+    assert(args[2] === '%42', `expected paneId %42, got ${args[2]}`);
+    assert(args[3] === 'pane-exited', `expected pane-exited hook, got ${args[3]}`);
+    assert(
+      args[4].includes('agent-worker-1-abc12345-exited'),
+      `expected spawnId in channel name, got ${args[4]}`,
+    );
+    assert(args[4].includes('wait-for -S'), 'expected wait-for -S in hook command');
+  });
+
+  await test('unregisterExitHook sends set-hook -u', async () => {
+    installMock(() => ({ stdout: '', exitCode: 0 }));
+
+    await unregisterExitHook('%42');
+
+    const calls = getCalls();
+    assert(calls.length === 1, `expected 1 tmux call, got ${calls.length}`);
+    const args = calls[0].args;
+    assert(args[0] === 'set-hook', `expected set-hook, got ${args[0]}`);
+    assert(args[1] === '-u', 'expected -u flag for unregister');
+    assert(args[2] === '-t', 'expected -t flag for pane scoping');
+    assert(args[3] === '%42', `expected paneId %42, got ${args[3]}`);
+    assert(args[4] === 'pane-exited', `expected pane-exited hook, got ${args[4]}`);
+  });
+
+  await test('unregisterExitHook does not throw on failure', async () => {
+    installMock(() => ({ stdout: '', exitCode: 1 })); // Hook doesn't exist
+
+    // Should not throw
+    await unregisterExitHook('%99');
+    assert(true, 'no exception thrown');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Group 10: buildReadySignalCommand
+// ═══════════════════════════════════════════════════════════════════════
+
+async function group10_buildReadySignalCommand(): Promise<void> {
+  console.log('\nGroup 10: buildReadySignalCommand');
+
+  await test('Output contains agent command', async () => {
+    const result = buildReadySignalCommand('claude --resume', 'agent-w1-abc-ready');
+    assert(result.includes('claude --resume'), 'expected agent command in output');
+  });
+
+  await test('Output contains ready channel signal', async () => {
+    const result = buildReadySignalCommand('claude', 'agent-w1-abc-ready');
+    assert(
+      result.includes('wait-for -S agent-w1-abc-ready'),
+      `expected wait-for signal in output, got ${result}`,
+    );
+  });
+
+  await test('Output starts background poller', async () => {
+    const result = buildReadySignalCommand('claude', 'agent-w1-abc-ready');
+    assert(result.includes('while true; do'), 'expected background loop');
+    assert(result.includes('capture-pane'), 'expected capture-pane in poller');
+    assert(result.includes('sleep 0.5'), 'expected 500ms poll interval');
+    assert(result.includes('done &'), 'expected background execution');
+  });
+
+  await test('Poller checks for idle prompts', async () => {
+    const result = buildReadySignalCommand('claude', 'agent-w1-abc-ready');
+    // Should check for ❯, $, › prompts
+    assert(result.includes('❯'), 'expected ❯ prompt check');
+    assert(result.includes('$'), 'expected $ prompt check');
+    assert(result.includes('›'), 'expected › prompt check');
+  });
+
+  await test('Agent command comes after poller', async () => {
+    const result = buildReadySignalCommand('claude --resume', 'agent-w1-abc-ready');
+    const pollerEnd = result.indexOf('done &');
+    const agentStart = result.indexOf('claude --resume');
+    assert(
+      pollerEnd < agentStart,
+      `expected poller (${pollerEnd}) before agent cmd (${agentStart})`,
+    );
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Group 11: waitForReady with spawnId (channel-based path)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function group11_waitForReadyChannel(): Promise<void> {
+  console.log('\nGroup 11: waitForReady with spawnId');
+
+  await test('Legacy path (no spawnId): falls back to polling', async () => {
+    installMock(defaultMock('❯'));
+
+    // No name/spawnId → uses legacy polling path
+    await waitForReady('%42', 5000);
+
+    const calls = getCalls();
+    // Legacy path makes capture-pane calls
+    const captureCalls = calls.filter((c) => c.args[0] === 'capture-pane');
+    assert(captureCalls.length >= 1, 'expected capture-pane calls in legacy path');
+  });
+
+  await test('Dead pane during legacy waitForReady → throws', async () => {
+    installMock((args) => {
+      if (args[0] === 'list-panes') {
+        return { stdout: '', exitCode: 1 }; // dead
+      }
+      return { stdout: '', exitCode: 0 };
+    });
+
+    let threw = false;
+    try {
+      await waitForReady('%42', 2000);
+    } catch (err) {
+      threw = true;
+      assert(
+        (err as Error).message.includes('died'),
+        `expected "died" in error, got: ${(err as Error).message}`,
+      );
+    }
+    assert(threw, 'expected waitForReady to throw for dead pane');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // Main
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -654,6 +965,12 @@ async function main(): Promise<void> {
     await group4_codexInterrupt();
     await group5_sendMessageRetry();
     await group6_waitForReadyTrust();
+    await group7_batchQueryPanes();
+    await group8_classifyByTitle();
+    await group8b_effectiveState();
+    await group9_hooks();
+    await group10_buildReadySignalCommand();
+    await group11_waitForReadyChannel();
   } finally {
     await teardown();
   }

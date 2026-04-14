@@ -540,13 +540,14 @@ export function buildReadySignalCommand(
   readyChannel: string,
 ): string {
   // Background poller: check for idle prompt every 500ms, signal when found
+  // Statements joined with "; " — shell requires semicolons when on one line
   const poller = [
     "while true; do",
-    '  OUT=$(tmux capture-pane -p -t "$TMUX_PANE" -S -5 2>/dev/null)',
+    '  OUT=$(tmux capture-pane -p -t "$TMUX_PANE" -S -5 2>/dev/null);',
     "  if echo \"$OUT\" | grep -qE '^(❯|\\$|›)\\s*$'; then",
-    `    tmux wait-for -S ${readyChannel}; break`,
-    "  fi",
-    "  sleep 0.5",
+    `    tmux wait-for -S ${readyChannel}; break;`,
+    "  fi;",
+    "  sleep 0.5;",
     "done &",
   ].join(" ");
   return `${poller} ${agentCmd}`;

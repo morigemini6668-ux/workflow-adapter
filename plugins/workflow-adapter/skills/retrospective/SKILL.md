@@ -100,7 +100,80 @@ Extract from the workflow itself:
 - Communication patterns that worked or didn't
 - Verification methods that caught (or missed) issues
 
-## Step 5: Compare with Existing Principles
+## Step 5: Extract Feature Changes
+
+From the same artifacts gathered in Step 2 (and git changes from Step 3), identify what user-facing features were added, changed, or removed during this session. The goal is to keep a living `FEATURES.md` at the **project root** that answers "what does this project do?" at a glance.
+
+### 5a. Identify Feature Deltas
+
+Scan the artifacts for feature-level changes:
+
+- **brainstorming.md** "Key Conclusions" / "User Decisions" → what capabilities were decided on
+- **spec** (if exists) → what interfaces, APIs, or user-facing behaviors were designed
+- **plan.md** completed tasks → what was actually implemented
+- **git diff** (from Step 3) → what code was added/changed that maps to user-visible behavior
+
+For each candidate feature delta, classify it as:
+- **New feature**: A capability that didn't exist before
+- **Enhancement**: An improvement to an existing feature in FEATURES.md
+- **Removal**: A feature that was intentionally removed or replaced
+- **No feature change**: Internal refactoring, test-only changes, etc. — skip these
+
+### 5b. Read Existing FEATURES.md
+
+Read `FEATURES.md` at the project root. If it doesn't exist, note that it will be created.
+
+For each candidate feature delta, determine whether it:
+- Needs a **new entry** in FEATURES.md
+- **Updates** an existing entry (enhancement or behavioral change)
+- **Removes** an existing entry
+
+### 5c. Present Each Feature Delta to the User
+
+For each candidate (one at a time):
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Based on this session, I detected the following feature change:\n\n**Type**: {New / Enhancement / Removal}\n**Feature**: {concise feature name}\n**Description**: {1-2 sentence description of what it does}\n**Evidence**: {which artifact or code change}\n{If Enhancement: **Current entry**: {existing text in FEATURES.md}}\n{If Enhancement: **Proposed update**: {revised text}}\n\nAdd this to FEATURES.md?",
+    header: "Feature Catalog Update",
+    options: [
+      { label: "Accept", description: "Add/update this entry in FEATURES.md" },
+      { label: "Modify", description: "Accept with changes — I'll edit the wording" },
+      { label: "Skip", description: "Don't update FEATURES.md for this" }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+If the user selects **"Modify"**: ask for their revised wording, then confirm.
+
+### 5d. Apply Feature Changes
+
+For accepted entries:
+
+1. **If FEATURES.md does not exist**: Create it at the project root with this structure:
+   ```markdown
+   # Features
+
+   ## {Category}
+
+   - **{Feature Name}** — {1-2 sentence description}
+   ```
+
+2. **If FEATURES.md exists**:
+   - For **new features**: Append under the appropriate category (create the category section if needed)
+   - For **enhancements**: Update the existing entry text
+   - For **removals**: Remove the entry (or move to a "Removed" section if the user prefers)
+
+Group features into logical categories based on what they do (e.g., "Core Workflow", "QA & Testing", "Team Collaboration", "Integrations"). Follow existing categories in FEATURES.md when they already exist.
+
+After applying all changes, briefly confirm what was updated.
+
+---
+
+## Step 6: Compare with Existing Principles
 
 1. Read `.workflow-adapter/principle.md` if it exists
 2. Read all `.workflow-adapter/principle.*.md` files if they exist
@@ -112,7 +185,7 @@ Extract from the workflow itself:
 
 Filter out reinforcements (no action needed) and focus on new, conflicting, and refinement candidates.
 
-## Step 6: Present Suggestions to User
+## Step 7: Present Suggestions to User
 
 For each candidate principle (grouped by category), present it to the user for confirmation:
 
@@ -153,7 +226,7 @@ AskUserQuestion({
 })
 ```
 
-## Step 7: Apply Approved Changes
+## Step 8: Apply Approved Changes
 
 For each accepted principle:
 
@@ -178,7 +251,7 @@ For each accepted principle:
 
 After each write, confirm to the user what was changed and in which file.
 
-## Step 8: Summary
+## Step 9: Summary
 
 Present a final summary to the user:
 
@@ -190,6 +263,13 @@ Present a final summary to the user:
 
 ### Code Changes Analyzed
 - {branch/commits examined, or "None"}
+
+### Feature Catalog Updates
+| # | Type | Feature | Action |
+|---|------|---------|--------|
+| 1 | New | Workflow execution pipeline | Added |
+| 2 | Enhancement | QA automation | Updated |
+| 3 | Removal | Legacy auth middleware | Removed |
 
 ### Principles Extracted
 | # | Category | Principle | Action | File |

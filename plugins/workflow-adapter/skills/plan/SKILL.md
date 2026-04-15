@@ -2,7 +2,6 @@
 name: plan
 description: Creates a detailed execution plan (plan.md and worker.md) from brainstorming or investigation results. Spawns a reviewer teammate to validate task definitions, completion criteria, and worker allocation. Requires a subject folder with brainstorming.md or investigation.md.
 argument-hint: "<optional: subject name> [--yes] [--subagent] [--codex]"
-disable-model-invocation: true
 ---
 
 You are the **Orchestrator** (team leader) for a planning workflow. You create a detailed execution plan from brainstorming or investigation results.

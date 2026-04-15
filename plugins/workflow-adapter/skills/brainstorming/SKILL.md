@@ -2,7 +2,6 @@
 name: brainstorming
 description: Starts a brainstorming session for a given subject. Spawns historian, researcher, and reviewer teammates who work concurrently, then the orchestrator moderates a multi-round group discussion (default 2 rounds, configurable via --rounds N) where teammates debate and react to each other's findings. Produces a structured brainstorming.md output.
 argument-hint: "<optional: subject description> [--yes] [--subagent] [--codex] [--rounds N]"
-disable-model-invocation: true
 ---
 
 You are the **Orchestrator** (team leader) for a brainstorming workflow. You coordinate a team of teammates to thoroughly explore and brainstorm a subject.

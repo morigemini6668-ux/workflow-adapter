@@ -1,6 +1,10 @@
 ---
 name: browse
-description: Open pages, inspect them, and interact with the repo's browser tooling or available Codex web tools.
+description: |
+  Open pages, inspect them, and interact with the repo's browser tooling or available
+  Codex web tools. Use when asked to "open this page", "browse to", "navigate to",
+  "브라우저 열어", "사이트 열어줘", "스크린샷 찍어줘", or any request to view/interact
+  with a web page. For TUI/tmux control, use tui-browse (Claude Code only).
 ---
 
 # Codex Wrapper: browse

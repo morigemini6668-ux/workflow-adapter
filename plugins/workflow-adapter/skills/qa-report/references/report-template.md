@@ -15,6 +15,8 @@
 
 ## Health Score: {SCORE}/100
 
+### Browser Target
+
 | Category | Score |
 |----------|-------|
 | Console | {0-100} |
@@ -24,6 +26,20 @@
 | UX | {0-100} |
 | Performance | {0-100} |
 | Accessibility | {0-100} |
+
+### TUI Target
+
+| Category | Score |
+|----------|-------|
+| Rendering | {0-100} |
+| Responsiveness | {0-100} |
+| Navigation | {0-100} |
+| Input | {0-100} |
+| Error Handling | {0-100} |
+| Layout | {0-100} |
+| Accessibility | {0-100} |
+
+> Use the **Browser Target** table for web QA, **TUI Target** table for tmux/CLI QA. Delete the unused table.
 
 ## Top 3 Things to Fix
 
@@ -54,7 +70,7 @@
 | Field | Value |
 |-------|-------|
 | **Severity** | critical / high / medium / low |
-| **Category** | visual / functional / ux / content / performance / console / accessibility |
+| **Category** | Browser: visual / functional / ux / content / performance / console / accessibility — TUI: rendering / responsiveness / navigation / input / error-handling / layout / accessibility |
 | **URL** | {page URL} |
 
 **Description:** {What is wrong, expected vs actual.}

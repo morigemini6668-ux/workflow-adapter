@@ -257,6 +257,16 @@ Each starts at 100. Deduct: Critical -25, High -15, Medium -8, Low -3. Minimum 0
 When `TARGET_TYPE=tui`, follow this workflow instead of the browser workflow above.
 Reference `references/tui-checklist.md` for the full per-screen checklist and issue taxonomy.
 
+### TUI Modes
+
+| Mode | When | What to test |
+|------|------|-------------|
+| **Full** (default) | App name or pane ID given | All screens, systematic per-screen checklist, resize test |
+| **Quick** (`--quick`) | Smoke test needed | Main screen + 2-3 key screens. Check: renders? Responds to input? Crashes? |
+| **Exhaustive** | Deep audit | Full + resize at 80x24/200x60, all edge cases, every keyboard shortcut |
+
+Quick skips resize testing and limits exploration to the primary workflow. Exhaustive adds resize testing at multiple dimensions and exercises every documented shortcut.
+
 ### Phase 1: Initialize (TUI)
 1. Find qa-tui script (see TUI Setup)
 2. Create output directories
@@ -419,6 +429,18 @@ Final score = weighted average.
 9. **Show screenshots to the user.** After every screenshot command, use Read on the file so the user sees it inline.
 10. **Never refuse to test.** When the user invokes this skill, they want testing — browser or TUI.
 11. **TUI: Verify state after every input.** After every `send`, `press`, or `type`, MUST `capture` and read the result BEFORE sending the next input. Never chain inputs blindly — always observe the actual screen state.
+    ```bash
+    # CORRECT — verify between every input
+    $T press Down
+    $T capture --stable --raw        # verify: what changed?
+    $T press Enter
+    $T capture --stable --raw        # verify: action succeeded?
+
+    # WRONG — blind input chain
+    $T press Down
+    $T press Enter
+    $T capture                       # too late — you don't know what happened
+    ```
 
 ---
 

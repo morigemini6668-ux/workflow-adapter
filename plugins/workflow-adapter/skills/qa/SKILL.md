@@ -201,10 +201,13 @@ $T launch <app-command> --here         # or --size 120x40 if not in tmux
 $T wait "ready indicator" --timeout 10
 # Navigate to the affected screen
 $T press <navigation-keys>
+$T capture --stable --raw              # verify state before screenshotting
 $T screenshot "$REPORT_DIR/screenshots/issue-NNN-after.png"
 $T log --read --errors
 $T diff
 ```
+
+> Use `--stable --raw` for TUI apps that do full-screen repaints (Ink, Bubbletea, Textual). When unsure of the framework, default to `--stable`.
 
 ### 8e. Classify
 - **verified**: re-test confirms fix, no new errors
@@ -244,9 +247,17 @@ Touching unrelated files:   +20%
 
 ## Phase 9: Final QA
 
-1. Re-run QA on all affected pages
+**Browser mode:**
+1. Re-run QA on all affected pages via `$B goto` + `$B snapshot` + `$B console --errors`
 2. Compute final health score
 3. **If final score is WORSE than baseline:** WARN prominently
+
+**TUI mode:**
+1. Restart the TUI app: `$T stop` → `$T launch <app-command> --here`
+2. Re-visit all affected screens: `$T press` → `$T capture --stable --raw` for each
+3. Check logs: `$T log --read --errors`
+4. Compute final health score using the TUI rubric
+5. **If final score is WORSE than baseline:** WARN prominently
 
 ---
 
@@ -305,3 +316,15 @@ Each category starts at 100. Deduct: Critical -25, High -15, Medium -8, Low -3. 
 14. **Revert on regression.** `git revert HEAD` immediately.
 15. **Self-regulate.** Follow WTF-likelihood. When in doubt, stop and ask.
 16. **TUI: Verify state after every input.** After every `send`, `press`, or `type`, MUST `capture` and read the result BEFORE sending the next input. Never chain inputs blindly — always observe the actual screen state.
+    ```bash
+    # CORRECT — verify between every input
+    $T press Down
+    $T capture --stable --raw        # verify: what changed?
+    $T press Enter
+    $T capture --stable --raw        # verify: action succeeded?
+
+    # WRONG — blind input chain
+    $T press Down
+    $T press Enter
+    $T capture                       # too late — you don't know what happened
+    ```

@@ -111,7 +111,7 @@ Read `references/commands.md` for the full command reference.
    $T press Enter
    $T capture                    # too late — you don't know what happened
    ```
-3. **Use `--stable --raw` for complex TUIs.** Apps that do full-screen repaints (Ink/React, Bubbletea, Textual) produce garbled output with plain `capture`. Use `$T capture --stable --raw` instead. If still garbled, fall back to `$T screenshot`.
+3. **Use `--stable --raw` for complex TUIs.** Apps that do full-screen repaints (Ink/React, Bubbletea, Textual) produce garbled output with plain `capture`. Use `$T capture --stable --raw` instead. If still garbled, fall back to `$T screenshot`. When unsure of the TUI framework, default to `--stable` — the minor latency cost is worth avoiding garbled output.
 4. **Use named keys for navigation.** TUI apps are keyboard-driven: `Up`, `Down`, `Tab`, `Enter`, `Escape`, `C-c`, etc.
 5. **Type literal text with `type`.** For search fields, input boxes, etc.
 6. **Use `wait` for slow operations.** If an action triggers loading, use `$T wait <expected-text>` before capturing.

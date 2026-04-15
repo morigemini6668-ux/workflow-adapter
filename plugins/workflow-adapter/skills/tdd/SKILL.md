@@ -21,7 +21,7 @@ allowed-tools:
   - AskUserQuestion
   - TaskCreate
   - TaskUpdate
-argument-hint: "<구현할 기능 설명> [--reviewer codex|copilot] [--skip-refactor]"
+argument-hint: "<구현할 기능 설명> [--reviewer codex|copilot] [--skip-refactor] [--fast]"
 ---
 
 # /tdd: Test-Driven Development
@@ -48,6 +48,7 @@ Phase 5: 리팩토링
 |------|--------|------|
 | `--reviewer <who>` | `user` | 리뷰어 지정: `codex`, `copilot`. 기본 동작은 Phase별로 다름 — 아래 참조 |
 | `--skip-refactor` | false | Phase 5 리팩토링 단계 생략 |
+| `--fast` | auto | Fast 모드: Phase 2를 Claude 자체 리뷰로, Phase 3b를 자동 스킵 — 아래 참조 |
 
 **구현 대상이 없는 경우**: 유저가 "TDD" 또는 "TDD로 해"만 입력하고 구현 대상을 명시하지 않았으면, AskUserQuestion으로 무엇을 구현할지 먼저 물어본다.
 
@@ -55,6 +56,22 @@ Phase 5: 리팩토링
 - **Phase 2 (테스트 목록 리뷰)**: 기본값(`user`)일 때 유저에게 명시적 승인을 요청한다. 테스트 목록은 이후 전체 TDD의 방향을 결정하므로 사람의 확인이 필요하다.
 - **Phase 3b (RED 타당성 점검)**: 기본값(`user`)일 때 Claude가 자체 점검하고, 의심스러운 항목만 유저에게 확인한다. 매 테스트마다 유저 승인을 받으면 per-test 루프의 템포가 깨지기 때문이다.
 - `codex`/`copilot` 지정 시에는 두 Phase 모두 해당 리뷰어에게 요청한다.
+
+**`--fast` 모드:**
+
+Fast 모드는 단순한 구현에 대해 TDD 프로세스를 경량화한다:
+- **Phase 2**: 유저 승인 대신 Claude 자체 리뷰 (codex/copilot 지정 시에도 생략하고 자체 리뷰)
+- **Phase 3b**: RED 타당성 점검을 생략. 실패 원인이 명백하면 (import error 아닌 실제 미구현) 바로 3c로 진행
+- 나머지 Phase (0, 1, 3a, 3c, 4, 5)는 동일하게 수행
+
+**Fast 모드 자동 판정**: `--fast`가 명시되지 않으면 Phase 0 완료 후 아래 기준으로 자동 판정한다:
+- **Fast 적용** (아래 **모두** 해당 시):
+  - 단일 함수/메서드 구현 (클래스/모듈 단위가 아님)
+  - 예상 테스트 5개 이하
+  - 외부 의존성 없음 (pure function)
+- **기본 모드**: 위 조건 중 하나라도 해당하지 않으면
+
+자동 판정이므로 agent가 트리거하는 경우에도 별도 옵션 없이 적절한 모드가 선택된다. 유저가 `--fast`를 명시하면 자동 판정을 무시하고 강제 적용한다.
 
 ---
 
@@ -77,6 +94,12 @@ TDD를 시작하기 전에 프로젝트의 테스트 환경을 파악하고, 현
 - 이미 실패 중인 테스트 목록과 **실패 시그니처** (에러 타입, 에러 메시지 요약)
 
 실패 시그니처까지 기록하는 이유: 이후 Phase 3c/4/5에서 "baseline 상 이미 실패 중이던 테스트는 상태 변화 없으면 허용"이라는 게이트를 사용하는데, 테스트 이름만으로는 "같은 테스트가 같은 이유로 실패하는지" 판별할 수 없다. 에러 시그니처가 바뀌었으면 새로운 regression으로 취급한다.
+
+### 0-2b. Brownfield 기존 함수 보호
+
+Brownfield(기존 코드 수정/추가)에서 수정 대상 모듈에 기존 public 함수의 테스트가 없으면, **TDD 시작 전에 기존 함수에 대한 characterization test를 먼저 작성한다.** 이 테스트들은 즉시 PASS하며, regression 보호의 안전망 역할을 한다.
+
+예: `string-utils.ts`에 `slugify`를 추가할 때, 기존 `capitalize`와 `truncate`의 테스트가 없으면 이들에 대한 기본 동작 테스트를 먼저 작성. 이후 Phase 3에서 새 함수만 TDD 사이클을 진행한다.
 
 ### 0-3. 테스트 범위 정의
 
@@ -143,6 +166,7 @@ TDD를 시작하기 전에 프로젝트의 테스트 환경을 파악하고, 현
 
 ### 리뷰어 결정
 
+- **Fast 모드**: Claude가 자체 리뷰하고 바로 Phase 3으로 진행. 유저 승인을 건너뛴다.
 - **기본 (`--reviewer` 미지정)**: AskUserQuestion으로 목록을 보여주고 유저에게 승인/수정 요청
 - **`--reviewer codex`**: ask-codex 스킬 호출
 - **`--reviewer copilot`**: ask-copilot 스킬 호출
@@ -206,6 +230,8 @@ RED의 의미는 "구현이 없어서 실패"에 국한되지 않는다. **"기�
 ### 3b. RED 타당성 점검
 
 새 테스트의 실패가 올바른 RED인지 점검한다.
+
+**Fast 모드**: 실패 원인이 명백하면 (import error가 아닌 실제 미구현/행위 불일치) 이 단계를 건너뛰고 바로 3c로 진행. 실패 원인이 모호한 경우에만 점검을 수행한다.
 
 **기본 (`--reviewer` 미지정 또는 `--reviewer user`)**: Claude가 아래 관점으로 자체 점검 후, 의심스러운 항목만 유저에게 확인한다.
 **`--reviewer codex|copilot`**: 해당 리뷰어에게 실패 로그와 테스트 코드를 보내 점검 요청한다. 호출 실패 시 유저 fallback.

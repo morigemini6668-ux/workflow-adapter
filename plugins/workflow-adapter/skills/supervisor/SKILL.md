@@ -68,11 +68,12 @@ done
 
 ## Step 3: 도구 선택
 
-Step 1의 분석과 Step 2의 catalog를 대조하여 최적 조합을 결정한다.
+Step 1의 분석과 Step 2의 catalog를 대조하여 사용할 스킬을 확정한다.
+확정한 스킬은 Step 4에서 프롬프트의 `## Skills to Use` 섹션에 호출 명령과 함께 명시한다.
 
 판단 기준:
 - 특정 스킬과 직접 매칭 → 해당 스킬 호출 (`/brainstorming`, `/plan` 등)
-- 복합 다단계 작업 → 워크플로우 스킬 조합
+- 복합 다단계 작업 → 워크플로우 스킬 조합 (실행 순서 포함)
 - 단순 일회성 작업 → 스킬 없이 직접 수행
 - 조사/디버깅 → `investigate` 또는 `ralph-debug`
 
@@ -86,6 +87,9 @@ echo "CWD: $(pwd)" && echo "BRANCH: $(git branch --show-current 2>/dev/null || e
 수집한 정보를 바탕으로 자립적 프롬프트를 조합한다. 실행 대상 프로세스가
 별도 컨텍스트 없이 즉시 작업을 시작할 수 있어야 한다.
 
+프롬프트에는 반드시 Step 3에서 선별한 스킬/에이전트를 **구체적으로 명시**하고,
+그것을 사용하라는 지시를 포함해야 한다. 스킬을 선별했으면 호출 명령까지 적어준다.
+
 프롬프트 구조:
 
 ```
@@ -94,8 +98,14 @@ You are an autonomous agent. Complete the task without asking questions — make
 ## Task
 {유저 요청을 구체적으로 재구성한 설명}
 
-## Approach
-{선택한 스킬/명령어와 실행 방법. e.g., "/brainstorming 주제" 또는 직접 수행 지시}
+## Skills to Use
+다음 스킬을 순서대로 실행하라:
+1. /workflow-adapter:{skill-name} {arguments}
+   - 목적: {이 스킬로 달성할 것}
+2. /workflow-adapter:{skill-name} {arguments}  (필요시)
+   - 목적: {이 스킬로 달성할 것}
+
+스킬이 불필요한 단순 작업이면 이 섹션 대신 직접 수행 지시를 적는다.
 
 ## Context
 - Working directory: {cwd}

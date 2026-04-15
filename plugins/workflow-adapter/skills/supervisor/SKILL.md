@@ -8,7 +8,7 @@ description: |
   Use when the user says "supervisor", "감독자", "대신 실행해줘",
   "다른 pane에서 돌려", "tmux로 실행", "자동으로 처리해줘",
   "dispatch", or wants to delegate a task to a separate autonomous Claude instance.
-argument-hint: "<task description>"
+argument-hint: "<task description> [--codex] [--copilot]"
 disable-model-invocation: true
 allowed-tools:
   - Bash
@@ -49,6 +49,10 @@ tmux display-message -p '#{session_name}' 2>/dev/null || echo "NOT_IN_TMUX"
 - **목표**: 유저가 달성하려는 것
 - **범위**: 파일, 모듈, 프로젝트 전체
 - **제약/선호**: 특정 기술, 접근법, 조건
+- **플래그 파싱**:
+  - `--codex` → tmux pane에 Claude 대신 Codex CLI를 실행
+  - `--copilot` → tmux pane에 Claude 대신 Copilot CLI를 실행
+  - 플래그를 task description에서 제거
 
 ## Step 2: 도구 탐색
 
@@ -124,9 +128,17 @@ Start immediately.
 
 Pane 생성 → ready 대기 → 프롬프트 주입.
 
+플래그에 따라 실행할 프로세스를 결정:
+
+| 모드 | 실행 명령 |
+|------|----------|
+| 기본 | `claude --dangerously-skip-permissions` |
+| `--codex` | `codex --full-auto` |
+| `--copilot` | `copilot` |
+
 ```bash
 CWD="$(pwd)"
-PANE_ID=$(bun $CLI launch "$CWD" "claude --dangerously-skip-permissions")
+PANE_ID=$(bun $CLI launch "$CWD" "<위 표에서 결정된 명령>")
 echo "PANE_ID=$PANE_ID"
 ```
 

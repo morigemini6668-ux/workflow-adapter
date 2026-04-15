@@ -16,6 +16,7 @@ allowed-tools:
   - Glob
   - Grep
   - Agent
+  - Skill
 ---
 
 # Supervisor: Smart Dispatcher

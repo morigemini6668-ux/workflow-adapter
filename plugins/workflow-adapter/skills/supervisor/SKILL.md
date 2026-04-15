@@ -12,6 +12,9 @@ argument-hint: "<task description>"
 disable-model-invocation: true
 allowed-tools:
   - Bash
+  - Read
+  - Glob
+  - Grep
 ---
 
 # Supervisor: Smart Dispatcher

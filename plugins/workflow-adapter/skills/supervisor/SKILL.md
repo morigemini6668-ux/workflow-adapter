@@ -134,7 +134,7 @@ Pane 생성 → ready 대기 → 프롬프트 주입.
 |------|----------|
 | 기본 | `claude --dangerously-skip-permissions` |
 | `--codex` | `codex --full-auto` |
-| `--copilot` | `copilot` |
+| `--copilot` | `copilot --yolo` |
 
 ```bash
 CWD="$(pwd)"

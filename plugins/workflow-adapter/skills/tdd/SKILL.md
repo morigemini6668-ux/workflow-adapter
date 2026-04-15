@@ -18,6 +18,7 @@ allowed-tools:
   - Glob
   - Grep
   - Agent
+  - LSP
   - AskUserQuestion
   - TaskCreate
   - TaskUpdate

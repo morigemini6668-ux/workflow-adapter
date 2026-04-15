@@ -18,6 +18,7 @@ allowed-tools:
   - Edit
   - Glob
   - Grep
+  - LSP
   - AskUserQuestion
   - WebSearch
 ---

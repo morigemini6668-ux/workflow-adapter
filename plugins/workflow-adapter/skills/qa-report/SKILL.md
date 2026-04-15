@@ -13,6 +13,8 @@ allowed-tools:
   - Bash
   - Read
   - Write
+  - Glob
+  - Grep
   - AskUserQuestion
 ---
 

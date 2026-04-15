@@ -13,6 +13,8 @@ description: |
 argument-hint: "<optional: subject name>"
 allowed-tools:
   - Bash
+  - Agent
+  - LSP
   - Read
   - Write
   - Glob

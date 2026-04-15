@@ -17,6 +17,7 @@ allowed-tools:
   - Grep
   - Agent
   - Skill
+  - AskUserQuestion
 ---
 
 # Supervisor: Smart Dispatcher

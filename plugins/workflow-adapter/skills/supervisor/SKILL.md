@@ -12,9 +12,6 @@ argument-hint: "<task description>"
 disable-model-invocation: true
 allowed-tools:
   - Bash
-  - Read
-  - Glob
-  - Grep
 ---
 
 # Supervisor: Smart Dispatcher
@@ -48,28 +45,14 @@ tmux display-message -p '#{session_name}' 2>/dev/null || echo "NOT_IN_TMUX"
 
 ## Step 2: 도구 탐색
 
-플러그인의 capability catalog를 구축한다. Skills, agents를 스캔하여 name + description 첫 줄을 수집.
-
-```bash
-AWK_DESC='/^description:/{found=1; sub(/^description: *[|>]?[-+]? */, ""); gsub(/^ +| +$/, ""); if(length>0){print; exit} next} found && /^  /{sub(/^  /,""); print; exit}'
-echo "=== SKILLS ===" && \
-for f in ${CLAUDE_PLUGIN_ROOT}/skills/*/SKILL.md; do
-  NAME=$(basename "$(dirname "$f")")
-  DESC=$(awk "$AWK_DESC" "$f")
-  printf "  %-20s %s\n" "$NAME" "$DESC"
-done && \
-echo "=== AGENTS ===" && \
-for f in ${CLAUDE_PLUGIN_ROOT}/agents/*.md; do
-  NAME=$(basename "$f" .md)
-  DESC=$(awk "$AWK_DESC" "$f")
-  printf "  %-20s %s\n" "$NAME" "$DESC"
-done
-```
+현재 컨텍스트의 system-reminder에 사용 가능한 모든 스킬 목록이 이미 로드되어 있다.
+별도 파일 스캔 없이, 로드된 스킬 목록에서 유저 요청과 관련된 스킬을 식별한다.
 
 ## Step 3: 도구 선택
 
-Step 1의 분석과 Step 2의 catalog를 대조하여 사용할 스킬을 확정한다.
+Step 1의 분석과 Step 2에서 식별한 스킬을 대조하여 사용할 스킬을 확정한다.
 확정한 스킬은 Step 4에서 프롬프트의 `## Skills to Use` 섹션에 호출 명령과 함께 명시한다.
+workflow-adapter 스킬뿐 아니라 다른 플러그인의 스킬도 적합하면 선택한다.
 
 판단 기준:
 - 특정 스킬과 직접 매칭 → 해당 스킬 호출 (`/brainstorming`, `/plan` 등)
@@ -99,10 +82,10 @@ You are an autonomous agent. Complete the task without asking questions — make
 {유저 요청을 구체적으로 재구성한 설명}
 
 ## Skills to Use
-다음 스킬을 순서대로 실행하라:
-1. /workflow-adapter:{skill-name} {arguments}
+너의 available skills 목록을 확인하고, 다음 스킬을 순서대로 실행하라:
+1. {plugin-name}:{skill-name} {arguments}
    - 목적: {이 스킬로 달성할 것}
-2. /workflow-adapter:{skill-name} {arguments}  (필요시)
+2. {plugin-name}:{skill-name} {arguments}  (필요시)
    - 목적: {이 스킬로 달성할 것}
 
 스킬이 불필요한 단순 작업이면 이 섹션 대신 직접 수행 지시를 적는다.

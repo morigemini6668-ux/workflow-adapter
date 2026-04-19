@@ -12,10 +12,35 @@ Phased development loop: clarify the problem interactively (P0), then iterate **
 Unlike `autopilot-ralph` (single-agent analyze-execute-verify), this skill spawns a **team of specialists** — historian, researcher, planner, executer(s), reviewer — coordinated by you (the orchestrator). Teammates actively collaborate across phases: historian ↔ researcher share findings in P1, the reviewer gates the plan in P2, the planner assigns work to one or more executers, and executers can request research support in P3.
 
 **Worktree Safety — MANDATORY:**
-- Use `EnterWorktree`/`ExitWorktree` tools for all worktree operations. **NEVER use raw `git worktree add/remove` commands.**
+- Prefer the `EnterWorktree`/`ExitWorktree` tools for all worktree operations. **NEVER use raw `git worktree add/remove` commands when those tools are available.**
 - `ExitWorktree({ action: "remove" })` will automatically refuse if there are uncommitted changes — this is the safety net.
 - **NEVER call `ExitWorktree({ action: "remove" })` automatically.** Only the user may decide to remove a worktree. After completion, call `ExitWorktree({ action: "keep" })` and report the branch name so the user can clean up later.
 - **NEVER pass `discard_changes: true`** unless the user explicitly asks to discard.
+
+**Worktree Fallback (tool unavailable, e.g., Copilot/Codex CLI):**
+If the `EnterWorktree`/`ExitWorktree` tools are not available in the current environment, use the bash helpers below. They preserve files by refusing to reuse a worktree that has uncommitted changes and by NEVER running `git worktree remove` automatically.
+
+- **Instead of `EnterWorktree({ name: "X" })`:**
+  ```bash
+  WORKTREE_NAME="X"
+  REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
+  WORKTREE_PATH="$REPO_ROOT/.claude/worktrees/$WORKTREE_NAME"
+  if [ -d "$WORKTREE_PATH" ]; then
+    # Reuse: abort if there are uncommitted changes to prevent file loss
+    [ -z "$(git -C "$WORKTREE_PATH" status --porcelain)" ] \
+      || { echo "ABORT: uncommitted changes in $WORKTREE_PATH — resolve before reusing"; exit 1; }
+    cd "$WORKTREE_PATH"
+  elif git show-ref --verify --quiet "refs/heads/$WORKTREE_NAME"; then
+    git worktree add "$WORKTREE_PATH" "$WORKTREE_NAME" && cd "$WORKTREE_PATH"
+  else
+    git worktree add "$WORKTREE_PATH" -b "$WORKTREE_NAME" && cd "$WORKTREE_PATH"
+  fi
+  ```
+- **Instead of `ExitWorktree({ action: "keep" })`:**
+  ```bash
+  cd "$REPO_ROOT"   # keep worktree on disk; do NOT run `git worktree remove` — user decides later
+  ```
+- **Never substitute `ExitWorktree({ action: "remove" })`** with `git worktree remove` automatically. If the user explicitly asks to remove, first verify the worktree is clean (`git -C "$WORKTREE_PATH" status --porcelain` returns empty), then run `git worktree remove "$WORKTREE_PATH"`.
 
 **Principle Compliance:**
 Before starting any work:

@@ -12,7 +12,7 @@ Before starting any work:
 2. Check if `.workflow-adapter/principle.orchestrator.md` exists. If it does, follow its directives (takes priority over `principle.md` on conflicts).
 
 **Backlog Check:**
-Check if `.workflow-adapter/backlog/` exists and contains `.md` files with `status: pending` in their frontmatter. If pending items exist, briefly list them to the user and ask:
+Check if `.workflow-adapter/backlog/` exists and contains `.md` files with `status: pending` in their frontmatter. **Skip any item whose status is `consumed` or `deferred`** — closed items must not appear in the prompt. If pending items exist, briefly list them to the user and ask:
 ```
 AskUserQuestion({
   questions: [{
@@ -20,13 +20,18 @@ AskUserQuestion({
     header: "Backlog",
     options: [
       { label: "Yes", description: "I'll incorporate some backlog items into this session" },
-      { label: "No", description: "Proceed without addressing backlog items" }
+      { label: "No", description: "Proceed without addressing backlog items" },
+      { label: "Other / ask", description: "I want to type freely or ask a question before deciding" }
     ],
     multiSelect: false
   }]
 })
 ```
-If yes, ask which items to include and factor them into the brainstorming scope. If no or if the backlog directory is empty/missing, proceed normally.
+If yes, ask which items to include and factor them into the brainstorming scope. **Record the list of item filenames you incorporated** — at the end of the session (after Step 7 Save) you MUST update each incorporated item's frontmatter `status: pending → consumed`. If no or if the backlog directory is empty/missing, proceed normally.
+
+**User Interaction Policy (applies to every `AskUserQuestion` in this skill):**
+- Every question must include an `{ label: "Other / ask", description: "I want to type freely or ask a question before deciding" }` option. When selected, read the user's typed reply and handle it (answer the question, apply the feedback, or re-ask with their context). Never force the user into preset options.
+- **Final approval question — chain option:** The final approve/confirm question in Step 6 MUST include an additional `{ label: "Approve + start next", description: "Approve and immediately launch the next skill (spec if complex, else plan)" }` option. When selected, finish save/shutdown as usual, then invoke the next skill automatically via `Skill({ skill: "workflow-adapter:spec", args: "{subject}" })` (if complexity detection triggers) or `Skill({ skill: "workflow-adapter:plan", args: "{subject}" })`.
 
 ## Step 0: Parse Options
 
@@ -249,9 +254,11 @@ AskUserQuestion({
     question: "Here is a summary of all decisions made during brainstorming:\n\n{list all key decisions, conclusions, chosen directions, and rejected alternatives}\n\nAre all these decisions appropriate?",
     header: "Confirm",
     options: [
-      { label: "Approve all", description: "All decisions look good. Save results and proceed." },
+      { label: "Approve", description: "All decisions look good. Save results and stop here." },
       { label: "Discuss further", description: "I want to discuss specific topics with the team before finalizing." },
-      { label: "Revise", description: "I want to directly revise some decisions without team discussion." }
+      { label: "Revise", description: "I want to directly revise some decisions without team discussion." },
+      { label: "Other / ask", description: "I want to type freely or ask a question before deciding" },
+      { label: "Approve + start next", description: "Approve and immediately launch the next skill (spec if complex, else plan)" }
     ],
     multiSelect: false
   }]

@@ -28,6 +28,14 @@ You are a **Technical Architect** producing a structured specification from brai
 
 ---
 
+## User Interaction Policy
+
+- **Every `AskUserQuestion` call in this skill must include a free-form option**: `{ label: "Other / ask", description: "I want to type freely or ask a question before deciding" }`. When selected, read the user's typed reply and handle it (answer the question, apply the feedback, or re-ask with their context). Never force the user into preset options.
+- **Final approval question — chain option:** The final approve/confirm question in Step 4.2 MUST include an additional `{ label: "Approve + start plan", description: "Approve and immediately launch /workflow-adapter:plan for this subject" }` option. When selected, complete the completion-message step, then invoke `Skill({ skill: "workflow-adapter:plan", args: "{subject}" })`.
+- **Backlog handling:** When reading `.workflow-adapter/backlog/`, consider only items whose frontmatter has `status: pending`. Skip `consumed` and `deferred`. If any pending item is incorporated into this spec session, update that item's frontmatter `status: pending → consumed` before finishing.
+
+---
+
 ## Step 0: Parse Options
 
 Extract parameters from user arguments:
@@ -236,9 +244,11 @@ AskUserQuestion({
     question: "{summary of key technical decisions}\n\nSpec saved to .workflow-adapter/{subject}/spec.md\n\nDoes this look correct?",
     header: "Technical Specification Summary",
     options: [
-      { label: "Approve", description: "Spec looks good" },
+      { label: "Approve", description: "Spec looks good — stop here" },
       { label: "Revise", description: "I have feedback — let me describe changes" },
-      { label: "Cancel", description: "Discard spec.md" }
+      { label: "Cancel", description: "Discard spec.md" },
+      { label: "Other / ask", description: "I want to type freely or ask a question before deciding" },
+      { label: "Approve + start plan", description: "Approve and immediately launch /workflow-adapter:plan for this subject" }
     ],
     multiSelect: false
   }]

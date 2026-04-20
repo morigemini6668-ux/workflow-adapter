@@ -1,7 +1,7 @@
 ---
 name: copilot
 description: Converts workflow-adapter plugin components into GitHub Copilot project configuration files. Generates .github/copilot-instructions.md from principles, .github/agents/*.agent.md from agent definitions, and .github/instructions/*.instructions.md from skills. Transforms TeamCreate/SendMessage patterns into Task tool subagent patterns.
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # GitHub Copilot Configuration Generator

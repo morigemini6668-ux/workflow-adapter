@@ -43,7 +43,7 @@ Before starting any work:
 2. Check if `.workflow-adapter/principle.orchestrator.md` exists. If it does, follow its directives (takes priority over `principle.md` on conflicts).
 
 **Backlog Check:**
-Check if `.workflow-adapter/backlog/` exists and contains `.md` files with `status: pending` in their frontmatter. If pending items exist, briefly list them to the user and ask:
+Check if `.workflow-adapter/backlog/` exists and contains `.md` files with `status: pending` in their frontmatter. **Skip any item whose status is `consumed` or `deferred`** — closed items must not appear in the prompt. If pending items exist, briefly list them to the user and ask:
 ```
 AskUserQuestion({
   questions: [{
@@ -51,13 +51,18 @@ AskUserQuestion({
     header: "Backlog",
     options: [
       { label: "Yes", description: "I'll incorporate some backlog items into this execution" },
-      { label: "No", description: "Proceed without addressing backlog items" }
+      { label: "No", description: "Proceed without addressing backlog items" },
+      { label: "Other / ask", description: "I want to type freely or ask a question before deciding" }
     ],
     multiSelect: false
   }]
 })
 ```
-If yes, ask which items to include and add them as additional tasks in plan.md. If no or if the backlog directory is empty/missing, proceed normally.
+If yes, ask which items to include and add them as additional tasks in plan.md. **Record the list of item filenames you incorporated** — after the incorporated tasks are marked `[x]` completed in plan.md, you MUST update each corresponding backlog item's frontmatter `status: pending → consumed`. If no or if the backlog directory is empty/missing, proceed normally.
+
+**User Interaction Policy (applies to every `AskUserQuestion` in this skill):**
+- Every question must include an `{ label: "Other / ask", description: "I want to type freely or ask a question before deciding" }` option. When selected, read the user's typed reply and handle it (answer the question, apply the feedback, or re-ask with their context). Never force the user into preset options.
+- **No next-step chaining**: execute is the terminal skill in the workflow chain. Do NOT add an "Approve + start next" option to any question here.
 
 ## Step 0: Parse Options
 

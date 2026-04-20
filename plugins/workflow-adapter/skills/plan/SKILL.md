@@ -12,7 +12,7 @@ Before starting any work:
 2. Check if `.workflow-adapter/principle.orchestrator.md` exists. If it does, follow its directives (takes priority over `principle.md` on conflicts).
 
 **Backlog Check:**
-Check if `.workflow-adapter/backlog/` exists and contains `.md` files with `status: pending` in their frontmatter. If pending items exist, briefly list them to the user and ask:
+Check if `.workflow-adapter/backlog/` exists and contains `.md` files with `status: pending` in their frontmatter. **Skip any item whose status is `consumed` or `deferred`** — closed items must not appear in the prompt. If pending items exist, briefly list them to the user and ask:
 ```
 AskUserQuestion({
   questions: [{
@@ -20,13 +20,18 @@ AskUserQuestion({
     header: "Backlog",
     options: [
       { label: "Yes", description: "I'll add some backlog items as tasks in the plan" },
-      { label: "No", description: "Proceed without addressing backlog items" }
+      { label: "No", description: "Proceed without addressing backlog items" },
+      { label: "Other / ask", description: "I want to type freely or ask a question before deciding" }
     ],
     multiSelect: false
   }]
 })
 ```
-If yes, ask which items to include and add them as tasks in the plan. If no or if the backlog directory is empty/missing, proceed normally.
+If yes, ask which items to include and add them as tasks in the plan. **Record the list of item filenames you incorporated** — at the end of the session (after plan.md/worker.md are finalized) you MUST update each incorporated item's frontmatter `status: pending → consumed`. If no or if the backlog directory is empty/missing, proceed normally.
+
+**User Interaction Policy (applies to every `AskUserQuestion` in this skill):**
+- Every question must include an `{ label: "Other / ask", description: "I want to type freely or ask a question before deciding" }` option. When selected, read the user's typed reply and handle it (answer the question, apply the feedback, or re-ask with their context). Never force the user into preset options.
+- **Final approval question — chain option:** The final approve/confirm question in Step 7 MUST include an additional `{ label: "Approve + start execute", description: "Approve and immediately launch /workflow-adapter:execute for this subject" }` option. When selected, finalize plan.md/worker.md as usual, then invoke `Skill({ skill: "workflow-adapter:execute", args: "{subject}" })`.
 
 ## Step 0: Parse Options
 
@@ -259,11 +264,13 @@ Before finalizing, present the plan summary to the user using AskUserQuestion:
 ```
 AskUserQuestion({
   questions: [{
-    question: "Here is the execution plan summary:\n\n**Tasks**: {number of tasks}\n**Executers**: {number and names}\n**Worktree**: {yes/no}\n\n**Task List:**\n{numbered list of tasks with assigned executer and dependencies}\n\n**Reviewer Concerns:**\n{any unresolved concerns, or 'None'}\n\nIs this plan appropriate? Select 'Approve' to finalize, or 'Revise' to make changes.",
+    question: "Here is the execution plan summary:\n\n**Tasks**: {number of tasks}\n**Executers**: {number and names}\n**Worktree**: {yes/no}\n\n**Task List:**\n{numbered list of tasks with assigned executer and dependencies}\n\n**Reviewer Concerns:**\n{any unresolved concerns, or 'None'}\n\nIs this plan appropriate?",
     header: "Confirm",
     options: [
-      { label: "Approve plan", description: "Plan looks good. Finalize and proceed." },
-      { label: "Revise", description: "I want to adjust some tasks or allocation before finalizing." }
+      { label: "Approve plan", description: "Plan looks good. Finalize and stop here." },
+      { label: "Revise", description: "I want to adjust some tasks or allocation before finalizing." },
+      { label: "Other / ask", description: "I want to type freely or ask a question before deciding" },
+      { label: "Approve + start execute", description: "Approve and immediately launch /workflow-adapter:execute for this subject" }
     ],
     multiSelect: false
   }]

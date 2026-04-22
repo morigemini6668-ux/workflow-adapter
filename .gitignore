@@ -1,25 +1,16 @@
-# Workflow state files (created at runtime in user's project)
-.claude/workflow-*.local.md
-
-# Workflow runtime directories (created in user's project)
-.workflow-adapter/logs/
-.workflow-adapter/doc/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Editor files
-*.swp
-*.swo
-*~
-.vscode/
-.idea/
-
-# Node
+.workflow-adapter/
 node_modules/
-
-# Temporary files
-*.tmp
-*.temp
-*.bak
+claude/scripts/qa-browse/dist/
+claude/scripts/qa-browse/bun.lock
+codex/claude-compat/scripts/qa-browse/dist/
+codex/claude-compat/scripts/qa-browse/bun.lock
+plugins/workflow-adapter/scripts/qa-tui/dist/
+plugins/workflow-adapter/scripts/qa-tui/node_modules/
+plugins/workflow-adapter/scripts/qa-tui/bun.lock
+plugins/workflow-adapter/scripts/supervisor/dist/
+plugins/workflow-adapter/scripts/supervisor/node_modules/
+plugins/workflow-adapter/scripts/supervisor/bun.lock
+plugins/workflow-adapter/scripts/tmux-lib/node_modules/
+plugins/workflow-adapter/scripts/tmux-lib/bun.lock
+.serena/
+.uniflow-worktrees/

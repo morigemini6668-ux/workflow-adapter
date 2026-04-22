@@ -1,0 +1,72 @@
+/**
+ * Config for qa-browse CLI + server.
+ *
+ * State directory: .workflow-adapter/qa-browse/ (project-local)
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync } from 'child_process';
+
+export interface BrowseConfig {
+  projectDir: string;
+  stateDir: string;
+  stateFile: string;
+  lockFile: string;
+  commandLockFile: string;
+  consoleLog: string;
+  networkLog: string;
+  dialogLog: string;
+}
+
+export function getGitRoot(): string | null {
+  try {
+    const out = execSync('git rev-parse --show-toplevel', {
+      timeout: 2_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return out.toString().trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveConfig(
+  env: Record<string, string | undefined> = process.env,
+): BrowseConfig {
+  let stateFile: string;
+  let stateDir: string;
+  let projectDir: string;
+
+  if (env.QA_BROWSE_STATE_FILE) {
+    stateFile = env.QA_BROWSE_STATE_FILE;
+    stateDir = path.dirname(stateFile);
+    projectDir = path.dirname(path.dirname(stateDir)); // parent of .workflow-adapter/qa-browse/
+  } else {
+    projectDir = getGitRoot() || process.cwd();
+    stateDir = path.join(projectDir, '.workflow-adapter', 'qa-browse');
+    stateFile = path.join(stateDir, 'server.json');
+  }
+
+  return {
+    projectDir,
+    stateDir,
+    stateFile,
+    lockFile: path.join(stateDir, 'server.lock'),
+    commandLockFile: path.join(stateDir, 'command.lock'),
+    consoleLog: path.join(stateDir, 'console.log'),
+    networkLog: path.join(stateDir, 'network.log'),
+    dialogLog: path.join(stateDir, 'dialog.log'),
+  };
+}
+
+export function ensureStateDir(config: BrowseConfig): void {
+  try {
+    fs.mkdirSync(config.stateDir, { recursive: true });
+  } catch (err: any) {
+    if (err.code === 'EACCES') {
+      throw new Error(`Cannot create state directory ${config.stateDir}: permission denied`);
+    }
+    throw err;
+  }
+}

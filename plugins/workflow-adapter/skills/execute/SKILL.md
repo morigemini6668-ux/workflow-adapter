@@ -237,6 +237,7 @@ When ALL tasks in plan.md are marked `[x]` completed:
          -> Discard: git branch -D {subject}
 
        Suggested follow-ups:
+         -> /pr to create a Pull Request / Merge Request
          -> /retrospective to extract principles and lessons learned
          -> /archive to preserve decisions as ADRs
          -> /session-insights to analyze usage patterns
@@ -248,6 +249,7 @@ When ALL tasks in plan.md are marked `[x]` completed:
        Changes were applied directly to the current branch.
 
        Suggested follow-ups:
+         -> /pr to create a Pull Request / Merge Request
          -> /retrospective to extract principles and lessons learned
          -> /archive to preserve decisions as ADRs
          -> /session-insights to analyze usage patterns
@@ -272,13 +274,16 @@ AskUserQuestion({
     header: "Backlog",
     options: [
       { label: "Yes", description: "I have items to add to the backlog" },
-      { label: "No", description: "Nothing to defer" }
+      { label: "No", description: "Nothing to defer" },
+      { label: "Create PR/MR", description: "Skip backlog and create a Pull Request / Merge Request now" },
+      { label: "Other / ask", description: "I want to type freely or ask a question before deciding" }
     ],
     multiSelect: false
   }]
 })
 ```
 If yes, collect each item's type (task / principle-change / environment-change), priority, and description, then create backlog files in `.workflow-adapter/backlog/` with `source: {subject}` and `status: pending`.
+If "Create PR/MR", invoke `Skill({ skill: "workflow-adapter:pr" })` immediately.
 
 ---
 

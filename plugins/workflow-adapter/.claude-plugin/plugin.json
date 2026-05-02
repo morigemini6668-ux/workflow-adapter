@@ -1,5 +1,5 @@
 {
   "name": "workflow-adapter",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "Agent team workflow plugin that spawns specialized agents (Historian, Researcher, Executer, Reviewer) through brainstorming, planning, and execution workflows to solve complex problems collaboratively. Includes Decision Registry for structured decision tracking across phases, session-insights for usage-based diagnostics, /spec for technical specifications, backlog management, retrospective analysis, ADR archival, and spec review checklists."
 }

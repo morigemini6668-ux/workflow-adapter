@@ -7,7 +7,7 @@ description: >
   "slim down CLAUDE.md", "CLAUDE.md 만들어줘", "CLAUDE.md 생성", "CLAUDE.md 최적화해줘",
   "CLAUDE.md 줄여줘", "CLAUDE.md가 너무 길어", "AGENTS.md 만들어줘", "프로젝트 컨텍스트 파일 생성".
   Applies research (arXiv:2602.11988) showing comprehensive context files reduce agent performance.
-argument-hint: <optional: generate | optimize> [--yes]
+argument-hint: "<optional: generate | optimize> [--yes]"
 ---
 
 # Generate or Optimize CLAUDE.md

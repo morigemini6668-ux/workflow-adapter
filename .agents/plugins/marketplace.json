@@ -1,0 +1,20 @@
+{
+  "name": "workflow-adapter",
+  "interface": {
+    "displayName": "Workflow Adapter"
+  },
+  "plugins": [
+    {
+      "name": "workflow-adapter",
+      "source": {
+        "source": "local",
+        "path": "./plugins/workflow-adapter"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Development"
+    }
+  ]
+}

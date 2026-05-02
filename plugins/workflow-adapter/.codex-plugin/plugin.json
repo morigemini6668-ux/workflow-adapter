@@ -1,0 +1,40 @@
+{
+  "name": "workflow-adapter",
+  "version": "0.14.0",
+  "description": "Agent team workflow plugin for brainstorming, planning, execution, QA, TDD, and review workflows across Claude Code and Codex.",
+  "author": {
+    "name": "Dal Park",
+    "email": "dal.park@pubg.com"
+  },
+  "homepage": "https://github.com/morigemini6668-ux/workflow-adapter",
+  "repository": "https://github.com/morigemini6668-ux/workflow-adapter",
+  "keywords": [
+    "workflow",
+    "agents",
+    "planning",
+    "tdd",
+    "qa",
+    "codex",
+    "claude-code"
+  ],
+  "skills": "./codex-skills/",
+  "interface": {
+    "displayName": "Workflow Adapter",
+    "shortDescription": "Team-style development workflows for Codex and Claude Code.",
+    "longDescription": "Workflow Adapter provides structured skills for brainstorming, planning, execution, investigation, QA, TDD, pull request preparation, and multi-agent coordination. The original Claude Code manifests remain intact, while the Codex manifest exposes shim skills with clean Codex frontmatter and compatibility guidance for Codex-native tools.",
+    "developerName": "Dal Park",
+    "category": "Development",
+    "capabilities": [
+      "Interactive",
+      "Write",
+      "Automation"
+    ],
+    "websiteURL": "https://github.com/morigemini6668-ux/workflow-adapter",
+    "defaultPrompt": [
+      "Run a team-loop investigation for this bug.",
+      "Create a plan from the latest brainstorming notes.",
+      "Use TDD to implement this feature."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

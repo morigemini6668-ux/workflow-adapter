@@ -1,13 +1,12 @@
 # Codex Compatibility
 
-This plugin is intentionally dual-runtime. Keep `.claude-plugin/`, Claude-specific frontmatter, and Claude tool examples in place so the Claude Code experience remains unchanged. Codex should enter through the `codex-skills/` shims exposed by `.codex-plugin/plugin.json`, then read the shared source skill under `skills/` and apply the mappings below when it mentions Claude Code tools.
+This plugin is intentionally dual-runtime. Keep `.claude-plugin/`, Claude-specific frontmatter, and Claude tool examples in place so the Claude Code experience remains unchanged. Codex enters through the shared source skills under `skills/` and applies the mappings below when a skill mentions Claude Code tools.
 
 ## Manifest And Frontmatter
 
 - Claude marketplace files live in `.claude-plugin/`.
 - Codex marketplace files live in repo root `.agents/plugins/marketplace.json`.
 - Codex plugin metadata lives in `.codex-plugin/plugin.json`.
-- Codex shim skills under `codex-skills/` use only Codex-safe `name` and `description` frontmatter.
 - Shared source skill frontmatter keys such as `argument-hint`, `allowed-tools`, and `disable-model-invocation` are Claude Code metadata. Do not remove them. In Codex, treat them as descriptive hints and follow Codex host policy for actual tool use.
 
 ## Plugin Root

@@ -1,6 +1,6 @@
 {
   "name": "workflow-adapter",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Agent team workflow plugin for brainstorming, planning, execution, QA, TDD, and review workflows across Claude Code and Codex.",
   "author": {
     "name": "Dal Park",
@@ -17,11 +17,11 @@
     "codex",
     "claude-code"
   ],
-  "skills": "./codex-skills/",
+  "skills": "./skills/",
   "interface": {
     "displayName": "Workflow Adapter",
     "shortDescription": "Team-style development workflows for Codex and Claude Code.",
-    "longDescription": "Workflow Adapter provides structured skills for brainstorming, planning, execution, investigation, QA, TDD, pull request preparation, and multi-agent coordination. The original Claude Code manifests remain intact, while the Codex manifest exposes shim skills with clean Codex frontmatter and compatibility guidance for Codex-native tools.",
+    "longDescription": "Workflow Adapter provides structured skills for brainstorming, planning, execution, investigation, QA, TDD, pull request preparation, and multi-agent coordination. The original Claude Code manifests remain intact, while the Codex manifest exposes the shared skill set with compatibility guidance for Codex-native tools.",
     "developerName": "Dal Park",
     "category": "Development",
     "capabilities": [

@@ -121,7 +121,7 @@ After your initial assessment, the orchestrator will share other teammates' find
 
 ## Spec Review Checklist
 
-When reviewing `brainstorming.md` or `plan.md`, evaluate against these criteria. Apply the checklist as part of your normal review — not as a separate pass.
+When reviewing `brainstorming.md`, `spec.md`, or `plan.md`, evaluate against these criteria. Apply the checklist as part of your normal review — not as a separate pass.
 
 | # | Criterion | PASS | FAIL | WARNING |
 |---|-----------|------|------|---------|
@@ -131,7 +131,7 @@ When reviewing `brainstorming.md` or `plan.md`, evaluate against these criteria.
 | 4 | **Scope Appropriateness** | Scope matches the user's request; neither bloated nor missing key pieces | Scope is significantly too broad (gold-plating) or too narrow (incomplete) | Scope is slightly off but adjustable during implementation |
 | 5 | **YAGNI** | No unnecessary features, abstractions, or speculative design | Contains features or complexity not justified by the current request | Minor over-engineering that does not significantly impact effort |
 | 6 | **Verifiability** | Success criteria are measurable, testable, and unambiguous | Success criteria are missing or unmeasurable ("improve quality") | Criteria exist but could be more specific or quantified |
-| 7 | **Decision Coverage** | Every accepted decision from the source Decision Registry has at least one corresponding task in plan.md's Decision Traceability section | One or more accepted decisions are completely unaddressed (no task mapping) | Most decisions are covered but some are implicitly addressed without explicit task mapping |
+| 7 | **Decision Coverage** | For spec.md: every accepted source decision is preserved in the spec Decision Registry with correct ID continuity. For plan.md: every accepted decision has at least one corresponding task in the Decision Traceability section | One or more accepted decisions are completely unaddressed, omitted, or renumbered incorrectly | Most decisions are covered but some are implicit, weakly traced, or missing source references |
 | 8 | **Technical Specificity** | Interface contracts use concrete types/schemas; NFRs have measurable targets | Interfaces are described in prose without types; NFRs are vague ("should be fast") | Most interfaces have types but some are prose; most NFRs have targets |
 
 > **Note:** Criterion 8 (Technical Specificity) applies only to Spec Review, not Plan Review.
@@ -143,7 +143,7 @@ When reviewing `brainstorming.md` or `plan.md`, evaluate against these criteria.
 3. For each FAIL or WARNING, provide a brief explanation and a concrete suggestion
 4. Include the checklist results in your review output (see Output Format below)
 5. For Completeness through Verifiability (criteria 1-6): apply to all document types
-6. For Decision Coverage (criterion 7): cross-reference the Decision Registry in brainstorming.md or investigation.md with the Decision Traceability section in plan.md. Every `accepted` decision must map to at least one task. `DEFERRED` items should have corresponding backlog entries. If no Decision Registry exists in the source document, mark Decision Coverage as N/A.
+6. For Decision Coverage (criterion 7): when reviewing spec.md, cross-reference the Decision Registry in brainstorming.md or investigation.md with the spec Decision Registry. Every `accepted` source decision must be preserved, and new technical decisions must continue the source ID sequence. When reviewing plan.md, cross-reference the source Decision Registry with the Decision Traceability section in plan.md; every `accepted` decision must map to at least one task. `DEFERRED` items should have corresponding backlog entries. If no Decision Registry exists in the source document, mark Decision Coverage as N/A.
 7. For Technical Specificity (criterion 8): apply only when reviewing spec.md. Verify that interface contracts include actual type definitions (TypeScript interfaces, JSON schemas, etc.) rather than prose descriptions, and that NFRs have measurable targets. Mark as N/A for brainstorming or plan reviews.
 
 ### Iteration Protocol

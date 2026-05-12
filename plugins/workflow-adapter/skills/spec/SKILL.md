@@ -2,6 +2,7 @@
 name: spec
 description: |
   Create a technical specification from brainstorming or investigation results.
+  Spawns a reviewer to validate the specification before user confirmation.
   Use this skill when the user mentions "spec", "specification", "technical design",
   "interface design", "detailed design", "architecture design", "data model design",
   "API design", "사양", "기술 설계", "인터페이스 설계", "상세 설계", "아키텍처 설계",
@@ -31,7 +32,7 @@ You are a **Technical Architect** producing a structured specification from brai
 ## User Interaction Policy
 
 - **Every `AskUserQuestion` call in this skill must include a free-form option**: `{ label: "Other / ask", description: "I want to type freely or ask a question before deciding" }`. When selected, read the user's typed reply and handle it (answer the question, apply the feedback, or re-ask with their context). Never force the user into preset options.
-- **Final approval question — chain option:** The final approve/confirm question in Step 4.2 MUST include an additional `{ label: "Approve + start plan", description: "Approve and immediately launch /workflow-adapter:plan for this subject" }` option. When selected, complete the completion-message step, then invoke `Skill({ skill: "workflow-adapter:plan", args: "{subject}" })`.
+- **Final approval question — chain option:** The final approve/confirm question in Step 5.2 MUST include an additional `{ label: "Approve + start plan", description: "Approve and immediately launch /workflow-adapter:plan for this subject" }` option. When selected, complete the completion-message step, then invoke `Skill({ skill: "workflow-adapter:plan", args: "{subject}" })`.
 - **Backlog handling:** When reading `.workflow-adapter/backlog/`, consider only items whose frontmatter has `status: pending`. Skip `consumed` and `deferred`. If any pending item is incorporated into this spec session, update that item's frontmatter `status: pending → consumed` before finishing.
 
 ---
@@ -225,23 +226,53 @@ interface ExampleRequest {
 
 ---
 
-## Step 4: Present and Confirm
+## Step 4: Reviewer Validation
 
-### 4.1 Present Summary
+Spawn a reviewer as a **foreground Task** after writing `spec.md` and before presenting the spec to the user.
+
+Read the reviewer system prompt from `${CLAUDE_PLUGIN_ROOT}/agents/reviewer.md`, then spawn:
+
+```
+Task({
+  description: "Reviewer: validate spec",
+  subagent_type: "general-purpose",
+  run_in_background: false,
+  prompt: "<system prompt from reviewer.md>\n\nYour subject is: {subject}\n\nYou are reviewing .workflow-adapter/{subject}/spec.md before it is presented to the user.\n\nBefore starting:\n1. Check .workflow-adapter/principle.md if it exists — follow it.\n2. Check .workflow-adapter/principle.reviewer.md if it exists — it takes priority.\n\nReview these files:\n- .workflow-adapter/{subject}/spec.md\n- .workflow-adapter/{subject}/brainstorming.md (if exists)\n- .workflow-adapter/{subject}/investigation.md (if exists)\n- All files in .workflow-adapter/{subject}/doc/ (if any)\n\nVerify:\n- All 6 spec sections are present: Technical Design Decisions, Interface Contracts, Non-Functional Requirements, Acceptance Criteria, Risks & No-gos, Decision Registry\n- The spec focuses on HOW and does not duplicate WHAT/WHY narrative from brainstorming or investigation\n- Interface contracts include concrete types, schemas, signatures, or file formats where applicable\n- Non-functional requirements have measurable targets rather than vague goals\n- Decision Registry preserves source decisions and continues IDs correctly for new technical decisions\n- Risks include mitigations, and no-gos/scope boundaries are explicit\n- spec.md is <= 500 lines\n\nWrite your review to .workflow-adapter/{subject}/spec-review.md in this format:\nStatus: PASS or NEEDS REVISION\nChecklist Results:\n| Criterion | Result | Notes |\n|-----------|--------|-------|\nIssues:\n- [CRITICAL|WARNING|SUGGESTION] {description}\nRecommendations:\n- {specific text or section to add/change in spec.md}\n\nReturn only the Status line plus a one-paragraph summary."
+})
+```
+
+If the reviewer returns `NEEDS REVISION`:
+- Apply all CRITICAL fixes directly to `spec.md`.
+- Apply WARNING-level suggestions only when they improve clarity, measurability, or implementation readiness without broadening scope.
+- Spawn the reviewer Task once more for re-review.
+- If the second review still returns `NEEDS REVISION`, do not loop further. Preserve the unresolved issues in `spec-review.md` and include them in the user-facing summary.
+
+If the reviewer fails to spawn or becomes unresponsive:
+- Inform the user that automatic spec review could not be completed.
+- Create `.workflow-adapter/{subject}/spec-review.md` with `Status: REVIEW UNAVAILABLE` and the failure reason if possible.
+- Continue to Step 5 with `Reviewer Concerns: Review unavailable`.
+- Do not block the workflow solely on reviewer failure.
+
+---
+
+## Step 5: Present and Confirm
+
+### 5.1 Present Summary
 
 Prepare a summary of key technical decisions made or refined during spec generation:
 - List the most important interface contracts defined
 - Highlight any new decisions added to the Decision Registry
 - Note any risks or scope boundaries that may surprise the user
+- Include reviewer status and any unresolved reviewer concerns from `spec-review.md`
 
-### 4.2 Confirm (unless --yes)
+### 5.2 Confirm (unless --yes)
 
 If `YES_MODE` is false, present the summary via AskUserQuestion:
 
 ```
 AskUserQuestion({
   questions: [{
-    question: "{summary of key technical decisions}\n\nSpec saved to .workflow-adapter/{subject}/spec.md\n\nDoes this look correct?",
+    question: "{summary of key technical decisions}\n\nReviewer status: {PASS / NEEDS REVISION / Review unavailable}\nReviewer concerns: {unresolved concerns, or 'None'}\n\nSpec saved to .workflow-adapter/{subject}/spec.md\nReview saved to .workflow-adapter/{subject}/spec-review.md\n\nDoes this look correct?",
     header: "Technical Specification Summary",
     options: [
       { label: "Approve", description: "Spec looks good — stop here" },
@@ -257,15 +288,16 @@ AskUserQuestion({
 
 - **Approve**: Proceed to completion message
 - **Revise**: Ask the user what they want changed via AskUserQuestion (free text). Apply their feedback to spec.md, then re-present the summary for confirmation. Repeat until approved or cancelled.
-- **Cancel**: Delete spec.md and stop
+- **Cancel**: Delete spec.md and spec-review.md, then stop
 
 If `YES_MODE` is true, skip confirmation and proceed directly.
 
-### 4.3 Completion Message
+### 5.3 Completion Message
 
 ```
 Technical specification for '{subject}' generated:
   .workflow-adapter/{subject}/spec.md
+  .workflow-adapter/{subject}/spec-review.md
 
 Next steps:
   - Run /workflow-adapter:plan {subject} to create an execution plan from this spec

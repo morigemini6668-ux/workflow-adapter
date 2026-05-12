@@ -10,7 +10,7 @@
     {
       "name": "workflow-adapter",
       "description": "Agent team workflow plugin that spawns specialized agents (Historian, Researcher, Executer, Reviewer) through brainstorming, planning, and execution workflows to solve complex problems collaboratively. Includes backlog management for deferred items, retrospective analysis for principle auto-detection, ADR archival for preserving architectural decisions, and spec review checklists for calibrated document review.",
-      "version": "0.14.2",
+      "version": "0.14.3",
       "author": {
         "name": "Dal Park",
         "email": "dal.park@pubg.com"

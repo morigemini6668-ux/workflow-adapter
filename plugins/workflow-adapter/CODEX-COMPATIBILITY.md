@@ -34,7 +34,7 @@ Then call scripts as `bun "$PLUGIN_ROOT/scripts/..."`.
 | `Read`, `LS`, `Glob`, `Grep` | `exec_command` with `sed`, `ls`, `rg --files`, and `rg`; prefer `rg` for search. |
 | `Write`, `Edit`, `MultiEdit` | `apply_patch` for manual file edits; formatting or mechanical rewrites may use command-line tools. |
 | `TodoWrite` | `update_plan` for substantial multi-step work. |
-| `AskUserQuestion` | Ask a concise chat question. Use `request_user_input` only when that tool is available in the active mode. |
+| `AskUserQuestion` | `request_user_input`. `AskUserQuestion` is a Claude Code tool and must not be called or emitted in Codex. |
 | `WebSearch`, `WebFetch` | `web.search_query` and `web.open`, following Codex browsing rules. |
 | Browser/TUI inspection via shell CLIs | Prefer installed Codex/browser plugin tools when explicitly requested; otherwise the existing qa scripts remain valid. |
 | `Task` or `Agent` foreground delegation | `spawn_agent` followed by `wait_agent`, only when the user explicitly asked for delegation/parallel agents or the skill invocation clearly requires it. |
@@ -44,6 +44,22 @@ Then call scripts as `bun "$PLUGIN_ROOT/scripts/..."`.
 | `TeamCreate` / `TeamDelete` | No direct Codex equivalent. Track spawned agent ids in the conversation or workflow state files. |
 | `Skill({ skill, args })` | Invoke the referenced skill instructions directly in the current turn when available. |
 | `EnterWorktree` / `ExitWorktree` | Use safe git worktree shell fallbacks described in the skill, preserving uncommitted work. |
+
+## User Input In Codex
+
+When a workflow skill says to use `AskUserQuestion`, translate it to Codex `request_user_input` instead of writing an `AskUserQuestion(...)` call.
+
+- Preserve the question intent, short header, and mutually exclusive options.
+- Codex `request_user_input` supports one to three short questions per call. Prefer one question at a time when the workflow is collecting decisions sequentially.
+- Codex automatically provides a free-form "Other" response path. If a skill requires an "Other / ask" option for `AskUserQuestion`, treat that requirement as satisfied by the Codex free-form response and do not duplicate it unless the active host explicitly requires a visible option.
+- If `request_user_input` is not available in the active Codex mode, ask one concise normal chat question and wait for the user's reply.
+
+If `request_user_input` is unavailable because the Codex `default_mode_request_user_input` feature flag is disabled or missing, recommend enabling it in `config.toml`:
+
+```toml
+[features]
+default_mode_request_user_input = true
+```
 
 ## Agent Files
 

@@ -1,6 +1,16 @@
 # 목표
 - 정의된 agents들을 claude agents team(aka teammate) 기능을 spawn하여 지정된 workflow로 사용자가 요구하는 문제를 해결하는 플러그인
 
+# Codex 호환성
+- 이 문서와 skill 문서의 `AskUserQuestion`은 Claude Code 도구명을 기준으로 쓴 표현이다.
+- Codex 런타임에서는 `AskUserQuestion`을 직접 사용할 수 없으므로, 동일한 사용자 확인/선택 수집은 `request_user_input`으로 수행한다.
+- Codex에서 `request_user_input`이 활성 모드에 노출되지 않는다면 짧은 일반 채팅 질문으로 대체하고, `config.toml`에서 `default_mode_request_user_input` feature flag가 꺼져 있거나 누락된 경우 다음 설정을 켜도록 추천한다:
+
+```toml
+[features]
+default_mode_request_user_input = true
+```
+
 # basePath
 - {project}/.workflow-adpater/
 
@@ -84,6 +94,5 @@
 - command로 실행할 수 있다.
 - orchestrator agent로서 실행되어야한다(fork: true 로 가능한지 확인 필요)
 - worker.md를 보고 executer들을 spawn한다.
-
 
 
